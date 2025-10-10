@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Header from './component/header/header.jsx'
 import Footer from './component/footer/footer.jsx'
 import HomePage from './pages/public/HomePage.jsx'
+import ProfilePage from './pages/public/ProfilePage.jsx'
+import Booking from './pages/public/Booking.jsx'
 import NotFound from './pages/public/NotFoud.jsx'
 import Login from './pages/auth/Login.jsx'
 import Register from './pages/auth/Register.jsx'
@@ -17,6 +19,8 @@ function App() {
           <Header />
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/booking" element={<Booking />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="*" element={<NotFound />} />
