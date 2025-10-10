@@ -11,7 +11,7 @@ function Header() {
         </div>
         <nav className="nav">
           <Link to="/">Trang chủ</Link>
-          <a href="#">Đặt sân</a>
+          <Link to="/booking">Đặt sân</Link>
           <a href="#">Liên hệ</a>
         </nav>
         <div className="auth-actions">
