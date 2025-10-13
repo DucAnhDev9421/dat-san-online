@@ -11,6 +11,7 @@ import Login from './pages/auth/Login.jsx'
 import Register from './pages/auth/Register.jsx'
 import Partner from './pages/public/Partner.jsx' 
 import Facilities from './pages/public/Facilities.jsx'
+import Payment from './pages/public/Payment.jsx'
 
 function App() {
 
@@ -23,6 +24,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/booking" element={<Booking />} />
+            <Route path="/payment" element={<Payment />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/partner" element={<Partner />} />

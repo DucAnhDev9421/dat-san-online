@@ -1,8 +1,9 @@
 //Trang đặt sân
 import React, { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 function Booking() {
+  const navigate = useNavigate()
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [selectedStartTime, setSelectedStartTime] = useState('')
   const [selectedEndTime, setSelectedEndTime] = useState('')
@@ -124,12 +125,10 @@ function Booking() {
 
   const handleBookingSubmit = (e) => {
     e.preventDefault()
-    // In real app, this would submit to API
-    alert('Đặt sân thành công! Chúng tôi sẽ liên hệ lại với bạn.')
+    // In real app, this would save booking info to context/state
+    // For now, we'll just navigate to payment page
     setShowBookingModal(false)
-    setSelectedStartTime('')
-    setSelectedEndTime('')
-    setBookingForm({ name: '', phone: '', email: '', notes: '' })
+    navigate('/payment')
   }
 
   const calculateDuration = () => {
