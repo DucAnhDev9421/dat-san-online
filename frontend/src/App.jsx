@@ -10,7 +10,7 @@ import AdminLayout from "./layouts/AdminLayout.jsx";
 import OwnerLayout from "./layouts/OwnerLayout.jsx";
 
 // Components
-import ProtectedRoute, { AdminRoute, OwnerRoute } from "./components/ProtectedRoute.jsx";
+import ProtectedRoute, { AdminRoute, OwnerRoute } from "./component/ProtectedRoute.jsx";
 
 // Public pages
 import HomePage from "./pages/public/HomePage.jsx";
