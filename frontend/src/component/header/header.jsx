@@ -30,6 +30,7 @@ function Header() {
   return (
     <header className="site-header">
       <div className="container header-inner">
+
         <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
           <div className="brand">
             <img 
@@ -49,12 +50,7 @@ function Header() {
             <a href="/partner">Đối tác</a>
           </nav>
         </div>
-        
-        {/* Location Display */}
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <LocationDisplay />
-        </div>
-        
+
         <div className="auth-actions">
           {loading ? (
             <div style={{ 
