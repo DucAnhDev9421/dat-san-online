@@ -74,22 +74,15 @@ export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-              borderRadius: 8,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontWeight: 800,
-              fontSize: 14,
+          <img 
+            src="/Logo.png" 
+            alt="Booking Sport Logo" 
+            style={{ 
+              height: "32px", 
+              width: "auto",
+              objectFit: "contain"
             }}
-          >
-            OS
-          </div>
+          />
           <div>
             <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1f2937", margin: 0 }}>
               Owner Dashboard

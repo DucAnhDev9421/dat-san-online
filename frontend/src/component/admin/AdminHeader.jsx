@@ -72,22 +72,15 @@ export default function AdminHeader({ onToggleSidebar, isSidebarOpen }) {
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              background: "linear-gradient(135deg, #10b981, #059669)",
-              borderRadius: 8,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontWeight: 800,
-              fontSize: 14,
+          <img 
+            src="/Logo.png" 
+            alt="Booking Sport Logo" 
+            style={{ 
+              height: "32px", 
+              width: "auto",
+              objectFit: "contain"
             }}
-          >
-            DS
-          </div>
+          />
           <div>
             <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1f2937", margin: 0 }}>
               Đặt Sân Online

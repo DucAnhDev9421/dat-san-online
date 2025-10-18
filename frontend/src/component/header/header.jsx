@@ -7,7 +7,16 @@ function Header() {
       <div className="container header-inner">
         <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
           <div className="brand">
-            <span className="logo-circle" />
+            <img 
+              src="/Logo.png" 
+              alt="Booking Sport Logo" 
+              className="logo-image"
+              style={{ 
+                height: "40px", 
+                width: "auto",
+                objectFit: "contain"
+              }}
+            />
             <span className="brand-name">Booking sport</span>
           </div>
           <nav className="nav">
