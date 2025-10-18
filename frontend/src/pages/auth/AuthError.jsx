@@ -152,7 +152,6 @@ function AuthError() {
             </summary>
             <div style={{
               fontSize: '0.875rem',
-              color: '#6b7280',
               fontFamily: 'monospace',
               background: '#1f2937',
               color: '#f9fafb',
