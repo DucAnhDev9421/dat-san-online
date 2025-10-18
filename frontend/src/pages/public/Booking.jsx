@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Calendar, Maximize2 } from 'lucide-react'
+import MapDisplay from '../../component/map/MapDisplay'
 
 function Booking() {
   const navigate = useNavigate()
@@ -504,6 +505,17 @@ function Booking() {
               </p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Map Section */}
+      <div style={{
+        background: '#fff',
+        padding: '24px',
+        borderBottom: '1px solid #e5e7eb'
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <MapDisplay venueData={venueData} />
         </div>
       </div>
 

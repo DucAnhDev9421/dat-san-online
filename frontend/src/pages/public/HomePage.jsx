@@ -293,7 +293,7 @@ function HomePage() {
       <section className="cards">
         <div className="container">
           <div className="section-head">
-            <h3>Cơ sở thể thao gần đây</h3>
+            <h3>Sân thể thao gần đây</h3>
             <a href="#">Xem tất cả →</a>
           </div>
           <div className="grid" style={{
