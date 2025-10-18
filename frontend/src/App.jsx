@@ -11,6 +11,7 @@ import OwnerLayout from "./layouts/OwnerLayout.jsx";
 
 // Components
 import ProtectedRoute, { AdminRoute, OwnerRoute } from "./component/ProtectedRoute.jsx";
+import ChatButton from "./component/chat/ChatButton.jsx";
 
 // Public pages
 import HomePage from "./pages/public/HomePage.jsx";
@@ -31,6 +32,7 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <ChatButton />
         <Routes>
           {/* Auth callback routes - No layout */}
           <Route path="/auth/callback" element={<AuthCallback />} />
