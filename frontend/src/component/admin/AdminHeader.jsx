@@ -10,10 +10,12 @@ import {
   Sun,
   Moon
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-export default function AdminHeader({ onToggleSidebar, isSidebarOpen }) {
+export default function AdminHeader({ onToggleSidebar, isSidebarOpen, currentTabTitle }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const navigate = useNavigate();
 
   const notifications = [
     { id: 1, message: "Có 3 đơn đặt sân mới cần xử lý", time: "5 phút trước", type: "booking" },
@@ -26,6 +28,10 @@ export default function AdminHeader({ onToggleSidebar, isSidebarOpen }) {
       // TODO: Implement logout logic
       alert("Đăng xuất thành công!");
     }
+  };
+
+  const handleLogoClick = () => {
+    navigate("/");
   };
 
   return (
@@ -71,25 +77,45 @@ export default function AdminHeader({ onToggleSidebar, isSidebarOpen }) {
           <Menu size={20} />
         </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          onClick={handleLogoClick}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "4px 8px",
+            borderRadius: 8,
+            transition: "background-color 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = "#f3f4f6";
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = "transparent";
+          }}
+          title="Quay về trang chủ"
+        >
           <img 
             src="/Logo.png" 
-            alt="Booking Sport Logo" 
+            alt="Dat San Online Logo" 
             style={{ 
               height: "32px", 
               width: "auto",
               objectFit: "contain"
             }}
           />
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1f2937", margin: 0 }}>
+          <div style={{ textAlign: "left" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>
               Đặt Sân Online
-            </h1>
-            <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>
               Admin Panel
-            </p>
+            </div>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Center - Search */}

@@ -25,8 +25,7 @@ import AuthCallback from "./pages/auth/AuthCallback.jsx";
 import AuthError from "./pages/auth/AuthError.jsx";
 import NotFound from "./pages/public/NotFoud.jsx";
 
-// Owner pages
-import MyBookings from "./pages/private/Owner/MyBookings.jsx";
+
 
 function App() {
   return (
