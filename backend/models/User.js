@@ -89,8 +89,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // Index để tối ưu hóa truy vấn
-userSchema.index({ email: 1 });
-userSchema.index({ googleId: 1 });
+// Note: email and googleId indexes are automatically created by unique: true
 userSchema.index({ role: 1 });
 
 // Virtual field cho tên hiển thị
@@ -130,21 +129,48 @@ userSchema.methods.updateLoginInfo = function() {
 };
 
 // Method để thêm refresh token
-userSchema.methods.addRefreshToken = function(token) {
-  if (!this.refreshTokens || !Array.isArray(this.refreshTokens)) {
-    this.refreshTokens = [];
+userSchema.methods.addRefreshToken = async function(token) {
+  try {
+    if (!this.refreshTokens || !Array.isArray(this.refreshTokens)) {
+      this.refreshTokens = [];
+    }
+    this.refreshTokens.push({ token });
+    return await this.save();
+  } catch (error) {
+    if (error.name === 'VersionError') {
+      // Nếu có xung đột version, thử lại với document mới nhất
+      const freshUser = await this.constructor.findById(this._id);
+      if (freshUser) {
+        if (!freshUser.refreshTokens || !Array.isArray(freshUser.refreshTokens)) {
+          freshUser.refreshTokens = [];
+        }
+        freshUser.refreshTokens.push({ token });
+        return await freshUser.save();
+      }
+    }
+    throw error;
   }
-  this.refreshTokens.push({ token });
-  return this.save();
 };
 
 // Method để xóa refresh token
-userSchema.methods.removeRefreshToken = function(token) {
-  if (!this.refreshTokens || !Array.isArray(this.refreshTokens)) {
-    this.refreshTokens = [];
+userSchema.methods.removeRefreshToken = async function(token) {
+  try {
+    if (!this.refreshTokens || !Array.isArray(this.refreshTokens)) {
+      this.refreshTokens = [];
+    }
+    this.refreshTokens = this.refreshTokens.filter(rt => rt.token !== token);
+    return await this.save();
+  } catch (error) {
+    if (error.name === 'VersionError') {
+      // Nếu có xung đột version, thử lại với document mới nhất
+      const freshUser = await this.constructor.findById(this._id);
+      if (freshUser) {
+        freshUser.refreshTokens = freshUser.refreshTokens.filter(rt => rt.token !== token);
+        return await freshUser.save();
+      }
+    }
+    throw error;
   }
-  this.refreshTokens = this.refreshTokens.filter(rt => rt.token !== token);
-  return this.save();
 };
 
 // Static method để tìm user bằng Google ID

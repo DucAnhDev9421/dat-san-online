@@ -141,8 +141,16 @@ export const refreshToken = async (req, res, next) => {
     const tokens = generateTokens(user);
     
     // Xóa refresh token cũ và thêm token mới
-    await user.removeRefreshToken(refreshToken);
-    await user.addRefreshToken(tokens.refreshToken);
+    try {
+      await user.removeRefreshToken(refreshToken);
+      await user.addRefreshToken(tokens.refreshToken);
+    } catch (error) {
+      console.error('Error updating refresh tokens:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Error updating tokens'
+      });
+    }
 
     res.json({
       success: true,
