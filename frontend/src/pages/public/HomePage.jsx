@@ -168,6 +168,8 @@ function HomePage() {
     ]
     return images[(venueId - 1) % images.length]
   }
+  
+  const featuredVenues = [...venues].sort((a, b) => b.rating - a.rating).slice(0, 4)
   return (
     <main>
       <style>
@@ -178,20 +180,35 @@ function HomePage() {
           }
         `}
       </style>
-      <section className="hero">
-        <div className="container">
-          <div className="hero-content">
-            <h1>Booking sport</h1>
-            <p>Đặt sân thể thao dễ dàng, nhanh chóng</p>
-            <div className="hero-actions">
-              <Link to="/login" className="btn btn-primary">Đăng nhập / Đăng ký</Link>
-              <button className="btn btn-light">Tải ứng dụng</button>
+      <section 
+        className="hero"
+        style={{
+          background: `linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)), url('/all-sports-banner.webp')`,
+          backgroundSize: 'cover, contain',
+          backgroundPosition: 'center, center',
+          backgroundRepeat: 'no-repeat, no-repeat',
+          color: '#fff'
+        }}
+      >
+        <div className="container" style={{ padding: '64px 16px' }}>
+          <div className="hero-content" style={{ maxWidth: '1024px', margin: '0 auto', textAlign: 'center' }}>
+            <h1 style={{ fontSize: '44px', lineHeight: 1.15, margin: 0, fontWeight: 800 }}>
+              Đặt Sân Thể Thao Trực Tuyến
+            </h1>
+            <p style={{ marginTop: '12px', fontSize: '18px', opacity: 0.95 }}>
+              Nhanh chóng, tiện lợi và giá tốt cho mọi môn thể thao bạn yêu thích
+            </p>
+            <div className="hero-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <Link to="/login" className="btn btn-primary" style={{ padding: '12px 18px' }}>Bắt đầu ngay</Link>
+              <a href="#search" className="btn btn-light" style={{ padding: '12px 18px', background: '#ffffff', color: '#111827' }}>Tìm sân gần bạn</a>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="search-card">
+      
+
+      <section id="search" className="search-card">
         <div className="container">
           <h3>Đặt sân thể thao ngay</h3>
           <div className="search-row">
@@ -286,6 +303,217 @@ function HomePage() {
                 'Tìm kiếm ngay'
               )}
             </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Featured venues directly after search */}
+      <section className="cards" style={{ marginTop: '8px' }}>
+        <div className="container">
+          <div className="section-head">
+            <h3>Sân thể thao nổi bật</h3>
+            <a href="#">Xem tất cả →</a>
+          </div>
+          <div className="grid" style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '24px',
+            padding: '0 16px'
+          }}>
+            {featuredVenues.map((venue) => (
+              <article key={venue.id} className="card" style={{
+                background: '#fff',
+                borderRadius: '12px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                overflow: 'hidden',
+                transition: 'all 0.3s ease',
+                border: '1px solid #e5e7eb',
+                height: 'fit-content'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-4px)'
+                e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+              }}>
+                <div className="card-thumb">
+                  <div style={{
+                    width: '100%',
+                    height: '200px',
+                    background: `linear-gradient(135deg, ${getVenueGradient(venue.id)}), url(${getVenueImage(venue.id)})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundBlendMode: 'overlay',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontSize: '18px',
+                    fontWeight: '700',
+                    textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                    position: 'relative'
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      top: '12px',
+                      right: '12px',
+                      background: 'rgba(0,0,0,0.7)',
+                      color: '#fff',
+                      padding: '4px 8px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: '600'
+                    }}>
+                      {venue.rating} ⭐
+                    </div>
+                    {venue.name}
+                  </div>
+                </div>
+                <div className="card-body" style={{
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: '100%',
+                  minHeight: '280px'
+                }}>
+                  <h4 style={{
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    color: '#1f2937',
+                    margin: '0 0 8px 0',
+                    lineHeight: '1.3',
+                    height: '42px',
+                    overflow: 'hidden',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical'
+                  }}>
+                    {venue.name}
+                  </h4>
+                  
+                  <p style={{
+                    fontSize: '13px',
+                    color: '#6b7280',
+                    margin: '0 0 8px 0',
+                    lineHeight: '1.4',
+                    height: '36px',
+                    overflow: 'hidden',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical'
+                  }}>
+                    📍 {venue.address}
+                  </p>
+                  
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    marginBottom: '8px',
+                    height: '20px'
+                  }}>
+                    <span style={{ color: '#f59e0b', fontSize: '14px' }}>
+                      {'★'.repeat(Math.floor(venue.rating))}{'☆'.repeat(5 - Math.floor(venue.rating))}
+                    </span>
+                    <span style={{ fontSize: '13px', color: '#6b7280' }}>({venue.rating})</span>
+                  </div>
+                  
+                  <p style={{
+                    fontSize: '13px',
+                    color: '#6b7280',
+                    margin: '0 0 8px 0',
+                    height: '20px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}>
+                    🕐 {venue.operatingHours}
+                  </p>
+                  
+                  <p style={{
+                    fontSize: '14px',
+                    color: '#059669',
+                    fontWeight: '700',
+                    margin: '0 0 12px 0',
+                    height: '20px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}>
+                    💰 {venue.price}
+                  </p>
+                  
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '4px',
+                    marginBottom: '16px',
+                    minHeight: '32px',
+                    flex: '1'
+                  }}>
+                    {venue.facilities.slice(0, 2).map((facility, index) => (
+                      <span key={index} style={{
+                        background: '#ecfdf5',
+                        color: '#059669',
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: '500',
+                        border: '1px solid #d1fae5'
+                      }}>
+                        {facility}
+                      </span>
+                    ))}
+                    {venue.facilities.length > 2 && (
+                      <span style={{
+                        background: '#f3f4f6',
+                        color: '#6b7280',
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: '500'
+                      }}>
+                        +{venue.facilities.length - 2}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <button 
+                    className="btn btn-outline small"
+                    onClick={() => handleBookVenue(venue.id)}
+                    style={{
+                      width: '100%',
+                      background: '#3b82f6',
+                      color: '#fff',
+                      border: 'none',
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      marginTop: 'auto',
+                      height: '44px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#2563eb'
+                      e.target.style.transform = 'translateY(-1px)'
+                      e.target.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = '#3b82f6'
+                      e.target.style.transform = 'translateY(0)'
+                      e.target.style.boxShadow = 'none'
+                    }}
+                  >
+                    Đặt lịch
+                  </button>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       </section>
