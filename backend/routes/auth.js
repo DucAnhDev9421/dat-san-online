@@ -5,7 +5,7 @@ import {
   authenticateToken,
   generateTokens,
   refreshToken,
-} from "../middleware/Auth.js";
+} from "../middleware/auth.js";
 import { authLimiter, loginLimiter } from "../middleware/rateLimiter.js";
 
 // === CÁC IMPORT MỚI CHO TÍNH NĂNG MỚI ===
