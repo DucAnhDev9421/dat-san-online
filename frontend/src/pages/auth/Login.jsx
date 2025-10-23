@@ -128,7 +128,7 @@ function Login() {
             
             <div className="row-between">
               <span />
-              <a href="#">Quên mật khẩu</a>
+              <Link to="/forgot-password">Quên mật khẩu</Link>
             </div>
             <div className="divider">Hoặc đăng nhập với</div>
             <button 

@@ -85,10 +85,36 @@ export const AuthProvider = ({ children }) => {
               refreshToken: tokens.refreshToken
             }
           });
+        } else {
+          // No tokens found, just finish loading
+          dispatch({ type: 'SET_LOADING', payload: false });
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
-        authService.clearTokens();
+        
+        // Only clear tokens if it's an authentication error (401)
+        // Don't clear tokens for network errors or other issues
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          console.log('Token invalid or expired, clearing tokens');
+          authService.clearTokens();
+          dispatch({ type: 'LOGIN_FAILURE', payload: error.message });
+        } else {
+          console.log('Network or server error, keeping tokens for retry');
+          // Keep tokens, might be temporary network issue
+          const tokens = authService.getTokens();
+          if (tokens.accessToken) {
+            // Still mark as authenticated but without user data
+            // User data will be fetched on next successful API call
+            dispatch({
+              type: 'LOGIN_SUCCESS',
+              payload: {
+                user: null,
+                accessToken: tokens.accessToken,
+                refreshToken: tokens.refreshToken
+              }
+            });
+          }
+        }
       } finally {
         dispatch({ type: 'SET_LOADING', payload: false });
       }

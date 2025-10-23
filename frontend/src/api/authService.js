@@ -81,7 +81,7 @@ export const clearTokens = () => {
 export const authService = {
   // Get current user
   getCurrentUser: async () => {
-    const response = await apiClient.get('/auth/me');
+    const response = await apiClient.get('/users/profile');
     return response.data.data.user;
   },
 
