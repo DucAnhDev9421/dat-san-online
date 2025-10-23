@@ -5,7 +5,7 @@ import {
   authenticateToken,
   generateTokens,
   refreshToken,
-} from "../middleware/Auth.js";
+} from "../middleware/auth.js";
 import { authLimiter, loginLimiter } from "../middleware/rateLimiter.js";
 
 // === CÁC IMPORT MỚI CHO TÍNH NĂNG MỚI ===
@@ -260,8 +260,11 @@ router.post("/reset-password/:token", authLimiter, async (req, res, next) => {
  * API SỐ 6: Quản lý đa thiết bị / session
  * GET /api/auth/sessions
  */
-router.get("/sessions", authenticateToken, (req, res) => {
-  const sessions = req.user.refreshTokens.map((rt) => ({
+router.get("/sessions", authenticateToken, async (req, res) => {
+  // Query lại user để lấy refreshTokens
+  const userWithTokens = await User.findById(req.user._id).select('refreshTokens');
+  
+  const sessions = userWithTokens.refreshTokens.map((rt) => ({
     id: rt._id,
     createdAt: rt.createdAt,
   }));

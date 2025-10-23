@@ -207,6 +207,35 @@ userSchema.methods.removeRefreshToken = async function (token) {
   }
 };
 
+// Method để xóa refresh token bằng ID
+userSchema.methods.removeRefreshTokenById = async function (tokenId) {
+  try {
+    if (!this.refreshTokens || !Array.isArray(this.refreshTokens)) {
+      this.refreshTokens = [];
+    }
+    this.refreshTokens = this.refreshTokens.filter((rt) => rt._id.toString() !== tokenId);
+    return await this.save();
+  } catch (error) {
+    if (error.name === "VersionError") {
+      // Nếu có xung đột version, thử lại với document mới nhất
+      const freshUser = await this.constructor.findById(this._id);
+      if (freshUser) {
+        if (
+          !freshUser.refreshTokens ||
+          !Array.isArray(freshUser.refreshTokens)
+        ) {
+          freshUser.refreshTokens = [];
+        }
+        freshUser.refreshTokens = freshUser.refreshTokens.filter(
+          (rt) => rt._id.toString() !== tokenId
+        );
+        return await freshUser.save();
+      }
+    }
+    throw error;
+  }
+};
+
 // Static method để tìm user bằng Google ID
 userSchema.statics.findByGoogleId = function (googleId) {
   return this.findOne({ googleId });
