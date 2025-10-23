@@ -1,7 +1,7 @@
 // routes/user.js
 import express from "express";
 import User from "../models/User.js";
-import { authenticateToken, requireAdmin } from "../middleware/Auth.js";
+import { authenticateToken, requireAdmin } from "../middleware/auth.js";
 import { logAudit } from "../utils/auditLogger.js";
 import upload from "../utils/upload.js"; // Helper upload
 
