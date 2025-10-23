@@ -5,18 +5,18 @@ import nodemailer from "nodemailer";
 // Bạn cần cấu hình transporter này với dịch vụ mail của bạn
 // (ví dụ: Gmail, SendGrid, Mailgun)
 const transporter = nodemailer.createTransport({
-  // service: 'gmail',
-  // auth: {
-  //   user: 'YOUR_EMAIL@gmail.com',
-  //   pass: 'YOUR_APP_PASSWORD',
-  // },
-  // ---- HOẶC DÙNG DỊCH VỤ SMTP TEST (ví dụ: Mailtrap) ----
-  host: "sandbox.smtp.mailtrap.io",
-  port: 2525,
-  auth: {
-    user: "your_mailtrap_user",
-    pass: "your_mailtrap_pass",
+   service: 'gmail',
+   auth: {
+   user: 'ntducanh9421@gmail.com',
+   pass: 'vnhg hbwh mvyo rujy',
   },
+  // ---- HOẶC DÙNG DỊCH VỤ SMTP TEST (ví dụ: Mailtrap) ----
+ // host: "sandbox.smtp.mailtrap.io",
+  //port: 2525,
+  //auth: {
+  //  user: "your_mailtrap_user",
+  //  pass: "your_mailtrap_pass",
+  //},
 });
 
 /**
