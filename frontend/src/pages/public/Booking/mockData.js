@@ -3,14 +3,15 @@
 export const venuesData = [
   {
     id: 1,
-    name: 'Truong Football',
-    address: '123 Đường ABC, Quận 1, TP.HCM',
+    name: 'Sân bóng đá Thành Công',
+    address: '123 Nguyễn Huệ, Quận 1, TP. HCM',
     phone: '0376283388',
-    rating: 4.5,
+    rating: 4.8,
+    reviewCount: 124,
     price: '200,000 VNĐ/giờ',
     images: ['venue1.jpg', 'venue2.jpg'],
-    facilities: ['Thay đồ', 'Nước uống', 'Bãi đỗ xe', 'Wifi', 'Cỏ nhân tạo', 'Ánh sáng'],
-    description: 'Sân bóng đá chất lượng cao với cỏ nhân tạo, phù hợp cho các trận đấu và luyện tập. Có đầy đủ tiện ích và dịch vụ hỗ trợ.',
+    facilities: ['Phòng thay đồ', 'Wifi miễn phí', 'Bãi đỗ xe', 'Nước uống', 'Đèn chiếu sáng'],
+    description: 'Sân cỏ nhân tạo cao cấp, đầy đủ trang thiết bị, có phòng thay đồ và khu vực đỗ xe rộng rãi.',
     operatingHours: '06:00 - 22:00',
     capacity: '7 người/sân'
   },

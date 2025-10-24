@@ -3,13 +3,15 @@ import ReviewCard from './ReviewCard'
 
 export default function ReviewsSection({ reviews, venueRating }) {
   return (
-    <div style={{
-      background: '#fff',
-      padding: '24px',
-      borderBottom: '1px solid #e5e7eb'
-    }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+    <div>
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: window.innerWidth <= 768 ? 'column' : 'row',
+          justifyContent: 'space-between', 
+          alignItems: window.innerWidth <= 768 ? 'flex-start' : 'center', 
+          marginBottom: '20px',
+          gap: window.innerWidth <= 768 ? '12px' : '0'
+        }}>
           <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
             Đánh giá từ khách hàng
           </h3>
@@ -22,7 +24,7 @@ export default function ReviewsSection({ reviews, venueRating }) {
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : 'repeat(auto-fit, minmax(300px, 1fr))',
           gap: '16px'
         }}>
           {reviews.map((review) => (
@@ -34,7 +36,7 @@ export default function ReviewsSection({ reviews, venueRating }) {
           <button style={{
             background: 'none',
             border: '1px solid #d1d5db',
-            padding: '10px 20px',
+            padding: '10px 16px',
             borderRadius: '8px',
             fontSize: '14px',
             color: '#374151',
@@ -44,7 +46,6 @@ export default function ReviewsSection({ reviews, venueRating }) {
             Xem tất cả đánh giá
           </button>
         </div>
-      </div>
     </div>
   )
 }

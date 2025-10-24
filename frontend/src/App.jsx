@@ -63,6 +63,15 @@ function App() {
             </OwnerRoute>
           } />
 
+          {/* Booking Route - With Footer */}
+          <Route path="/booking" element={
+            <div className="layout">
+              <Header />
+              <Booking />
+              <Footer />
+            </div>
+          } />
+
           {/* Public Routes - With Header/Footer */}
           <Route path="/*" element={
             <div className="layout">
@@ -74,7 +83,6 @@ function App() {
                     <ProfilePage />
                   </ProtectedRoute>
                 } />
-                <Route path="/booking" element={<Booking />} />
                 <Route path="/partner" element={<Partner />} />
                 <Route path="/facilities" element={<Facilities />} />
                 <Route path="/login" element={<Login />} />
