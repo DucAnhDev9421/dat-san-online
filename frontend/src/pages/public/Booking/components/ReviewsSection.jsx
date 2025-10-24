@@ -1,7 +1,11 @@
-import React from 'react'
+import React, { useState } from 'react'
 import ReviewCard from './ReviewCard'
+import ReviewsModal from '../modals/ReviewsModal'
 
 export default function ReviewsSection({ reviews, venueRating }) {
+  const [showAllReviews, setShowAllReviews] = useState(false)
+  
+  
   return (
     <div>
         <div style={{ 
@@ -33,19 +37,30 @@ export default function ReviewsSection({ reviews, venueRating }) {
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '20px' }}>
-          <button style={{
-            background: 'none',
-            border: '1px solid #d1d5db',
-            padding: '10px 16px',
-            borderRadius: '8px',
-            fontSize: '14px',
-            color: '#374151',
-            cursor: 'pointer',
-            fontWeight: '500'
-          }}>
+          <button 
+            onClick={() => setShowAllReviews(true)}
+            style={{
+              background: 'none',
+              border: '1px solid #d1d5db',
+              padding: '10px 16px',
+              borderRadius: '8px',
+              fontSize: '14px',
+              color: '#374151',
+              cursor: 'pointer',
+              fontWeight: '500'
+            }}
+          >
             Xem tất cả đánh giá
           </button>
         </div>
+
+        {/* Reviews Modal */}
+        <ReviewsModal 
+          isOpen={showAllReviews}
+          onClose={() => setShowAllReviews(false)}
+          reviews={reviews}
+          venueRating={venueRating}
+        />
     </div>
   )
 }
