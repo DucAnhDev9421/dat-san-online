@@ -1,9 +1,9 @@
 // routes/user.js
 import express from "express";
 import User from "../models/User.js";
-import { authenticateToken, requireAdmin } from "../middleware/Auth.js";
+import { authenticateToken, requireAdmin } from "../middleware/auth.js";
 import { logAudit } from "../utils/auditLogger.js";
-import upload from "../utils/upload.js"; // Helper upload
+import upload, { cloudinaryUtils } from "../config/cloudinary.js"; // Cloudinary upload middleware
 
 const router = express.Router();
 
@@ -29,13 +29,19 @@ router.get("/profile", (req, res) => {
  */
 router.put("/profile", async (req, res, next) => {
   try {
-    const { name, phone, address, dateOfBirth } = req.body;
+    const { name, phone } = req.body;
+
+    // Validation
+    if (!name && !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp ít nhất một trường để cập nhật (name hoặc phone).",
+      });
+    }
 
     const updateData = {};
     if (name) updateData.name = name;
     if (phone) updateData.phone = phone;
-    if (address) updateData.address = address;
-    if (dateOfBirth) updateData.dateOfBirth = new Date(dateOfBirth);
 
     const user = await User.findByIdAndUpdate(req.user._id, updateData, {
       new: true,
@@ -46,6 +52,7 @@ router.put("/profile", async (req, res, next) => {
 
     res.json({
       success: true,
+      message: "Cập nhật hồ sơ thành công.",
       data: { user },
     });
   } catch (error) {
@@ -54,7 +61,7 @@ router.put("/profile", async (req, res, next) => {
 });
 
 /**
- * API SỐ 9: Cập nhật ảnh đại diện
+ * API SỐ 9: Cập nhật ảnh đại diện với Cloudinary
  * POST /api/users/avatar
  */
 router.post("/avatar", upload.single("avatar"), async (req, res, next) => {
@@ -65,21 +72,50 @@ router.post("/avatar", upload.single("avatar"), async (req, res, next) => {
         .json({ success: false, message: "Vui lòng upload file ảnh." });
     }
 
-    // req.file.path là đường dẫn file (ví dụ: 'uploads/avatar-12345.png')
-    // Bạn nên lưu URL đầy đủ, ví dụ: `${process.env.BASE_URL}/${req.file.path}`
-    const avatarUrl = `/${req.file.path}`;
+    // Cloudinary trả về thông tin file trong req.file
+    // CloudinaryStorage sử dụng 'path' và 'filename' thay vì 'secure_url' và 'public_id'
+    const secure_url = req.file.path;
+    const public_id = req.file.filename;
 
+    // Lấy user hiện tại để xóa avatar cũ
+    const currentUser = await User.findById(req.user._id);
+    
+    // Xóa avatar cũ từ Cloudinary nếu có
+    if (currentUser.avatarPublicId) {
+      try {
+        await cloudinaryUtils.deleteImage(currentUser.avatarPublicId);
+      } catch (deleteError) {
+        console.warn('⚠️ Could not delete old avatar:', deleteError.message);
+        // Không throw error vì upload mới đã thành công
+      }
+    }
+
+    // Lưu URL và public_id vào database
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      { avatar: avatarUrl },
+      { 
+        avatar: secure_url,
+        avatarPublicId: public_id // Lưu public_id để có thể xóa sau này
+      },
       { new: true }
     ).select("-password -refreshTokens");
 
-    logAudit("UPDATE_AVATAR", req.user._id, req, { path: avatarUrl });
+    logAudit("UPDATE_AVATAR", req.user._id, req, { 
+      url: secure_url, 
+      publicId: public_id,
+      oldPublicId: currentUser.avatarPublicId
+    });
 
     res.json({
       success: true,
-      data: { user },
+      message: "Cập nhật ảnh đại diện thành công.",
+      data: { 
+        user,
+        uploadInfo: {
+          url: secure_url,
+          publicId: public_id
+        }
+      },
     });
   } catch (error) {
     next(error);
@@ -104,6 +140,74 @@ router.patch("/language", async (req, res, next) => {
     await req.user.save();
 
     res.json({ success: true, data: { language: req.user.language } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * API SỐ 11: Đổi mật khẩu
+ * PUT /api/users/change-password
+ */
+router.put("/change-password", async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    // Validation
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp mật khẩu hiện tại và mật khẩu mới.",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Mật khẩu mới phải có ít nhất 6 ký tự.",
+      });
+    }
+
+    // Get user with password field
+    const user = await User.findById(req.user._id).select("+password");
+
+    // Check if user has password (not OAuth user)
+    if (!user.password) {
+      return res.status(400).json({
+        success: false,
+        message: "Tài khoản này đăng ký qua Google, không thể đổi mật khẩu.",
+      });
+    }
+
+    // Verify current password
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Mật khẩu hiện tại không đúng.",
+      });
+    }
+
+    // Check if new password is same as current
+    const isSamePassword = await user.comparePassword(newPassword);
+    if (isSamePassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Mật khẩu mới không được trùng với mật khẩu hiện tại.",
+      });
+    }
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    // Log audit
+    logAudit("CHANGE_PASSWORD", user._id, req);
+
+    res.json({
+      success: true,
+      message: "Đổi mật khẩu thành công.",
+    });
   } catch (error) {
     next(error);
   }
@@ -180,6 +284,54 @@ router.get("/", requireAdmin, async (req, res, next) => {
           pages: Math.ceil(total / limit),
         },
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * API: Xóa ảnh đại diện
+ * DELETE /api/users/avatar
+ */
+router.delete("/avatar", async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    
+    if (!user.avatarPublicId) {
+      return res.status(400).json({
+        success: false,
+        message: "Không có ảnh đại diện để xóa."
+      });
+    }
+
+    // Xóa avatar từ Cloudinary
+    try {
+      await cloudinaryUtils.deleteImage(user.avatarPublicId);
+      console.log('✅ Deleted avatar from Cloudinary:', user.avatarPublicId);
+    } catch (deleteError) {
+      console.warn('⚠️ Could not delete avatar from Cloudinary:', deleteError.message);
+      // Vẫn tiếp tục xóa trong database
+    }
+
+    // Xóa avatar trong database
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { 
+        avatar: null,
+        avatarPublicId: null
+      },
+      { new: true }
+    ).select("-password -refreshTokens");
+
+    logAudit("DELETE_AVATAR", req.user._id, req, { 
+      publicId: user.avatarPublicId 
+    });
+
+    res.json({
+      success: true,
+      message: "Xóa ảnh đại diện thành công.",
+      data: { user: updatedUser }
     });
   } catch (error) {
     next(error);

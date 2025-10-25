@@ -15,12 +15,16 @@ import ChatButton from "./component/chat/ChatButton.jsx";
 
 // Public pages
 import HomePage from "./pages/public/HomePage.jsx";
-import ProfilePage from "./pages/public/ProfilePage.jsx";
-import Booking from "./pages/public/Booking.jsx";
+import ProfilePage from "./pages/public/ProfilePage";
+import Booking from "./pages/public/Booking";
+import Payment from "./pages/public/Payment.jsx";
 import Partner from "./pages/public/Partner.jsx";
 import Facilities from "./pages/public/Facilities.jsx";
 import Login from "./pages/auth/Login.jsx";
 import Register from "./pages/auth/Register.jsx";
+import VerifyOtp from "./pages/auth/VerifyOtp.jsx";
+import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
+import ResetPassword from "./pages/auth/ResetPassword.jsx";
 import AuthCallback from "./pages/auth/AuthCallback.jsx";
 import AuthError from "./pages/auth/AuthError.jsx";
 import NotFound from "./pages/public/NotFoud.jsx";
@@ -61,6 +65,24 @@ function App() {
             </OwnerRoute>
           } />
 
+          {/* Booking Route - With Footer */}
+          <Route path="/booking" element={
+            <div className="layout">
+              <Header />
+              <Booking />
+              <Footer />
+            </div>
+          } />
+
+          {/* Payment Route - With Footer */}
+          <Route path="/payment" element={
+            <div className="layout">
+              <Header />
+              <Payment />
+              <Footer />
+            </div>
+          } />
+
           {/* Public Routes - With Header/Footer */}
           <Route path="/*" element={
             <div className="layout">
@@ -72,11 +94,13 @@ function App() {
                     <ProfilePage />
                   </ProtectedRoute>
                 } />
-                <Route path="/booking" element={<Booking />} />
                 <Route path="/partner" element={<Partner />} />
                 <Route path="/facilities" element={<Facilities />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/verify-otp" element={<VerifyOtp />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password/:token" element={<ResetPassword />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
               <Footer />

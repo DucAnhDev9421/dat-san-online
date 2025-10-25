@@ -1,12 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './ChatButton.css';
 
 const ChatButton = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
 
   const toggleChat = () => {
     setIsOpen(!isOpen);
   };
+
+  // Simulate typing effect
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => {
+        setIsTyping(true);
+        setTimeout(() => setIsTyping(false), 2000);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   return (
     <>
@@ -73,6 +85,23 @@ const ChatButton = () => {
                 <span className="message-time">Vừa xong</span>
               </div>
             </div>
+            
+            {isTyping && (
+              <div className="message bot-message typing-message">
+                <div className="message-avatar">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4H19V9Z" fill="currentColor"/>
+                  </svg>
+                </div>
+                <div className="message-content typing-content">
+                  <div className="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="chat-input">

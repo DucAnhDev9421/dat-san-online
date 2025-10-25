@@ -121,22 +121,104 @@ export default function Facilities() {
         ) : (
           <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
             {facilities.map(f => (
-              <div key={f.id} style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16, background: "#fff", border: "1px solid #eef2f7", borderRadius: 16, overflow: "hidden" }}>
-                <VenueCard
-                  image={f.image}
-                  name={f.name}
-                  address={`${f.district}, ${f.city}`}
-                  rating={f.rating}
-                  open={f.open}
-                  price={`${f.price.toLocaleString()} VND/giờ`}
-                  sport={f.sport}
-                  status={f.status}
-                  onBook={() => {}}
-                />
-                                </div>
-                            ))}
-                        </div>
-                    )}
+              <div key={f.id} style={{ 
+                display: "flex", 
+                background: "#fff", 
+                border: "1px solid #eef2f7", 
+                borderRadius: 16, 
+                overflow: "hidden",
+                boxShadow: "0 2px 8px rgba(16,24,40,0.04)",
+                transition: "all 0.3s ease",
+                cursor: "pointer"
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = "0 4px 16px rgba(16,24,40,0.08)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 2px 8px rgba(16,24,40,0.04)";
+              }}>
+                {/* Image Section */}
+                <div style={{ width: 200, height: 150, background: "#f3f4f6", position: "relative", flexShrink: 0 }}>
+                  <img 
+                    src={f.image} 
+                    alt={f.name} 
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                  />
+                  <span style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 8,
+                    background: "#111827",
+                    color: "#fff",
+                    padding: "4px 8px",
+                    borderRadius: 12,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4
+                  }}>
+                    ★ {f.rating}
+                  </span>
+                </div>
+                
+                {/* Content Section */}
+                <div style={{ flex: 1, padding: 16, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                  <div>
+                    {/* Tags */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 12, color: "#16a34a", background: "#f0fdf4", padding: "2px 8px", borderRadius: 999 }}>
+                        {f.sport}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#10b981", background: "#ecfdf5", padding: "2px 8px", borderRadius: 999 }}>
+                        {f.status}
+                      </span>
+                    </div>
+                    
+                    {/* Title */}
+                    <h3 style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>
+                      {f.name}
+                    </h3>
+                    
+                    {/* Address */}
+                    <div style={{ fontSize: 14, color: "#6b7280", display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      📍 {f.district}, {f.city}
+                    </div>
+                    
+                    {/* Hours */}
+                    <div style={{ fontSize: 14, color: "#6b7280", display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      🕒 {f.open}
+                    </div>
+                  </div>
+                  
+                  {/* Bottom Section */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ color: "#16a34a", fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                      💰 {f.price.toLocaleString()} VND/giờ
+                    </div>
+                    <button 
+                      onClick={() => {}}
+                      style={{ 
+                        background: "#111827", 
+                        color: "#fff", 
+                        fontWeight: 700, 
+                        border: "none", 
+                        borderRadius: 10, 
+                        padding: "10px 16px", 
+                        cursor: "pointer",
+                        fontSize: 14
+                      }}
+                    >
+                      Đặt sân ngay
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
             </div>
         </div>
     );

@@ -29,6 +29,13 @@ export const config = {
   // Frontend URL (for CORS)
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
 
+  // Cloudinary Configuration
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    apiSecret: process.env.CLOUDINARY_API_SECRET
+  },
+
   // Rate Limiting
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 minutes

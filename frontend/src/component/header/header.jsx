@@ -1,13 +1,21 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { User, LogOut, Settings, ChevronDown } from 'lucide-react'
-import LocationDisplay from '../location/LocationDisplay'
+import { User, LogOut, Settings, ChevronDown, Bell } from 'lucide-react'
 
 function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth()
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [unreadNotifications, setUnreadNotifications] = useState(3) // Mock data
   const navigate = useNavigate()
+
+  // Reset user menu when authentication state changes
+  useEffect(() => {
+    setShowUserMenu(false)
+  }, [isAuthenticated, user])
+
+  // Debug logs
+  console.log('🔍 Header - Auth state:', { isAuthenticated, user, loading });
 
   const handleLogout = async () => {
     try {
@@ -50,11 +58,6 @@ function Header() {
           </nav>
         </div>
         
-        {/* Location Display */}
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <LocationDisplay />
-        </div>
-        
         <div className="auth-actions">
           {loading ? (
             <div style={{ 
@@ -74,23 +77,70 @@ function Header() {
               Đang tải...
             </div>
           ) : isAuthenticated ? (
-            <div style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {/* Notification Button */}
               <button
-                onClick={handleUserMenuClick}
+                onClick={() => navigate('/notifications')}
                 style={{
+                  position: 'relative',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
+                  justifyContent: 'center',
                   background: 'none',
                   border: 'none',
-                  padding: '8px 12px',
+                  padding: '8px',
                   borderRadius: '8px',
                   cursor: 'pointer',
-                  transition: 'background 0.2s'
+                  transition: 'background 0.2s',
+                  color: '#374151'
                 }}
-                onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.target.style.background = 'none'}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                aria-label="Thông báo"
               >
+                <Bell size={20} />
+                {unreadNotifications > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    background: '#ef4444',
+                    color: 'white',
+                    fontSize: '10px',
+                    fontWeight: '600',
+                    padding: '2px 5px',
+                    borderRadius: '10px',
+                    minWidth: '16px',
+                    height: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                    animation: 'pulse 2s infinite'
+                  }}>
+                    {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                  </span>
+                )}
+              </button>
+
+              {/* User Menu */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={handleUserMenuClick}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: 'none',
+                    border: 'none',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+                  onMouseLeave={(e) => e.target.style.background = 'none'}
+                >
                 {user?.avatar ? (
                   <img
                     src={user.avatar}
@@ -189,7 +239,7 @@ function Header() {
                     <button
                       onClick={() => {
                         setShowUserMenu(false)
-                        navigate('/settings')
+                        navigate('/profile?tab=settings')
                       }}
                       style={{
                         width: '100%',
@@ -238,22 +288,23 @@ function Header() {
                     </button>
                   </div>
                 </div>
-              )}
+                )}
 
-              {/* Click outside to close menu */}
-              {showUserMenu && (
-                <div
-                  style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    zIndex: 999,
-                  }}
-                  onClick={() => setShowUserMenu(false)}
-                />
-              )}
+                {/* Click outside to close menu */}
+                {showUserMenu && (
+                  <div
+                    style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 999,
+                    }}
+                    onClick={() => setShowUserMenu(false)}
+                  />
+                )}
+              </div>
             </div>
           ) : (
             <Link to="/login" className="btn btn-outline">Đăng ký / Đăng nhập</Link>
@@ -265,6 +316,17 @@ function Header() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.1);
+            opacity: 0.9;
+          }
         }
       `}</style>
     </header>
