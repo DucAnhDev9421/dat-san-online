@@ -23,6 +23,7 @@ const auditLogSchema = new mongoose.Schema(
         "CHANGE_PASSWORD",
         "UPDATE_PROFILE",
         "UPDATE_AVATAR",
+        "DELETE_AVATAR",
         "CHANGE_ROLE",
       ],
     },
