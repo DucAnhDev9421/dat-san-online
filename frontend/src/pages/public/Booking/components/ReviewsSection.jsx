@@ -232,8 +232,7 @@ export default function ReviewsSection({ reviews, venueRating }) {
                   boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
                   transition: 'all 0.3s ease',
                   border: '1px solid rgba(0, 0, 0, 0.05)',
-                  borderLeft: '4px solid #667eea',
-                  position: 'relative'
+                  borderLeft: '4px solid #667eea'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateX(4px)'
@@ -246,26 +245,6 @@ export default function ReviewsSection({ reviews, venueRating }) {
                   e.currentTarget.style.borderLeftColor = '#667eea'
                 }}
               >
-                {/* Review Number */}
-                <div style={{
-                  position: 'absolute',
-                  top: '16px',
-                  right: '16px',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  color: '#fff',
-                  borderRadius: '50%',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)'
-                }}>
-                  {startIndex + index + 1}
-                </div>
-                
                 <ReviewCard review={review} />
               </div>
             ))}
