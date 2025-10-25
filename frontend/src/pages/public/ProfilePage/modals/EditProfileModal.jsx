@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { FiX, FiUser, FiPhone, FiCamera, FiUpload } from 'react-icons/fi'
+import { authService } from '../../../../api/authService'
 
 export default function EditProfileModal({ isOpen, onClose, userData, onSave }) {
   const [formData, setFormData] = useState({
@@ -68,12 +69,34 @@ export default function EditProfileModal({ isOpen, onClose, userData, onSave }) 
     }
   }
 
-  const removeAvatar = () => {
-    setAvatarPreview(null)
-    setFormData(prev => ({
-      ...prev,
-      avatar: null
-    }))
+  const removeAvatar = async () => {
+    if (!userData?.avatar) {
+      // If no avatar exists, just clear the preview
+      setAvatarPreview(null)
+      setFormData(prev => ({
+        ...prev,
+        avatar: null
+      }))
+      return
+    }
+
+    if (window.confirm('Bạn có chắc chắn muốn xóa ảnh đại diện?')) {
+      try {
+        await authService.deleteAvatar()
+        
+        // Clear preview and form data
+        setAvatarPreview(null)
+        setFormData(prev => ({
+          ...prev,
+          avatar: null
+        }))
+        
+        alert('Xóa ảnh đại diện thành công!')
+      } catch (error) {
+        console.error('Delete avatar error:', error)
+        alert('Có lỗi xảy ra khi xóa ảnh đại diện. Vui lòng thử lại.')
+      }
+    }
   }
 
   const validateForm = () => {
@@ -103,20 +126,53 @@ export default function EditProfileModal({ isOpen, onClose, userData, onSave }) 
     setIsLoading(true)
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // Prepare data for API
+      const updateData = {
+        name: formData.name.trim(),
+        phone: formData.phone.trim() || undefined
+      }
+
+      // Update profile data first
+      const profileResult = await authService.updateProfile(updateData)
+      
+      // Upload avatar to Cloudinary if changed
+      let avatarUrl = formData.avatar
+      if (formData.avatar instanceof File) {
+        const avatarResult = await authService.uploadAvatar(formData.avatar)
+        avatarUrl = avatarResult.data.uploadInfo.url
+        console.log('✅ Avatar uploaded to Cloudinary:', avatarResult.data.uploadInfo)
+      } else if (formData.avatar === null && userData?.avatar) {
+        // Avatar was removed (set to null)
+        avatarUrl = null
+        console.log('✅ Avatar removed')
+      } else {
+        // Keep existing avatar
+        avatarUrl = userData?.avatar
+      }
       
       // Call onSave with updated data
       if (onSave) {
-        onSave(formData)
+        onSave({
+          ...updateData,
+          avatar: avatarUrl
+        })
       }
       
       // Close modal
       onClose()
       
+      // Show success message
+      alert(profileResult.message || 'Cập nhật thông tin thành công!')
+      
     } catch (error) {
       console.error('Save profile error:', error)
-      alert('Có lỗi xảy ra khi lưu thông tin. Vui lòng thử lại.')
+      
+      // Handle specific error messages
+      if (error.message) {
+        alert(`Lỗi: ${error.message}`)
+      } else {
+        alert('Có lỗi xảy ra khi lưu thông tin. Vui lòng thử lại.')
+      }
     } finally {
       setIsLoading(false)
     }

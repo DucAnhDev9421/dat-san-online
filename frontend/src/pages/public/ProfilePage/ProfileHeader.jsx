@@ -1,10 +1,13 @@
 import React, { useState } from 'react'
 import { Mail, Phone, MapPin, Calendar, Trophy, Heart, Edit3 } from 'lucide-react'
+import { useAuth } from '../../../contexts/AuthContext'
+import { authService } from '../../../api/authService'
 import StatCard from './components/StatCard'
 import EditProfileModal from './modals/EditProfileModal'
 import './modals/EditProfileModal.css'
 
 export default function ProfileHeader({ userData, favoriteVenues }) {
+  const { refreshUserData } = useAuth()
   const [showEditModal, setShowEditModal] = useState(false)
   const [currentUserData, setCurrentUserData] = useState(userData)
 
@@ -12,28 +15,30 @@ export default function ProfileHeader({ userData, favoriteVenues }) {
     setShowEditModal(true)
   }
 
-  const handleSaveProfile = (updatedData) => {
-    // Handle avatar separately if it's a File object
-    let avatarUrl = updatedData.avatar
-    
-    if (updatedData.avatar instanceof File) {
-      // Create object URL for preview (in real app, you'd upload to server)
-      avatarUrl = URL.createObjectURL(updatedData.avatar)
-      console.log('Avatar file selected:', updatedData.avatar.name)
+  const handleSaveProfile = async (updatedData) => {
+    try {
+      // Handle avatar separately if it's a File object
+      let avatarUrl = updatedData.avatar
+      
+      if (updatedData.avatar instanceof File) {
+        // Create object URL for preview (in real app, you'd upload to server)
+        avatarUrl = URL.createObjectURL(updatedData.avatar)
+        console.log('Avatar file selected:', updatedData.avatar.name)
+      }
+      
+      // Update local state
+      setCurrentUserData(prev => ({
+        ...prev,
+        ...updatedData,
+        avatar: avatarUrl
+      }))
+      
+      // Refresh user data from server to get latest info
+      await refreshUserData()
+      
+    } catch (error) {
+      console.error('Error updating profile:', error)
     }
-    
-    // Update local state
-    setCurrentUserData(prev => ({
-      ...prev,
-      ...updatedData,
-      avatar: avatarUrl
-    }))
-    
-    // Here you would typically call an API to save the data
-    console.log('Saving profile data:', updatedData)
-    
-    // Show success message
-    alert('Cập nhật thông tin thành công!')
   }
 
   return (

@@ -1,23 +1,47 @@
 import React, { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { LayoutDashboard, Calendar, Heart, Settings } from 'lucide-react'
+import { useAuth } from '../../../contexts/AuthContext'
 import ProfileHeader from './ProfileHeader'
 import OverviewTab from './tabs/OverviewTab'
 import BookingsTab from './tabs/BookingsTab'
 import FavoritesTab from './tabs/FavoritesTab'
 import SettingsTab from './tabs/SettingsTab'
-import { mockUserData, mockFavoriteVenues } from './mockData'
+import { mockFavoriteVenues } from './mockData'
 
 function ProfilePage() {
+  const { user, refreshUserData } = useAuth()
   const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState('overview')
-  const [userData] = useState(mockUserData)
   const [favoriteVenues, setFavoriteVenues] = useState(mockFavoriteVenues)
   const [notifications, setNotifications] = useState({
     booking: true,
     promotion: true,
     email: false
   })
+
+  // Merge real user data with mock data for missing fields
+  const userData = user ? {
+    name: user.name || 'Người dùng',
+    email: user.email || '',
+    phone: user.phone || 'Chưa cập nhật',
+    location: user.location || 'Chưa cập nhật',
+    avatar: user.avatar || null,
+    joinDate: user.createdAt || new Date().toISOString(),
+    totalBookings: user.totalBookings || 0,
+    points: user.points || 0,
+    isVIP: user.isVIP || false
+  } : {
+    name: 'Người dùng',
+    email: '',
+    phone: 'Chưa cập nhật',
+    location: 'Chưa cập nhật',
+    avatar: null,
+    joinDate: new Date().toISOString(),
+    totalBookings: 0,
+    points: 0,
+    isVIP: false
+  }
 
   // Check for tab parameter in URL and set active tab
   useEffect(() => {

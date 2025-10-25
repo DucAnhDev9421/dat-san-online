@@ -229,11 +229,29 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Refresh user data from server
+  const refreshUserData = async () => {
+    try {
+      const result = await authService.getCurrentUser();
+      if (result.data?.user) {
+        dispatch({
+          type: 'UPDATE_USER',
+          payload: result.data.user
+        });
+        // Also update localStorage
+        localStorage.setItem('userData', JSON.stringify(result.data.user));
+      }
+    } catch (error) {
+      console.error('Failed to refresh user data:', error);
+    }
+  };
+
   const value = {
     ...state,
     login,
     logout,
     updateUser,
+    refreshUserData,
     refreshAccessToken
   };
 

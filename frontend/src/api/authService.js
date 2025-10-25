@@ -103,6 +103,16 @@ export const authService = {
     }
   },
 
+  // Delete avatar
+  deleteAvatar: async () => {
+    try {
+      const response = await api.delete('/users/avatar');
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
   // Change password
   changePassword: async (currentPassword, newPassword) => {
     try {
