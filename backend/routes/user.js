@@ -29,13 +29,19 @@ router.get("/profile", (req, res) => {
  */
 router.put("/profile", async (req, res, next) => {
   try {
-    const { name, phone, address, dateOfBirth } = req.body;
+    const { name, phone } = req.body;
+
+    // Validation
+    if (!name && !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp ít nhất một trường để cập nhật (name hoặc phone).",
+      });
+    }
 
     const updateData = {};
     if (name) updateData.name = name;
     if (phone) updateData.phone = phone;
-    if (address) updateData.address = address;
-    if (dateOfBirth) updateData.dateOfBirth = new Date(dateOfBirth);
 
     const user = await User.findByIdAndUpdate(req.user._id, updateData, {
       new: true,
@@ -46,6 +52,7 @@ router.put("/profile", async (req, res, next) => {
 
     res.json({
       success: true,
+      message: "Cập nhật hồ sơ thành công.",
       data: { user },
     });
   } catch (error) {
