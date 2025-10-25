@@ -3,7 +3,7 @@ import express from "express";
 import User from "../models/User.js";
 import { authenticateToken, requireAdmin } from "../middleware/auth.js";
 import { logAudit } from "../utils/auditLogger.js";
-import upload from "../utils/upload.js"; // Helper upload
+import upload, { cloudinaryUtils } from "../config/cloudinary.js"; // Cloudinary upload middleware
 
 const router = express.Router();
 
@@ -61,7 +61,7 @@ router.put("/profile", async (req, res, next) => {
 });
 
 /**
- * API SỐ 9: Cập nhật ảnh đại diện
+ * API SỐ 9: Cập nhật ảnh đại diện với Cloudinary
  * POST /api/users/avatar
  */
 router.post("/avatar", upload.single("avatar"), async (req, res, next) => {
@@ -72,21 +72,50 @@ router.post("/avatar", upload.single("avatar"), async (req, res, next) => {
         .json({ success: false, message: "Vui lòng upload file ảnh." });
     }
 
-    // req.file.path là đường dẫn file (ví dụ: 'uploads/avatar-12345.png')
-    // Bạn nên lưu URL đầy đủ, ví dụ: `${process.env.BASE_URL}/${req.file.path}`
-    const avatarUrl = `/${req.file.path}`;
+    // Cloudinary trả về thông tin file trong req.file
+    // CloudinaryStorage sử dụng 'path' và 'filename' thay vì 'secure_url' và 'public_id'
+    const secure_url = req.file.path;
+    const public_id = req.file.filename;
 
+    // Lấy user hiện tại để xóa avatar cũ
+    const currentUser = await User.findById(req.user._id);
+    
+    // Xóa avatar cũ từ Cloudinary nếu có
+    if (currentUser.avatarPublicId) {
+      try {
+        await cloudinaryUtils.deleteImage(currentUser.avatarPublicId);
+      } catch (deleteError) {
+        console.warn('⚠️ Could not delete old avatar:', deleteError.message);
+        // Không throw error vì upload mới đã thành công
+      }
+    }
+
+    // Lưu URL và public_id vào database
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      { avatar: avatarUrl },
+      { 
+        avatar: secure_url,
+        avatarPublicId: public_id // Lưu public_id để có thể xóa sau này
+      },
       { new: true }
     ).select("-password -refreshTokens");
 
-    logAudit("UPDATE_AVATAR", req.user._id, req, { path: avatarUrl });
+    logAudit("UPDATE_AVATAR", req.user._id, req, { 
+      url: secure_url, 
+      publicId: public_id,
+      oldPublicId: currentUser.avatarPublicId
+    });
 
     res.json({
       success: true,
-      data: { user },
+      message: "Cập nhật ảnh đại diện thành công.",
+      data: { 
+        user,
+        uploadInfo: {
+          url: secure_url,
+          publicId: public_id
+        }
+      },
     });
   } catch (error) {
     next(error);
@@ -255,6 +284,54 @@ router.get("/", requireAdmin, async (req, res, next) => {
           pages: Math.ceil(total / limit),
         },
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * API: Xóa ảnh đại diện
+ * DELETE /api/users/avatar
+ */
+router.delete("/avatar", async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    
+    if (!user.avatarPublicId) {
+      return res.status(400).json({
+        success: false,
+        message: "Không có ảnh đại diện để xóa."
+      });
+    }
+
+    // Xóa avatar từ Cloudinary
+    try {
+      await cloudinaryUtils.deleteImage(user.avatarPublicId);
+      console.log('✅ Deleted avatar from Cloudinary:', user.avatarPublicId);
+    } catch (deleteError) {
+      console.warn('⚠️ Could not delete avatar from Cloudinary:', deleteError.message);
+      // Vẫn tiếp tục xóa trong database
+    }
+
+    // Xóa avatar trong database
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { 
+        avatar: null,
+        avatarPublicId: null
+      },
+      { new: true }
+    ).select("-password -refreshTokens");
+
+    logAudit("DELETE_AVATAR", req.user._id, req, { 
+      publicId: user.avatarPublicId 
+    });
+
+    res.json({
+      success: true,
+      message: "Xóa ảnh đại diện thành công.",
+      data: { user: updatedUser }
     });
   } catch (error) {
     next(error);
