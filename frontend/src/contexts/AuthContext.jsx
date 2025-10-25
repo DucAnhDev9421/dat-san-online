@@ -76,11 +76,17 @@ export const AuthProvider = ({ children }) => {
         const tokens = authService.getTokens();
         if (tokens.accessToken) {
           // Verify token with backend
-          const user = await authService.getCurrentUser();
+          console.log('🔍 Checking user authentication...');
+          const result = await authService.getCurrentUser();
+          console.log('👤 User data from API:', result);
+          
+          // Save user data to localStorage as backup
+          localStorage.setItem('userData', JSON.stringify(result.data.user));
+          
           dispatch({
             type: 'LOGIN_SUCCESS',
             payload: {
-              user,
+              user: result.data.user,
               accessToken: tokens.accessToken,
               refreshToken: tokens.refreshToken
             }
@@ -103,12 +109,21 @@ export const AuthProvider = ({ children }) => {
           // Keep tokens, might be temporary network issue
           const tokens = authService.getTokens();
           if (tokens.accessToken) {
-            // Still mark as authenticated but without user data
-            // User data will be fetched on next successful API call
+            // Try to get user data from localStorage as fallback
+            const savedUser = localStorage.getItem('userData');
+            let userData = null;
+            if (savedUser) {
+              try {
+                userData = JSON.parse(savedUser);
+              } catch (e) {
+                console.error('Error parsing saved user data:', e);
+              }
+            }
+            
             dispatch({
               type: 'LOGIN_SUCCESS',
               payload: {
-                user: null,
+                user: userData,
                 accessToken: tokens.accessToken,
                 refreshToken: tokens.refreshToken
               }
@@ -123,24 +138,37 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  // Login function
-  const login = async (userData, tokens) => {
+  // Login function - can accept userData only (tokens handled by authService)
+  const login = async (userData, tokens = null) => {
     try {
+      console.log('🔐 Login function called with userData:', userData);
       dispatch({ type: 'LOGIN_START' });
       
-      // Store tokens
-      authService.setTokens(tokens);
+      // If tokens provided, store them
+      if (tokens) {
+        authService.setTokens(tokens);
+      }
+      
+      // Get tokens from localStorage if not provided
+      const currentTokens = tokens || authService.getTokens();
+      console.log('🔑 Current tokens:', currentTokens);
+      
+      // Save user data to localStorage as backup
+      localStorage.setItem('userData', JSON.stringify(userData));
       
       dispatch({
         type: 'LOGIN_SUCCESS',
         payload: {
           user: userData,
-          ...tokens
+          accessToken: currentTokens.accessToken,
+          refreshToken: currentTokens.refreshToken
         }
       });
       
+      console.log('✅ Login successful, user stored in context and localStorage');
       return { success: true };
     } catch (error) {
+      console.error('❌ Login error:', error);
       dispatch({
         type: 'LOGIN_FAILURE',
         payload: error.message
@@ -152,13 +180,12 @@ export const AuthProvider = ({ children }) => {
   // Logout function
   const logout = async () => {
     try {
-      if (state.refreshToken) {
-        await authService.logout(state.refreshToken);
-      }
+      await authService.logout();
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      authService.clearTokens();
+      // Clear user data from localStorage
+      localStorage.removeItem('userData');
       dispatch({ type: 'LOGOUT' });
     }
   };
@@ -178,23 +205,23 @@ export const AuthProvider = ({ children }) => {
         throw new Error('No refresh token available');
       }
 
-      const response = await authService.refreshToken(state.refreshToken);
+      const result = await authService.refreshToken(state.refreshToken);
       
       authService.setTokens({
-        accessToken: response.accessToken,
-        refreshToken: response.refreshToken
+        accessToken: result.data.accessToken,
+        refreshToken: result.data.refreshToken
       });
 
       dispatch({
         type: 'LOGIN_SUCCESS',
         payload: {
-          user: response.user,
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken
+          user: result.data.user,
+          accessToken: result.data.accessToken,
+          refreshToken: result.data.refreshToken
         }
       });
 
-      return response.accessToken;
+      return result.data.accessToken;
     } catch (error) {
       console.error('Token refresh error:', error);
       logout();

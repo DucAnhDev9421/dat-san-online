@@ -1,17 +1,32 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import './Payment.css'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { 
+  FiSmartphone, 
+  FiCreditCard, 
+  FiDollarSign, 
+  FiShield, 
+  FiCalendar, 
+  FiClock, 
+  FiMapPin, 
+  FiCheck,
+  FiX,
+  FiArrowRight,
+  FiInfo,
+  FiAlertTriangle
+} from 'react-icons/fi'
+import '../../styles/Payment.css'
 
 function Payment() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [selectedMethod, setSelectedMethod] = useState('')
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [showQRCode, setShowQRCode] = useState(false)
 
-  // Mock booking data - in real app this would come from props/context/API
-  const bookingData = {
-    venue: 'Sân bóng đá ABC',
+  // Get booking data from navigation state, fallback to mock data
+  const bookingData = location.state?.bookingData || {
+    venueName: 'Sân bóng đá ABC',
     sport: 'Bóng đá',
     date: '25/01/2024',
     time: '18:00 - 20:00',
@@ -28,7 +43,7 @@ function Payment() {
       id: 'momo',
       name: 'Ví MoMo',
       description: 'Thanh toán qua ví điện tử MoMo',
-      icon: '📱',
+      icon: <FiSmartphone size={28} />,
       color: '#A50064',
       gradient: 'linear-gradient(135deg, #A50064, #D91C81)'
     },
@@ -36,7 +51,7 @@ function Payment() {
       id: 'vnpay',
       name: 'VNPay',
       description: 'Thanh toán qua cổng VNPay',
-      icon: '💳',
+      icon: <FiCreditCard size={28} />,
       color: '#0071BA',
       gradient: 'linear-gradient(135deg, #0071BA, #0090E3)'
     },
@@ -44,7 +59,7 @@ function Payment() {
       id: 'cash',
       name: 'Tiền mặt',
       description: 'Thanh toán trực tiếp tại sân',
-      icon: '💵',
+      icon: <FiDollarSign size={28} />,
       color: '#22c55e',
       gradient: 'linear-gradient(135deg, #22c55e, #10b981)'
     }
@@ -135,23 +150,23 @@ function Payment() {
                       </div>
                     </div>
                     
-                    <div 
-                      className="method-icon"
-                      style={{ background: method.gradient }}
-                    >
-                      <span>{method.icon}</span>
-                    </div>
+                     <div 
+                       className="method-icon"
+                       style={{ background: method.gradient }}
+                     >
+                       {method.icon}
+                     </div>
                     
                     <div className="method-info">
                       <h4>{method.name}</h4>
                       <p>{method.description}</p>
                     </div>
 
-                    {selectedMethod === method.id && (
-                      <div className="method-badge">
-                        <span>✓</span>
-                      </div>
-                    )}
+                     {selectedMethod === method.id && (
+                       <div className="method-badge">
+                         <FiCheck size={16} />
+                       </div>
+                     )}
                   </div>
                 ))}
               </div>
@@ -160,60 +175,60 @@ function Payment() {
             {/* Payment Info based on selected method */}
             {selectedMethod && (
               <div className="payment-info-section">
-                {selectedMethod === 'momo' && (
-                  <div className="payment-instructions momo-info">
-                    <div className="instruction-header">
-                      <span className="instruction-icon">📱</span>
-                      <h4>Hướng dẫn thanh toán MoMo</h4>
-                    </div>
+                 {selectedMethod === 'momo' && (
+                   <div className="payment-instructions momo-info">
+                     <div className="instruction-header">
+                       <FiSmartphone className="instruction-icon" size={32} />
+                       <h4>Hướng dẫn thanh toán MoMo</h4>
+                     </div>
                     <ol>
                       <li>Bấm "Xác nhận thanh toán" để chuyển đến ứng dụng MoMo</li>
                       <li>Đăng nhập vào ứng dụng MoMo</li>
                       <li>Xác nhận thông tin giao dịch</li>
                       <li>Nhập mã PIN để hoàn tất thanh toán</li>
                     </ol>
-                    <div className="info-note">
-                      <span>💡</span>
-                      <p>Giao dịch được mã hóa và bảo mật tuyệt đối</p>
-                    </div>
+                     <div className="info-note">
+                       <FiInfo size={20} />
+                       <p>Giao dịch được mã hóa và bảo mật tuyệt đối</p>
+                     </div>
                   </div>
                 )}
 
-                {selectedMethod === 'vnpay' && (
-                  <div className="payment-instructions vnpay-info">
-                    <div className="instruction-header">
-                      <span className="instruction-icon">💳</span>
-                      <h4>Hướng dẫn thanh toán VNPay</h4>
-                    </div>
+                 {selectedMethod === 'vnpay' && (
+                   <div className="payment-instructions vnpay-info">
+                     <div className="instruction-header">
+                       <FiCreditCard className="instruction-icon" size={32} />
+                       <h4>Hướng dẫn thanh toán VNPay</h4>
+                     </div>
                     <ol>
                       <li>Bấm "Xác nhận thanh toán" để chuyển đến cổng VNPay</li>
                       <li>Chọn ngân hàng hoặc ví điện tử</li>
                       <li>Nhập thông tin thẻ/tài khoản</li>
                       <li>Xác thực OTP để hoàn tất thanh toán</li>
                     </ol>
-                    <div className="info-note">
-                      <span>🔒</span>
-                      <p>Hỗ trợ hơn 40 ngân hàng và ví điện tử tại Việt Nam</p>
-                    </div>
+                     <div className="info-note">
+                       <FiShield size={20} />
+                       <p>Hỗ trợ hơn 40 ngân hàng và ví điện tử tại Việt Nam</p>
+                     </div>
                   </div>
                 )}
 
-                {selectedMethod === 'cash' && (
-                  <div className="payment-instructions cash-info">
-                    <div className="instruction-header">
-                      <span className="instruction-icon">💵</span>
-                      <h4>Thanh toán tiền mặt tại sân</h4>
-                    </div>
+                 {selectedMethod === 'cash' && (
+                   <div className="payment-instructions cash-info">
+                     <div className="instruction-header">
+                       <FiDollarSign className="instruction-icon" size={32} />
+                       <h4>Thanh toán tiền mặt tại sân</h4>
+                     </div>
                     <ol>
                       <li>Bấm "Xác nhận thanh toán" để hoàn tất đặt sân</li>
                       <li>Bạn sẽ nhận được mã đặt sân qua SMS/Email</li>
                       <li>Đến sân đúng giờ đã đặt</li>
                       <li>Xuất trình mã đặt sân và thanh toán trực tiếp</li>
                     </ol>
-                    <div className="info-note warning">
-                      <span>⚠️</span>
-                      <p>Vui lòng đến sớm 10 phút và mang theo đủ tiền mặt</p>
-                    </div>
+                     <div className="info-note warning">
+                       <FiAlertTriangle size={20} />
+                       <p>Vui lòng đến sớm 10 phút và mang theo đủ tiền mặt</p>
+                     </div>
                   </div>
                 )}
               </div>
@@ -236,32 +251,40 @@ function Payment() {
             <div className="booking-summary-card">
               <h3>Thông tin đặt sân</h3>
               
-              <div className="summary-section">
-                <div className="venue-header">
-                  <div className="venue-icon">🏟️</div>
-                  <div>
-                    <h4>{bookingData.venue}</h4>
-                    <p className="sport-type">{bookingData.sport}</p>
-                  </div>
-                </div>
-              </div>
+               <div className="summary-section">
+                 <div className="venue-header">
+                   <div className="venue-icon">
+                     <FiMapPin size={32} />
+                   </div>
+                   <div>
+                     <h4>{bookingData.venueName}</h4>
+                     <p className="sport-type">{bookingData.sport}</p>
+                   </div>
+                 </div>
+               </div>
 
               <div className="summary-divider"></div>
 
-              <div className="summary-section">
-                <div className="summary-row">
-                  <span className="label">📅 Ngày:</span>
-                  <span className="value">{bookingData.date}</span>
-                </div>
-                <div className="summary-row">
-                  <span className="label">🕐 Giờ:</span>
-                  <span className="value">{bookingData.time}</span>
-                </div>
-                <div className="summary-row">
-                  <span className="label">⏱️ Thời lượng:</span>
-                  <span className="value">{bookingData.duration} giờ</span>
-                </div>
-              </div>
+               <div className="summary-section">
+                 <div className="summary-row">
+                   <span className="label">
+                     <FiCalendar size={16} style={{ marginRight: '8px' }} />
+                     Ngày:
+                   </span>
+                   <span className="value">{bookingData.date}</span>
+                 </div>
+                 <div className="summary-row">
+                   <span className="label">
+                     <FiClock size={16} style={{ marginRight: '8px' }} />
+                     Giờ:
+                   </span>
+                   <span className="value">{bookingData.time}</span>
+                 </div>
+                 <div className="summary-row">
+                   <span className="label">⏱️ Thời lượng:</span>
+                   <span className="value">{bookingData.duration} giờ</span>
+                 </div>
+               </div>
 
               <div className="summary-divider"></div>
 
@@ -294,13 +317,13 @@ function Payment() {
                 <span className="value">{bookingData.total.toLocaleString('vi-VN')} đ</span>
               </div>
 
-              <div className="security-badge">
-                <span className="badge-icon">🛡️</span>
-                <div>
-                  <strong>Thanh toán an toàn</strong>
-                  <p>Thông tin được mã hóa SSL</p>
-                </div>
-              </div>
+               <div className="security-badge">
+                 <FiShield className="badge-icon" size={24} />
+                 <div>
+                   <strong>Thanh toán an toàn</strong>
+                   <p>Thông tin được mã hóa SSL</p>
+                 </div>
+               </div>
             </div>
           </div>
         </div>
@@ -309,26 +332,26 @@ function Payment() {
         {showQRCode && (
           <div className="modal-overlay" onClick={() => setShowQRCode(false)}>
             <div className="qr-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>Thanh toán MoMo</h3>
-                <button 
-                  className="close-btn"
-                  onClick={() => setShowQRCode(false)}
-                >
-                  ×
-                </button>
-              </div>
+               <div className="modal-header">
+                 <h3>Thanh toán MoMo</h3>
+                 <button 
+                   className="close-btn"
+                   onClick={() => setShowQRCode(false)}
+                 >
+                   <FiX size={24} />
+                 </button>
+               </div>
 
               <div className="qr-modal-body">
-                <div className="qr-tabs">
-                  <div className="qr-tab active">
-                    <span className="tab-icon">📱</span>
-                    <div>
-                      <h4>Quét mã QR</h4>
-                      <p>Sử dụng app MoMo để quét</p>
-                    </div>
-                  </div>
-                </div>
+                 <div className="qr-tabs">
+                   <div className="qr-tab active">
+                     <FiSmartphone className="tab-icon" size={32} />
+                     <div>
+                       <h4>Quét mã QR</h4>
+                       <p>Sử dụng app MoMo để quét</p>
+                     </div>
+                   </div>
+                 </div>
 
                 <div className="qr-content">
                   <div className="qr-code-wrapper">
@@ -410,8 +433,11 @@ function Payment() {
                     </div>
                   </div>
 
-                  <div className="qr-instructions">
-                    <h4>📱 Hướng dẫn thanh toán</h4>
+                   <div className="qr-instructions">
+                     <h4>
+                       <FiSmartphone size={18} style={{ marginRight: '8px' }} />
+                       Hướng dẫn thanh toán
+                     </h4>
                     <ol>
                       <li>Mở ứng dụng <strong>MoMo</strong> trên điện thoại</li>
                       <li>Chọn <strong>"Quét mã QR"</strong></li>
@@ -423,24 +449,27 @@ function Payment() {
                       <span>Hoặc</span>
                     </div>
 
-                    <button 
-                      className="btn btn-momo"
-                      onClick={handleDirectPayment}
-                    >
-                      <span>📱</span>
-                      Mở ứng dụng MoMo
-                    </button>
+                     <button 
+                       className="btn btn-momo"
+                       onClick={handleDirectPayment}
+                     >
+                       <FiSmartphone size={20} />
+                       Mở ứng dụng MoMo
+                     </button>
 
-                    <div className="qr-note">
-                      <span>⏱️</span>
-                      <p>Mã QR có hiệu lực trong <strong>15 phút</strong></p>
-                    </div>
+                     <div className="qr-note">
+                       <FiClock size={20} />
+                       <p>Mã QR có hiệu lực trong <strong>15 phút</strong></p>
+                     </div>
                   </div>
                 </div>
 
-                <div className="qr-footer">
-                  <p>💡 Nếu đã thanh toán thành công, vui lòng chờ hệ thống xác nhận (khoảng 30 giây)</p>
-                </div>
+                 <div className="qr-footer">
+                   <p>
+                     <FiInfo size={16} style={{ marginRight: '8px' }} />
+                     Nếu đã thanh toán thành công, vui lòng chờ hệ thống xác nhận (khoảng 30 giây)
+                   </p>
+                 </div>
               </div>
             </div>
           </div>
@@ -450,16 +479,16 @@ function Payment() {
         {showConfirmModal && (
           <div className="modal-overlay" onClick={() => !isProcessing && setShowConfirmModal(false)}>
             <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>Xác nhận thanh toán</h3>
-                <button 
-                  className="close-btn"
-                  onClick={() => setShowConfirmModal(false)}
-                  disabled={isProcessing}
-                >
-                  ×
-                </button>
-              </div>
+               <div className="modal-header">
+                 <h3>Xác nhận thanh toán</h3>
+                 <button 
+                   className="close-btn"
+                   onClick={() => setShowConfirmModal(false)}
+                   disabled={isProcessing}
+                 >
+                   <FiX size={24} />
+                 </button>
+               </div>
 
               <div className="modal-body">
                 <div className="confirm-icon">
@@ -472,7 +501,7 @@ function Payment() {
                 <div className="confirm-details">
                   <div className="confirm-row">
                     <span>Sân:</span>
-                    <strong>{bookingData.venue}</strong>
+                    <strong>{bookingData.venueName}</strong>
                   </div>
                   <div className="confirm-row">
                     <span>Ngày giờ:</span>
@@ -484,12 +513,12 @@ function Payment() {
                   </div>
                 </div>
 
-                {selectedMethod === 'cash' && (
-                  <div className="cash-reminder">
-                    <span>💡</span>
-                    <p>Bạn sẽ thanh toán <strong>{bookingData.total.toLocaleString('vi-VN')} đ</strong> trực tiếp tại sân</p>
-                  </div>
-                )}
+                 {selectedMethod === 'cash' && (
+                   <div className="cash-reminder">
+                     <FiInfo size={20} />
+                     <p>Bạn sẽ thanh toán <strong>{bookingData.total.toLocaleString('vi-VN')} đ</strong> trực tiếp tại sân</p>
+                   </div>
+                 )}
               </div>
 
               <div className="modal-actions">

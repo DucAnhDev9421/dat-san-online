@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { User, LogOut, Settings, ChevronDown, Bell } from 'lucide-react'
@@ -9,6 +9,14 @@ function Header() {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(3) // Mock data
   const navigate = useNavigate()
+
+  // Reset user menu when authentication state changes
+  useEffect(() => {
+    setShowUserMenu(false)
+  }, [isAuthenticated, user])
+
+  // Debug logs
+  console.log('🔍 Header - Auth state:', { isAuthenticated, user, loading });
 
   const handleLogout = async () => {
     try {

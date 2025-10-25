@@ -27,6 +27,7 @@ function Booking() {
   const [selectedSlots, setSelectedSlots] = useState([])
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   // Scroll to top when component mounts or venue changes
   useEffect(() => {
@@ -45,9 +46,34 @@ function Booking() {
     }
   }
 
-  const handleBookingSubmit = () => {
+  const handleBookingSubmit = (bookingData) => {
+    setIsProcessing(true)
     setShowBookingModal(false)
-    navigate('/payment')
+    
+    // Prepare booking data to pass to payment page
+    const bookingInfo = {
+      venueId: venueData.id,
+      venueName: venueData.name,
+      sport: venueData.sport,
+      date: selectedDate.toLocaleDateString('vi-VN'),
+      time: selectedSlots.map(slot => slot.split('-')[2]).join(', '),
+      duration: selectedSlots.length,
+      pricePerHour: venueData.price,
+      subtotal: calculateTotalAmount(),
+      serviceFee: Math.round(calculateTotalAmount() * 0.05), // 5% service fee
+      discount: 0,
+      total: calculateTotalAmount() + Math.round(calculateTotalAmount() * 0.05),
+      selectedSlots: selectedSlots,
+      venueData: venueData
+    }
+    
+    // Small delay to show processing state
+    setTimeout(() => {
+      // Navigate to payment with booking data
+      navigate('/payment', { 
+        state: { bookingData: bookingInfo } 
+      })
+    }, 500)
   }
 
   // Calculate total amount based on selected slots
@@ -84,6 +110,14 @@ function Booking() {
       minHeight: '100vh', 
       background: '#f8fafc'
     }}>
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
       {/* Gallery Section */}
       <div style={{ 
         maxWidth: '1200px',
@@ -208,6 +242,40 @@ function Booking() {
           onClose={() => setShowBookingModal(false)}
           onSubmit={handleBookingSubmit}
         />
+      )}
+      
+      {/* Processing Overlay */}
+      {isProcessing && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          flexDirection: 'column',
+          gap: '20px'
+        }}>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '4px solid #f3f3f3',
+            borderTop: '4px solid #16a34a',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }}></div>
+          <div style={{
+            color: '#fff',
+            fontSize: '18px',
+            fontWeight: '600'
+          }}>
+            Đang chuyển đến trang thanh toán...
+          </div>
+        </div>
       )}
     </div>
   )

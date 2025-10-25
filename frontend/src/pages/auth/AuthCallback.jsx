@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { authService } from '../../api/authService';
 
 function AuthCallback() {
   const [searchParams] = useSearchParams();
@@ -37,13 +38,19 @@ function AuthCallback() {
 
       // Parse user data
       const userData = JSON.parse(decodeURIComponent(userParam));
-      console.log('👤 User data:', userData);
+      console.log('👤 User data from Google:', userData);
+      console.log('📧 Email:', userData.email);
+      console.log('👤 Name:', userData.name);
+      console.log('🔑 Role:', userData.role);
 
-      // Login user
-      const result = await login(userData, {
+      // Store tokens first
+      authService.setTokens({
         accessToken,
         refreshToken
       });
+
+      // Login user with the userData
+      const result = await login(userData);
 
       if (result.success) {
         console.log('✅ Login successful, redirecting...');

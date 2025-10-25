@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Eye, EyeOff, CheckCircle } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Eye, EyeOff } from 'lucide-react'
+import { authService } from '../../api/authService'
 
 function ResetPassword() {
-  const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
-  const token = searchParams.get('token')
-
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [formData, setFormData] = useState({
@@ -14,18 +11,17 @@ function ResetPassword() {
     confirmPassword: ''
   })
   const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
-  const [tokenValid, setTokenValid] = useState(true)
+  const [success, setSuccess] = useState(false)
+  
+  const navigate = useNavigate()
+  const { token } = useParams()
 
   useEffect(() => {
-    // Validate token exists
     if (!token) {
-      setTokenValid(false)
-      setError('Token không hợp lệ hoặc đã hết hạn')
+      navigate('/forgot-password')
     }
-    // TODO: Validate token with backend when API is ready
-  }, [token])
+  }, [token, navigate])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -33,7 +29,6 @@ function ResetPassword() {
       ...prev,
       [name]: value
     }))
-    // Clear error when user starts typing
     if (error) setError('')
   }
 
@@ -42,15 +37,8 @@ function ResetPassword() {
     setLoading(true)
     setError('')
 
-    // Validate passwords
     if (!formData.password || !formData.confirmPassword) {
       setError('Vui lòng điền đầy đủ thông tin')
-      setLoading(false)
-      return
-    }
-
-    if (formData.password.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự')
       setLoading(false)
       return
     }
@@ -61,79 +49,24 @@ function ResetPassword() {
       return
     }
 
+    if (formData.password.length < 6) {
+      setError('Mật khẩu phải có ít nhất 6 ký tự')
+      setLoading(false)
+      return
+    }
+
     try {
-      // TODO: Implement reset password API call when backend is ready
-      // await authService.resetPassword(token, formData.password)
+      const result = await authService.resetPassword(token, formData.password)
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
-      setSuccess(true)
-      
-      // Redirect to login after 3 seconds
-      setTimeout(() => {
-        navigate('/login')
-      }, 3000)
+      if (result.success) {
+        setSuccess(true)
+      }
     } catch (error) {
       console.error('Reset password error:', error)
-      setError('Có lỗi xảy ra. Vui lòng thử lại sau.')
+      setError(error.message || 'Token không hợp lệ hoặc đã hết hạn.')
     } finally {
       setLoading(false)
     }
-  }
-
-  if (!tokenValid) {
-    return (
-      <main className="auth-wrapper">
-        <section className="hero hero-slim" />
-        <div className="container">
-          <div className="auth-card">
-            <div className="auth-left">
-              <h2>Sport Booking</h2>
-              <p>Đặt sân thể thao dễ dàng, tiện lợi</p>
-              <div className="auth-illustration" />
-            </div>
-            <div className="auth-right">
-              <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  borderRadius: '50%',
-                  background: '#fee',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 20px',
-                  color: '#c33',
-                  fontSize: '24px'
-                }}>
-                  ✕
-                </div>
-                <h3 style={{ marginBottom: '12px' }}>Link không hợp lệ</h3>
-                <p style={{ color: '#666', marginBottom: '24px' }}>
-                  Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.
-                </p>
-                <Link to="/forgot-password" className="btn btn-dark" style={{
-                  display: 'inline-block',
-                  textDecoration: 'none',
-                  marginBottom: '12px'
-                }}>
-                  Yêu cầu link mới
-                </Link>
-                <br />
-                <Link to="/login" style={{
-                  color: '#666',
-                  fontSize: '14px',
-                  textDecoration: 'none'
-                }}>
-                  Quay lại đăng nhập
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    )
   }
 
   if (success) {
@@ -148,30 +81,22 @@ function ResetPassword() {
               <div className="auth-illustration" />
             </div>
             <div className="auth-right">
-              <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  borderRadius: '50%',
-                  background: '#e8f5e9',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 20px',
-                  color: '#2e7d32'
-                }}>
-                  <CheckCircle size={32} />
-                </div>
-                <h3 style={{ marginBottom: '12px' }}>Đặt lại mật khẩu thành công!</h3>
-                <p style={{ color: '#666', marginBottom: '24px' }}>
-                  Mật khẩu của bạn đã được thay đổi thành công.
-                  <br />
-                  Bạn sẽ được chuyển đến trang đăng nhập...
-                </p>
-                <Link to="/login" className="btn btn-dark" style={{
-                  display: 'inline-block',
-                  textDecoration: 'none'
-                }}>
+              <h3>Đặt lại mật khẩu thành công</h3>
+              
+              <div className="success-message" style={{
+                background: '#d4edda',
+                color: '#155724',
+                padding: '16px',
+                borderRadius: '8px',
+                marginBottom: '20px',
+                fontSize: '14px'
+              }}>
+                <p>Mật khẩu của bạn đã được đặt lại thành công!</p>
+                <p>Bây giờ bạn có thể đăng nhập với mật khẩu mới.</p>
+              </div>
+
+              <div style={{ textAlign: 'center' }}>
+                <Link to="/login" className="btn btn-dark full">
                   Đăng nhập ngay
                 </Link>
               </div>
@@ -194,13 +119,9 @@ function ResetPassword() {
           </div>
           <div className="auth-right">
             <h3>Đặt lại mật khẩu</h3>
-            <p style={{ 
-              color: '#666', 
-              fontSize: '14px', 
-              marginBottom: '24px',
-              lineHeight: '1.5'
-            }}>
-              Vui lòng nhập mật khẩu mới cho tài khoản của bạn.
+            
+            <p style={{ marginBottom: '20px', color: '#666' }}>
+              Nhập mật khẩu mới cho tài khoản của bạn
             </p>
             
             {error && (
@@ -222,7 +143,7 @@ function ResetPassword() {
                   className="input" 
                   name="password"
                   type={showPassword ? 'text' : 'password'} 
-                  placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" 
+                  placeholder="Mật khẩu mới" 
                   value={formData.password}
                   onChange={handleInputChange}
                   disabled={loading}
@@ -258,68 +179,20 @@ function ResetPassword() {
                   {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-
-              {formData.password && (
-                <div style={{ 
-                  fontSize: '12px', 
-                  marginBottom: '16px',
-                  color: '#666'
-                }}>
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '6px',
-                    marginBottom: '4px'
-                  }}>
-                    <span style={{ 
-                      color: formData.password.length >= 6 ? '#2e7d32' : '#999' 
-                    }}>
-                      {formData.password.length >= 6 ? '✓' : '○'}
-                    </span>
-                    Ít nhất 6 ký tự
-                  </div>
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '6px'
-                  }}>
-                    <span style={{ 
-                      color: formData.password === formData.confirmPassword && formData.confirmPassword ? '#2e7d32' : '#999' 
-                    }}>
-                      {formData.password === formData.confirmPassword && formData.confirmPassword ? '✓' : '○'}
-                    </span>
-                    Mật khẩu khớp nhau
-                  </div>
-                </div>
-              )}
               
               <button 
                 className="btn btn-dark full" 
                 type="submit"
-                disabled={loading}
-                style={{ 
-                  opacity: loading ? 0.7 : 1,
-                  marginBottom: '16px'
-                }}
+                disabled={loading || !formData.password || !formData.confirmPassword}
+                style={{ opacity: (loading || !formData.password || !formData.confirmPassword) ? 0.7 : 1 }}
               >
-                {loading ? 'Đang xử lý...' : 'Đặt lại mật khẩu'}
+                {loading ? 'Đang đặt lại...' : 'Đặt lại mật khẩu'}
               </button>
             </form>
-
-            <div style={{
-              textAlign: 'center',
-              fontSize: '14px',
-              color: '#666',
-              paddingTop: '16px',
-              borderTop: '1px solid #eee'
-            }}>
-              Nhớ mật khẩu?{' '}
-              <Link to="/login" style={{
-                color: '#333',
-                fontWeight: '600',
-                textDecoration: 'none'
-              }}>
-                Đăng nhập
+            
+            <div style={{ textAlign: 'center', marginTop: '20px' }}>
+              <Link to="/login" style={{ color: '#666', fontSize: '14px' }}>
+                Quay lại đăng nhập
               </Link>
             </div>
           </div>
@@ -330,4 +203,3 @@ function ResetPassword() {
 }
 
 export default ResetPassword
-

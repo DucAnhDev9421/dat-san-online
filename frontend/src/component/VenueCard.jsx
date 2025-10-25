@@ -15,16 +15,21 @@ export default function VenueCard({
   chip,
 }) {
   return (
-    <div style={{
-      background: '#fff',
-      border: '1px solid #eef2f7',
-      borderRadius: 16,
-      overflow: 'hidden',
-      boxShadow: '0 2px 8px rgba(16,24,40,0.04)',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
-      <div style={{ position: 'relative', width: '100%', height: 200, background: '#f3f4f6' }}>
+    <div 
+      className="venue-card"
+      style={{
+        background: '#fff',
+        border: '1px solid #eef2f7',
+        borderRadius: 16,
+        overflow: 'hidden',
+        boxShadow: '0 2px 8px rgba(16,24,40,0.04)',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'all 0.3s ease',
+        cursor: 'pointer'
+      }}
+    >
+      <div className="venue-card-image" style={{ position: 'relative', width: '100%', height: 200, background: '#f3f4f6' }}>
         {image ? (
           <img src={image} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : null}
@@ -69,7 +74,11 @@ export default function VenueCard({
               <FiDollarSign /> {price}
             </span>
             {onBook && (
-              <button onClick={onBook} style={{ marginLeft: 'auto', background: '#111827', color: '#fff', fontWeight: 700, border: 'none', borderRadius: 10, padding: '10px 14px', cursor: 'pointer' }}>
+              <button 
+                className="venue-card-button"
+                onClick={onBook} 
+                style={{ marginLeft: 'auto', background: '#111827', color: '#fff', fontWeight: 700, border: 'none', borderRadius: 10, padding: '10px 14px', cursor: 'pointer' }}
+              >
                 Đặt sân ngay
               </button>
             )}

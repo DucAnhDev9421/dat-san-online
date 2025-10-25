@@ -1,5 +1,7 @@
 //Trang đối tác
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import AOS from 'aos';
+import 'aos/dist/aos.css';
 
 const benefits = [
   {
@@ -57,6 +59,15 @@ export default function Partner() {
     address: ""
   });
 
+  useEffect(() => {
+    AOS.init({
+      duration: 1000,
+      easing: 'ease-in-out',
+      once: true,
+      offset: 100
+    });
+  }, []);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     console.log("Form submitted:", formData);
@@ -83,8 +94,8 @@ export default function Partner() {
           background: "url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23ffffff\" fill-opacity=\"0.05\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')",
           opacity: 0.4
         }} />
-        <div style={{ position: "relative", maxWidth: 900, margin: "0 auto" }}>
-          <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: 2, marginBottom: 16, opacity: 0.9 }}>
+        <div style={{ position: "relative", maxWidth: 900, margin: "0 auto" }} data-aos="fade-up">
+          <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: 2, marginBottom: 16, opacity: 0.9 }} data-aos="fade-up" data-aos-delay="100">
             CHƯƠNG TRÌNH ĐỐI TÁC
           </div>
           <h1 style={{ 
@@ -93,10 +104,10 @@ export default function Partner() {
             marginBottom: 24,
             lineHeight: 1.2,
             textShadow: "0 2px 8px rgba(0,0,0,0.1)"
-          }}>
+          }} data-aos="fade-up" data-aos-delay="200">
             Cùng Phát Triển Với Đặt Sân Thể Thao
           </h1>
-          <p style={{ fontSize: 20, marginBottom: 40, opacity: 0.95, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 20, marginBottom: 40, opacity: 0.95, lineHeight: 1.6 }} data-aos="fade-up" data-aos-delay="300">
             Đưa sân thể thao của bạn lên một tầm cao mới. Tiếp cận hàng nghìn khách hàng, 
             tăng doanh thu và quản lý hiệu quả với nền tảng hàng đầu Việt Nam.
           </p>
@@ -112,6 +123,8 @@ export default function Partner() {
             boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
             transition: "all 0.3s ease"
           }}
+          data-aos="zoom-in" 
+          data-aos-delay="400"
           onMouseEnter={e => {
             e.currentTarget.style.transform = "translateY(-3px)";
             e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.2)";
@@ -140,7 +153,7 @@ export default function Partner() {
           gap: 40
         }}>
           {stats.map((stat, index) => (
-            <div key={index} style={{ textAlign: "center" }}>
+            <div key={index} style={{ textAlign: "center" }} data-aos="fade-up" data-aos-delay={index * 100}>
               <div style={{ 
                 fontSize: 48, 
                 fontWeight: 800, 
@@ -159,7 +172,7 @@ export default function Partner() {
 
       {/* Benefits Section */}
       <section style={{ padding: "80px 24px", maxWidth: 1200, margin: "0 auto" }}>
-        <div style={{ textAlign: "center", marginBottom: 60 }}>
+        <div style={{ textAlign: "center", marginBottom: 60 }} data-aos="fade-up">
           <h2 style={{ 
             fontSize: 42, 
             fontWeight: 700, 
@@ -188,6 +201,8 @@ export default function Partner() {
               transition: "all 0.3s ease",
               cursor: "pointer"
             }}
+            data-aos="fade-up"
+            data-aos-delay={index * 100}
             onMouseEnter={e => {
               e.currentTarget.style.transform = "translateY(-8px)";
               e.currentTarget.style.boxShadow = "0 12px 32px rgba(22,163,74,0.15)";
@@ -221,7 +236,7 @@ export default function Partner() {
         background: "#f9fafb"
       }}>
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 60 }}>
+          <div style={{ textAlign: "center", marginBottom: 60 }} data-aos="fade-up">
             <h2 style={{ 
               fontSize: 42, 
               fontWeight: 700, 
@@ -241,7 +256,7 @@ export default function Partner() {
             gap: 24
           }}>
             {steps.map((step, index) => (
-              <div key={index} style={{ position: "relative" }}>
+              <div key={index} style={{ position: "relative" }} data-aos="fade-up" data-aos-delay={index * 150}>
                 {index < steps.length - 1 && (
                   <div style={{
                     position: "absolute",
@@ -303,7 +318,7 @@ export default function Partner() {
         background: "#fff"
       }}>
         <div style={{ maxWidth: 700, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <div style={{ textAlign: "center", marginBottom: 48 }} data-aos="fade-up">
             <h2 style={{ 
               fontSize: 42, 
               fontWeight: 700, 
@@ -323,7 +338,7 @@ export default function Partner() {
             borderRadius: 24,
             border: "2px solid #e5e7eb",
             boxShadow: "0 8px 32px rgba(0,0,0,0.08)"
-          }}>
+          }} data-aos="fade-up" data-aos-delay="200">
             <div style={{ marginBottom: 24 }}>
               <label style={{ 
                 display: "block",

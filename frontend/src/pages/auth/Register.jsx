@@ -63,11 +63,24 @@ function Register() {
     }
 
     try {
-      // TODO: Implement email registration when backend is ready
-      setError('Tính năng đăng ký bằng email chưa được hỗ trợ. Vui lòng sử dụng Google OAuth2.')
+      const result = await authService.register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password
+      })
+      
+      if (result.success) {
+        // Registration successful - redirect to OTP verification
+        navigate('/verify-otp', { 
+          state: { 
+            email: formData.email,
+            message: result.message 
+          }
+        })
+      }
     } catch (error) {
       console.error('Register error:', error)
-      setError('Đăng ký thất bại. Vui lòng thử lại.')
+      setError(error.message || 'Đăng ký thất bại. Vui lòng thử lại.')
     } finally {
       setLoading(false)
     }

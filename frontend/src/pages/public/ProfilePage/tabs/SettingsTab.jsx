@@ -1,7 +1,11 @@
-import React from 'react'
+import React, { useState } from 'react'
 import ToggleSwitch from '../components/ToggleSwitch'
+import ChangePasswordModal from '../modals/ChangePasswordModal'
+import '../modals/ChangePasswordModal.css'
 
 export default function SettingsTab({ notifications, setNotifications }) {
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
+
   return (
     <div className="settings-section">
       <h3 style={{ marginBottom: '24px', fontSize: '20px', fontWeight: '600' }}>Cài đặt tài khoản</h3>
@@ -50,12 +54,16 @@ export default function SettingsTab({ notifications, setNotifications }) {
         <div>
           <h4 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>Bảo mật</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <button className="btn btn-outline" style={{ 
-              justifyContent: 'flex-start',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}>
+            <button 
+              className="btn btn-outline" 
+              style={{ 
+                justifyContent: 'flex-start',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}
+              onClick={() => setShowChangePasswordModal(true)}
+            >
               🔒 Đổi mật khẩu
             </button>
             <button className="btn btn-outline" style={{ 
@@ -97,6 +105,12 @@ export default function SettingsTab({ notifications, setNotifications }) {
           </div>
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal 
+        isOpen={showChangePasswordModal}
+        onClose={() => setShowChangePasswordModal(false)}
+      />
     </div>
   )
 }

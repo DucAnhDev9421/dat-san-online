@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { authService } from '../../api/authService'
@@ -12,9 +12,22 @@ function Login() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Check for success message from other pages
+  useEffect(() => {
+    if (location.state?.message) {
+      setSuccess(location.state.message)
+      // Pre-fill email if provided
+      if (location.state.email) {
+        setFormData(prev => ({ ...prev, email: location.state.email }))
+      }
+    }
+  }, [location.state])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -43,11 +56,16 @@ function Login() {
     setError('')
 
     try {
-      // TODO: Implement regular login when backend supports it
-      setError('Tính năng đăng nhập thông thường chưa được hỗ trợ. Vui lòng sử dụng Google OAuth2.')
+      const result = await authService.login(formData.email, formData.password)
+      
+      // Login successful - update auth context
+      if (result.success && result.data.user) {
+        login(result.data.user)
+        navigate('/')
+      }
     } catch (error) {
       console.error('Login error:', error)
-      setError('Đăng nhập thất bại. Vui lòng thử lại.')
+      setError(error.message || 'Đăng nhập thất bại. Vui lòng thử lại.')
     } finally {
       setLoading(false)
     }
@@ -70,6 +88,19 @@ function Login() {
             </div>
 
             <h3>Đăng nhập tài khoản</h3>
+            
+            {success && (
+              <div className="success-message" style={{
+                background: '#d4edda',
+                color: '#155724',
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                fontSize: '14px'
+              }}>
+                {success}
+              </div>
+            )}
             
             {error && (
               <div className="error-message" style={{
