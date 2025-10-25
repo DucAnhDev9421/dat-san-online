@@ -109,6 +109,74 @@ router.patch("/language", async (req, res, next) => {
   }
 });
 
+/**
+ * API SỐ 11: Đổi mật khẩu
+ * PUT /api/users/change-password
+ */
+router.put("/change-password", async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    // Validation
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp mật khẩu hiện tại và mật khẩu mới.",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Mật khẩu mới phải có ít nhất 6 ký tự.",
+      });
+    }
+
+    // Get user with password field
+    const user = await User.findById(req.user._id).select("+password");
+
+    // Check if user has password (not OAuth user)
+    if (!user.password) {
+      return res.status(400).json({
+        success: false,
+        message: "Tài khoản này đăng ký qua Google, không thể đổi mật khẩu.",
+      });
+    }
+
+    // Verify current password
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Mật khẩu hiện tại không đúng.",
+      });
+    }
+
+    // Check if new password is same as current
+    const isSamePassword = await user.comparePassword(newPassword);
+    if (isSamePassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Mật khẩu mới không được trùng với mật khẩu hiện tại.",
+      });
+    }
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    // Log audit
+    logAudit("CHANGE_PASSWORD", user._id, req);
+
+    res.json({
+      success: true,
+      message: "Đổi mật khẩu thành công.",
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // --- ADMIN ROUTES ---
 // (Di chuyển từ auth.js)
 
