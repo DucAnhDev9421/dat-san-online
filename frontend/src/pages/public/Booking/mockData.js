@@ -113,7 +113,7 @@ export const reviews = [
     id: 1,
     user: 'Nguyễn Văn An',
     rating: 5,
-    date: '2025-01-10',
+    date: '2025-01-15',
     comment: 'Sân rất đẹp, cỏ nhân tạo chất lượng tốt. Nhân viên phục vụ nhiệt tình, giá cả hợp lý. Sẽ quay lại lần sau!',
     avatar: 'A'
   },
@@ -121,7 +121,7 @@ export const reviews = [
     id: 2,
     user: 'Trần Thị Bình',
     rating: 4,
-    date: '2025-01-08',
+    date: '2025-01-14',
     comment: 'Sân sạch sẽ, ánh sáng tốt. Chỉ có điều bãi đỗ xe hơi chật vào cuối tuần. Nhìn chung rất hài lòng.',
     avatar: 'B'
   },
@@ -129,7 +129,7 @@ export const reviews = [
     id: 3,
     user: 'Lê Hoàng Minh',
     rating: 5,
-    date: '2025-01-05',
+    date: '2025-01-13',
     comment: 'Đã chơi ở đây nhiều lần, chất lượng sân ổn định. Có wifi miễn phí, nước uống giá rẻ. Recommend!',
     avatar: 'L'
   },
@@ -137,9 +137,257 @@ export const reviews = [
     id: 4,
     user: 'Phạm Thị Hoa',
     rating: 4,
-    date: '2025-01-03',
+    date: '2025-01-12',
     comment: 'Sân bóng đẹp, không gian thoáng mát. Chỉ cần cải thiện thêm về dịch vụ thay đồ thì sẽ hoàn hảo.',
     avatar: 'P'
+  },
+  {
+    id: 5,
+    user: 'Hoàng Văn Cường',
+    rating: 5,
+    date: '2025-01-11',
+    comment: 'Sân cỏ nhân tạo rất mềm, không bị trượt chân. Hệ thống ánh sáng đầy đủ, chơi ban đêm cũng rất tốt. Giá cả hợp lý.',
+    avatar: 'H'
+  },
+  {
+    id: 6,
+    user: 'Nguyễn Thị Lan',
+    rating: 3,
+    date: '2025-01-10',
+    comment: 'Sân ổn nhưng nhân viên hơi lạnh lùng. Bãi đỗ xe hơi xa, đi bộ mất thời gian. Cần cải thiện dịch vụ khách hàng.',
+    avatar: 'N'
+  },
+  {
+    id: 7,
+    user: 'Đỗ Minh Tuấn',
+    rating: 4,
+    date: '2025-01-09',
+    comment: 'Chất lượng sân tốt, có phòng thay đồ sạch sẽ. Chỉ thiếu quán ăn gần đó, phải đi xa để mua đồ ăn.',
+    avatar: 'D'
+  },
+  {
+    id: 8,
+    user: 'Vũ Thị Mai',
+    rating: 5,
+    date: '2025-01-08',
+    comment: 'Sân rất đẹp và chuyên nghiệp. Có camera giám sát, cảm giác an toàn. Nhân viên hỗ trợ nhiệt tình.',
+    avatar: 'V'
+  },
+  {
+    id: 9,
+    user: 'Bùi Văn Đức',
+    rating: 2,
+    date: '2025-01-07',
+    comment: 'Sân cỏ có vấn đề, một số chỗ bị lồi lõm. Giá hơi cao so với chất lượng. Không recommend.',
+    avatar: 'B'
+  },
+  {
+    id: 10,
+    user: 'Lý Thị Hương',
+    rating: 4,
+    date: '2025-01-06',
+    comment: 'Sân sạch sẽ, có wifi miễn phí. Chỉ cần cải thiện thêm về hệ thống tưới nước cho cỏ.',
+    avatar: 'L'
+  },
+  {
+    id: 11,
+    user: 'Phan Văn Nam',
+    rating: 5,
+    date: '2025-01-05',
+    comment: 'Địa điểm thuận tiện, dễ tìm. Sân cỏ chất lượng cao, chơi rất thoải mái. Sẽ đặt lại nhiều lần.',
+    avatar: 'P'
+  },
+  {
+    id: 12,
+    user: 'Trịnh Thị Linh',
+    rating: 3,
+    date: '2025-01-04',
+    comment: 'Sân ổn nhưng giá hơi cao. Thiếu chỗ ngồi cho người xem. Cần có thêm ghế ngồi nghỉ.',
+    avatar: 'T'
+  },
+  {
+    id: 13,
+    user: 'Ngô Văn Hùng',
+    rating: 4,
+    date: '2025-01-03',
+    comment: 'Chất lượng sân tốt, có bảo vệ 24/7. Chỉ cần cải thiện thêm về dịch vụ vệ sinh.',
+    avatar: 'N'
+  },
+  {
+    id: 14,
+    user: 'Đinh Thị Thu',
+    rating: 5,
+    date: '2025-01-02',
+    comment: 'Sân rất đẹp, có hệ thống tưới nước tự động. Nhân viên chuyên nghiệp, phục vụ tốt.',
+    avatar: 'D'
+  },
+  {
+    id: 15,
+    user: 'Cao Văn Long',
+    rating: 4,
+    date: '2025-01-01',
+    comment: 'Sân cỏ nhân tạo chất lượng tốt. Có wifi và nước uống miễn phí. Giá cả hợp lý.',
+    avatar: 'C'
+  },
+  {
+    id: 16,
+    user: 'Lưu Thị Hoa',
+    rating: 3,
+    date: '2024-12-31',
+    comment: 'Sân ổn nhưng thiếu chỗ đỗ xe. Phải đỗ xa và đi bộ khá lâu. Cần mở rộng bãi đỗ xe.',
+    avatar: 'L'
+  },
+  {
+    id: 17,
+    user: 'Tôn Văn Quang',
+    rating: 5,
+    date: '2024-12-30',
+    comment: 'Sân rất chuyên nghiệp, có camera giám sát. Chất lượng cỏ tốt, chơi rất thoải mái.',
+    avatar: 'T'
+  },
+  {
+    id: 18,
+    user: 'Hồ Thị Nga',
+    rating: 4,
+    date: '2024-12-29',
+    comment: 'Sân sạch sẽ, có phòng thay đồ tiện lợi. Chỉ cần cải thiện thêm về ánh sáng ban đêm.',
+    avatar: 'H'
+  },
+  {
+    id: 19,
+    user: 'Võ Văn Tài',
+    rating: 2,
+    date: '2024-12-28',
+    comment: 'Sân có vấn đề về chất lượng cỏ. Một số chỗ bị hỏng, không đảm bảo an toàn khi chơi.',
+    avatar: 'V'
+  },
+  {
+    id: 20,
+    user: 'Dương Thị Lan',
+    rating: 4,
+    date: '2024-12-27',
+    comment: 'Sân đẹp, có wifi miễn phí. Nhân viên phục vụ nhiệt tình. Chỉ thiếu quán ăn gần đó.',
+    avatar: 'D'
+  },
+  {
+    id: 21,
+    user: 'Lâm Văn Hải',
+    rating: 5,
+    date: '2024-12-26',
+    comment: 'Sân cỏ chất lượng cao, có hệ thống tưới nước hiện đại. Chơi rất thoải mái và an toàn.',
+    avatar: 'L'
+  },
+  {
+    id: 22,
+    user: 'Nguyễn Thị Bích',
+    rating: 3,
+    date: '2024-12-25',
+    comment: 'Sân ổn nhưng giá hơi cao so với các sân khác. Thiếu chỗ ngồi nghỉ cho người xem.',
+    avatar: 'N'
+  },
+  {
+    id: 23,
+    user: 'Trần Văn Sơn',
+    rating: 4,
+    date: '2024-12-24',
+    comment: 'Chất lượng sân tốt, có bảo vệ 24/7. Chỉ cần cải thiện thêm về dịch vụ vệ sinh.',
+    avatar: 'T'
+  },
+  {
+    id: 24,
+    user: 'Lê Thị Mai',
+    rating: 5,
+    date: '2024-12-23',
+    comment: 'Sân rất đẹp và chuyên nghiệp. Có camera giám sát, cảm giác an toàn. Recommend!',
+    avatar: 'L'
+  },
+  {
+    id: 25,
+    user: 'Phạm Văn Đạt',
+    rating: 4,
+    date: '2024-12-22',
+    comment: 'Sân cỏ nhân tạo chất lượng tốt. Có wifi và nước uống miễn phí. Giá cả hợp lý.',
+    avatar: 'P'
+  },
+  {
+    id: 26,
+    user: 'Hoàng Thị Hương',
+    rating: 3,
+    date: '2024-12-21',
+    comment: 'Sân ổn nhưng thiếu chỗ đỗ xe. Phải đỗ xa và đi bộ khá lâu. Cần mở rộng bãi đỗ xe.',
+    avatar: 'H'
+  },
+  {
+    id: 27,
+    user: 'Vũ Văn Minh',
+    rating: 5,
+    date: '2024-12-20',
+    comment: 'Sân rất chuyên nghiệp, có camera giám sát. Chất lượng cỏ tốt, chơi rất thoải mái.',
+    avatar: 'V'
+  },
+  {
+    id: 28,
+    user: 'Đỗ Thị Thu',
+    rating: 4,
+    date: '2024-12-19',
+    comment: 'Sân sạch sẽ, có phòng thay đồ tiện lợi. Chỉ cần cải thiện thêm về ánh sáng ban đêm.',
+    avatar: 'D'
+  },
+  {
+    id: 29,
+    user: 'Bùi Văn Cường',
+    rating: 2,
+    date: '2024-12-18',
+    comment: 'Sân có vấn đề về chất lượng cỏ. Một số chỗ bị hỏng, không đảm bảo an toàn khi chơi.',
+    avatar: 'B'
+  },
+  {
+    id: 30,
+    user: 'Lý Thị Lan',
+    rating: 4,
+    date: '2024-12-17',
+    comment: 'Sân đẹp, có wifi miễn phí. Nhân viên phục vụ nhiệt tình. Chỉ thiếu quán ăn gần đó.',
+    avatar: 'L'
+  },
+  {
+    id: 31,
+    user: 'Phan Văn Hải',
+    rating: 5,
+    date: '2024-12-16',
+    comment: 'Sân cỏ chất lượng cao, có hệ thống tưới nước hiện đại. Chơi rất thoải mái và an toàn.',
+    avatar: 'P'
+  },
+  {
+    id: 32,
+    user: 'Trịnh Thị Bích',
+    rating: 3,
+    date: '2024-12-15',
+    comment: 'Sân ổn nhưng giá hơi cao so với các sân khác. Thiếu chỗ ngồi nghỉ cho người xem.',
+    avatar: 'T'
+  },
+  {
+    id: 33,
+    user: 'Ngô Văn Sơn',
+    rating: 4,
+    date: '2024-12-14',
+    comment: 'Chất lượng sân tốt, có bảo vệ 24/7. Chỉ cần cải thiện thêm về dịch vụ vệ sinh.',
+    avatar: 'N'
+  },
+  {
+    id: 34,
+    user: 'Đinh Thị Mai',
+    rating: 5,
+    date: '2024-12-13',
+    comment: 'Sân rất đẹp và chuyên nghiệp. Có camera giám sát, cảm giác an toàn. Recommend!',
+    avatar: 'D'
+  },
+  {
+    id: 35,
+    user: 'Cao Văn Đạt',
+    rating: 4,
+    date: '2024-12-12',
+    comment: 'Sân cỏ nhân tạo chất lượng tốt. Có wifi và nước uống miễn phí. Giá cả hợp lý.',
+    avatar: 'C'
   }
 ]
 
