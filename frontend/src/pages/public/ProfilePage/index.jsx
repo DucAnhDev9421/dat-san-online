@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { LayoutDashboard, Calendar, Heart, Settings } from 'lucide-react'
 import ProfileHeader from './ProfileHeader'
 import OverviewTab from './tabs/OverviewTab'
@@ -8,6 +9,7 @@ import SettingsTab from './tabs/SettingsTab'
 import { mockUserData, mockFavoriteVenues } from './mockData'
 
 function ProfilePage() {
+  const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState('overview')
   const [userData] = useState(mockUserData)
   const [favoriteVenues, setFavoriteVenues] = useState(mockFavoriteVenues)
@@ -17,13 +19,32 @@ function ProfilePage() {
     email: false
   })
 
+  // Check for tab parameter in URL and set active tab
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && ['overview', 'bookings', 'favorites', 'settings'].includes(tabParam)) {
+      setActiveTab(tabParam)
+    }
+  }, [searchParams])
+
   return (
-    <main className="profile-page">
+    <main className="profile-page" style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+      padding: '24px 0'
+    }}>
       <div className="container">
         <ProfileHeader userData={userData} favoriteVenues={favoriteVenues} />
         
         {/* Navigation Tabs */}
-        <section className="profile-tabs">
+        <section className="profile-tabs" style={{
+          background: '#fff',
+          borderRadius: '12px',
+          padding: '16px 24px',
+          marginBottom: '24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          border: '1px solid #e5e7eb'
+        }}>
           <div className="tabs">
             <button 
               className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
@@ -61,7 +82,13 @@ function ProfilePage() {
         </section>
 
         {/* Tab Content */}
-        <section className="profile-content">
+        <section className="profile-content" style={{
+          background: '#fff',
+          borderRadius: '12px',
+          padding: '24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          border: '1px solid #e5e7eb'
+        }}>
           {activeTab === 'overview' && <OverviewTab />}
           {activeTab === 'bookings' && <BookingsTab />}
           {activeTab === 'favorites' && <FavoritesTab venues={favoriteVenues} />}

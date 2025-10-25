@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { User, LogOut, Settings, ChevronDown, Bell } from 'lucide-react'
-import LocationDisplay from '../location/LocationDisplay'
 
 function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth()
@@ -57,11 +56,6 @@ function Header() {
             <Link to="/">Trang chủ</Link>
             <a href="/partner">Đối tác</a>
           </nav>
-        </div>
-        
-        {/* Location Display */}
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <LocationDisplay />
         </div>
         
         <div className="auth-actions">
@@ -245,7 +239,7 @@ function Header() {
                     <button
                       onClick={() => {
                         setShowUserMenu(false)
-                        navigate('/settings')
+                        navigate('/profile?tab=settings')
                       }}
                       style={{
                         width: '100%',

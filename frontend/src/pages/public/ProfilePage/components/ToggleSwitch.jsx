@@ -4,12 +4,13 @@ export default function ToggleSwitch({ checked, onChange, label, description }) 
   return (
     <div style={{ 
       display: 'flex', 
-      justifyContent: 'space-between', 
+      justifyContent: 'flex-start', 
       alignItems: 'center',
       padding: '12px 0',
-      borderBottom: '1px solid #f3f4f6'
+      borderBottom: '1px solid #f3f4f6',
+      gap: '16px'
     }}>
-      <div>
+      <div style={{ flex: 1 }}>
         <div style={{ fontSize: '15px', fontWeight: '500', marginBottom: '4px' }}>
           {label}
         </div>
@@ -17,7 +18,7 @@ export default function ToggleSwitch({ checked, onChange, label, description }) 
           {description}
         </div>
       </div>
-      <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px', cursor: 'pointer' }}>
+      <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px', cursor: 'pointer', flexShrink: 0 }}>
         <input 
           type="checkbox" 
           checked={checked}
