@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import VenueCard from '../../component/VenueCard'
+import VenueCard from '../../components/VenueCard'
 import { FiSearch } from 'react-icons/fi'
 import { useAuth } from '../../contexts/AuthContext'
 

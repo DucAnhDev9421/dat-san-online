@@ -11,7 +11,7 @@ import {
   BarChart3,
   Settings,
 } from "lucide-react";
-import AdminHeader from "../../../component/admin/AdminHeader";
+import AdminHeader from "../../../components/admin/AdminHeader";
 
 // Import các component đã tách
 import Dashboard from "./components/Dashboard";

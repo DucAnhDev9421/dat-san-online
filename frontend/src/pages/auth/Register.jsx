@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { authService } from '../../api/authService'
+import RotatingText from '../../components/RotatingText'
 
 function Register() {
   const [showPassword, setShowPassword] = useState(false)
@@ -88,12 +89,13 @@ function Register() {
 
   return (
     <main className="auth-wrapper">
-      <section className="hero hero-slim" />
-      <div className="container">
+      <div className="container" style={{ paddingTop: '60px' }}>
         <div className="auth-card">
           <div className="auth-left">
             <h2>Sport Booking</h2>
-            <p>Đặt sân thể thao dễ dàng, tiện lợi</p>
+            <p style={{ fontSize: '15px', color: '#475569', fontWeight: 500 }}>
+              Đặt sân thể thao <RotatingText words={['dễ dàng', 'tiện lợi', 'nhanh chóng']} />
+            </p>
             <div className="auth-illustration" />
           </div>
           <div className="auth-right">

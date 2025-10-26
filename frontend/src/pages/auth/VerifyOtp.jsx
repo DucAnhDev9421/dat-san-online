@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { authService } from '../../api/authService'
 import { useAuth } from '../../contexts/AuthContext'
+import RotatingText from '../../components/RotatingText'
 
 function VerifyOtp() {
-  const [otp, setOtp] = useState('')
+  const [otp, setOtp] = useState(['', '', '', '', '', ''])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [resendLoading, setResendLoading] = useState(false)
@@ -25,25 +26,61 @@ function VerifyOtp() {
     }
   }, [countdown])
 
-  const handleOtpChange = (e) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 6) // Only numbers, max 6 digits
-    setOtp(value)
+  // Handle input change for OTP fields
+  const handleOtpChange = (index, value) => {
+    // Only allow numbers
+    if (value && !/^\d$/.test(value)) return
+    
+    const newOtp = [...otp]
+    newOtp[index] = value
+    setOtp(newOtp)
     if (error) setError('')
+    
+    // Auto-focus next input
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`otp-${index + 1}`)
+      if (nextInput) nextInput.focus()
+    }
   }
+
+  // Handle backspace
+  const handleKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      const prevInput = document.getElementById(`otp-${index - 1}`)
+      if (prevInput) prevInput.focus()
+    }
+  }
+
+  // Handle paste
+  const handlePaste = (e) => {
+    e.preventDefault()
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    const newOtp = ['', '', '', '', '', '']
+    for (let i = 0; i < pastedData.length; i++) {
+      newOtp[i] = pastedData[i]
+    }
+    setOtp(newOtp)
+    const nextInput = document.getElementById(`otp-${pastedData.length}`)
+    if (nextInput) nextInput.focus()
+  }
+
+  // Get OTP as string
+  const getOtpString = () => otp.join('')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
-    if (!otp || otp.length !== 6) {
+    const otpString = getOtpString()
+    if (!otpString || otpString.length !== 6) {
       setError('Vui lòng nhập đầy đủ 6 số OTP')
       setLoading(false)
       return
     }
 
     try {
-      const result = await authService.verifyOtp(email, otp)
+      const result = await authService.verifyOtp(email, otpString)
       
       if (result.success) {
         // OTP verified successfully - redirect to login
@@ -91,8 +128,7 @@ function VerifyOtp() {
   if (!email) {
     return (
       <main className="auth-wrapper">
-        <section className="hero hero-slim" />
-        <div className="container">
+        <div className="container" style={{ paddingTop: '60px' }}>
           <div className="auth-card">
             <div className="auth-right">
               <h3>Lỗi</h3>
@@ -109,19 +145,20 @@ function VerifyOtp() {
 
   return (
     <main className="auth-wrapper">
-      <section className="hero hero-slim" />
-      <div className="container">
+      <div className="container" style={{ paddingTop: '60px' }}>
         <div className="auth-card">
           <div className="auth-left">
             <h2>Sport Booking</h2>
-            <p>Đặt sân thể thao dễ dàng, tiện lợi</p>
+            <p style={{ fontSize: '15px', color: '#475569', fontWeight: 500 }}>
+              Đặt sân thể thao <RotatingText words={['dễ dàng', 'tiện lợi', 'nhanh chóng']} />
+            </p>
             <div className="auth-illustration" />
           </div>
           <div className="auth-right">
             <h3>Xác thực tài khoản</h3>
             
-            <p style={{ marginBottom: '20px', color: '#666' }}>
-              Chúng tôi đã gửi mã OTP đến email <strong>{email}</strong>
+            <p style={{ marginBottom: '24px', color: '#666', fontSize: '15px' }}>
+              Chúng tôi đã gửi mã 6 chữ số đến email của bạn.
             </p>
 
             {message && (
@@ -152,49 +189,100 @@ function VerifyOtp() {
 
             <form onSubmit={handleSubmit}>
               <div className="form-group">
-                <input 
-                  className="input" 
-                  name="otp"
-                  type="text"
-                  placeholder="Nhập mã OTP (6 số)" 
-                  value={otp}
-                  onChange={handleOtpChange}
-                  disabled={loading}
-                  style={{ 
-                    textAlign: 'center',
-                    fontSize: '18px',
-                    letterSpacing: '2px'
-                  }}
-                />
+                <label style={{ 
+                  display: 'block', 
+                  fontWeight: '600', 
+                  marginBottom: '12px',
+                  color: '#333'
+                }}>
+                  Mã xác thực
+                </label>
+                
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '12px', 
+                  justifyContent: 'center',
+                  marginBottom: '8px'
+                }}>
+                  {otp.map((digit, index) => (
+                    <input
+                      key={index}
+                      id={`otp-${index}`}
+                      type="text"
+                      maxLength="1"
+                      value={digit}
+                      onChange={(e) => handleOtpChange(index, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(index, e)}
+                      onPaste={handlePaste}
+                      disabled={loading}
+                      style={{
+                        width: '48px',
+                        height: '56px',
+                        textAlign: 'center',
+                        fontSize: '24px',
+                        fontWeight: '600',
+                        borderRadius: '8px',
+                        border: '1px solid #e0e0e0',
+                        background: '#fff',
+                        color: '#333'
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = '#3b82f6'
+                        e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = '#e0e0e0'
+                        e.target.style.boxShadow = 'none'
+                      }}
+                    />
+                  ))}
+                </div>
+                
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#666', 
+                  textAlign: 'center',
+                  marginTop: '8px'
+                }}>
+                  Chúng tôi đã gửi mã 6 chữ số đến email của bạn
+                </p>
               </div>
               
               <button 
                 className="btn btn-dark full" 
                 type="submit"
-                disabled={loading || otp.length !== 6}
-                style={{ opacity: (loading || otp.length !== 6) ? 0.7 : 1 }}
+                disabled={loading || getOtpString().length !== 6}
+                style={{ 
+                  opacity: (loading || getOtpString().length !== 6) ? 0.7 : 1,
+                  marginTop: '24px'
+                }}
               >
                 {loading ? 'Đang xác thực...' : 'Xác thực'}
               </button>
             </form>
             
             <div style={{ textAlign: 'center', marginTop: '20px' }}>
-              <p style={{ color: '#666', marginBottom: '10px' }}>
-                Không nhận được mã OTP?
+              <p style={{ color: '#666', fontSize: '14px', marginBottom: 0 }}>
+                Không nhận được mã OTP?{' '}
+                <button 
+                  onClick={handleResendOtp}
+                  disabled={resendLoading || countdown > 0}
+                  style={{ 
+                    border: 'none',
+                    background: 'none',
+                    color: '#3b82f6',
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontSize: '14px',
+                    opacity: (resendLoading || countdown > 0) ? 0.7 : 1
+                  }}
+                >
+                  {resendLoading ? 'Đang gửi...' : 
+                   countdown > 0 ? `Gửi lại sau ${countdown}s` : 
+                   'Gửi lại'}
+                </button>
               </p>
-              <button 
-                className="btn btn-light" 
-                onClick={handleResendOtp}
-                disabled={resendLoading || countdown > 0}
-                style={{ 
-                  opacity: (resendLoading || countdown > 0) ? 0.7 : 1,
-                  fontSize: '14px'
-                }}
-              >
-                {resendLoading ? 'Đang gửi...' : 
-                 countdown > 0 ? `Gửi lại sau ${countdown}s` : 
-                 'Gửi lại mã OTP'}
-              </button>
             </div>
 
             <div style={{ textAlign: 'center', marginTop: '20px' }}>

@@ -1,5 +1,6 @@
 import { api, handleApiError, handleApiSuccess } from './axiosClient';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from './axiosClient';
+import { userApi } from './userApi';
 
 // API base URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -71,61 +72,6 @@ export const authService = {
     }
   },
 
-  // Get current user
-  getCurrentUser: async () => {
-    try {
-      const response = await api.get('/users/profile');
-      return handleApiSuccess(response);
-    } catch (error) {
-      throw handleApiError(error);
-    }
-  },
-
-  // Update user profile
-  updateProfile: async (userData) => {
-    try {
-      const response = await api.put('/users/profile', userData);
-      return handleApiSuccess(response);
-    } catch (error) {
-      throw handleApiError(error);
-    }
-  },
-
-  // Upload avatar
-  uploadAvatar: async (file) => {
-    try {
-      const formData = new FormData();
-      formData.append('avatar', file);
-      const response = await api.upload('/users/avatar', formData);
-      return handleApiSuccess(response);
-    } catch (error) {
-      throw handleApiError(error);
-    }
-  },
-
-  // Delete avatar
-  deleteAvatar: async () => {
-    try {
-      const response = await api.delete('/users/avatar');
-      return handleApiSuccess(response);
-    } catch (error) {
-      throw handleApiError(error);
-    }
-  },
-
-  // Change password
-  changePassword: async (currentPassword, newPassword) => {
-    try {
-      const response = await api.put('/users/change-password', {
-        currentPassword,
-        newPassword
-      });
-      return handleApiSuccess(response);
-    } catch (error) {
-      throw handleApiError(error);
-    }
-  },
-
   // Get user sessions
   getSessions: async () => {
     try {
@@ -185,7 +131,14 @@ export const authService = {
   setTokens,
 
   // Clear tokens from localStorage
-  clearTokens
+  clearTokens,
+
+  // Redirect to userApi for user-related operations (for backward compatibility)
+  getCurrentUser: userApi.getCurrentUser,
+  updateProfile: userApi.updateProfile,
+  uploadAvatar: userApi.uploadAvatar,
+  deleteAvatar: userApi.deleteAvatar,
+  changePassword: userApi.changePassword
 };
 
 export default authService;
