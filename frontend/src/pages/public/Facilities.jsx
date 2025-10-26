@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { FiSearch, FiGrid, FiList } from "react-icons/fi";
-import VenueCard from "../../component/VenueCard";
+import VenueCard from "../../components/VenueCard";
 
 const mockFacilities = [
   { id: 6, name: "Sân futsal Bình Tân", sport: "Futsal", city: "TP. HCM", district: "Bình Tân", open: "07:00 - 23:00", price: 280000, rating: 4.8, status: "Còn trống", image: "https://images.unsplash.com/photo-1521417531071-6d1448c1d2e8?q=80&w=1200&auto=format&fit=crop" },

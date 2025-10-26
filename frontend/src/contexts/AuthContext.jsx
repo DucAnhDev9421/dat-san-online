@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { authService } from '../api/authService';
+import { userApi } from '../api/userApi';
 
 const AuthContext = createContext();
 
@@ -77,7 +78,7 @@ export const AuthProvider = ({ children }) => {
         if (tokens.accessToken) {
           // Verify token with backend
           console.log('🔍 Checking user authentication...');
-          const result = await authService.getCurrentUser();
+          const result = await userApi.getCurrentUser();
           console.log('👤 User data from API:', result);
           
           // Save user data to localStorage as backup
@@ -232,7 +233,7 @@ export const AuthProvider = ({ children }) => {
   // Refresh user data from server
   const refreshUserData = async () => {
     try {
-      const result = await authService.getCurrentUser();
+      const result = await userApi.getCurrentUser();
       if (result.data?.user) {
         dispatch({
           type: 'UPDATE_USER',

@@ -11,7 +11,7 @@ import {
   History,
   Settings,
 } from "lucide-react";
-import OwnerHeader from "../../../component/owner/OwnerHeader";
+import OwnerHeader from "../../../components/owner/OwnerHeader";
 
 // Import các component đã tách
 import Dashboard from "./components/Dashboard";

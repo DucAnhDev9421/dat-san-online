@@ -1,17 +1,19 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 // Contexts
 import { AuthProvider } from "./contexts/AuthContext";
 
 // Layouts
-import Header from "./component/header/header.jsx";
-import Footer from "./component/footer/footer.jsx";
+import Header from "./components/header/header.jsx";
+import Footer from "./components/footer/footer.jsx";
 import AdminLayout from "./layouts/AdminLayout.jsx";
 import OwnerLayout from "./layouts/OwnerLayout.jsx";
 
 // Components
-import ProtectedRoute, { AdminRoute, OwnerRoute } from "./component/ProtectedRoute.jsx";
-import ChatButton from "./component/chat/ChatButton.jsx";
+import ProtectedRoute, { AdminRoute, OwnerRoute } from "./components/ProtectedRoute.jsx";
+import ChatButton from "./components/chat/ChatButton.jsx";
 
 // Public pages
 import HomePage from "./pages/public/HomePage.jsx";
@@ -38,6 +40,18 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="colored"
+        />
         <ChatButton />
         <Routes>
           {/* Auth callback routes-No layout */}

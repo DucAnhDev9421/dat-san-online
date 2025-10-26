@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { FiX, FiEye, FiEyeOff, FiLock, FiCheck } from 'react-icons/fi'
-import { authService } from '../../../../api/authService'
+import { toast } from 'react-toastify'
+import { userApi } from '../../../../api/userApi'
 
 export default function ChangePasswordModal({ isOpen, onClose }) {
   const [formData, setFormData] = useState({
@@ -15,7 +16,6 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState({})
-  const [successMessage, setSuccessMessage] = useState('')
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -29,10 +29,6 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
         ...prev,
         [name]: ''
       }))
-    }
-    // Clear success message when user starts typing
-    if (successMessage) {
-      setSuccessMessage('')
     }
   }
 
@@ -83,13 +79,13 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
     
     try {
       // Call real API
-      const result = await authService.changePassword(
+      const result = await userApi.changePassword(
         formData.currentPassword,
         formData.newPassword
       )
       
       if (result.success) {
-        setSuccessMessage('Đổi mật khẩu thành công!')
+        toast.success('Đổi mật khẩu thành công!')
         
         // Reset form
         setFormData({
@@ -98,10 +94,10 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
           confirmPassword: ''
         })
         
-        // Close modal after 2 seconds
+        // Close modal after 1.5 seconds
         setTimeout(() => {
           onClose()
-        }, 2000)
+        }, 1500)
       }
       
     } catch (error) {
@@ -111,10 +107,12 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
       if (error.message.includes('mật khẩu hiện tại không đúng')) {
         setErrors({ currentPassword: 'Mật khẩu hiện tại không đúng' })
       } else if (error.message.includes('tài khoản này đăng ký qua Google')) {
+        toast.error('Tài khoản này đăng ký qua Google, không thể đổi mật khẩu')
         setErrors({ currentPassword: 'Tài khoản này đăng ký qua Google, không thể đổi mật khẩu' })
       } else if (error.message.includes('mật khẩu mới không được trùng')) {
         setErrors({ newPassword: 'Mật khẩu mới không được trùng với mật khẩu hiện tại' })
       } else {
+        toast.error(error.message || 'Có lỗi xảy ra. Vui lòng thử lại.')
         setErrors({ general: error.message || 'Có lỗi xảy ra. Vui lòng thử lại.' })
       }
     } finally {
@@ -137,24 +135,6 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
 
         {/* Modal Body */}
         <div className="modal-body">
-          {/* Success Message */}
-          {successMessage && (
-            <div className="success-message" style={{
-              background: '#d4edda',
-              color: '#155724',
-              padding: '12px',
-              borderRadius: '8px',
-              marginBottom: '16px',
-              fontSize: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <FiCheck size={16} />
-              {successMessage}
-            </div>
-          )}
-
           {/* General Error Message */}
           {errors.general && (
             <div className="error-message" style={{
@@ -289,17 +269,12 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={isLoading || successMessage}
+                disabled={isLoading}
               >
                 {isLoading ? (
                   <>
                     <div className="spinner"></div>
                     Đang xử lý...
-                  </>
-                ) : successMessage ? (
-                  <>
-                    <FiCheck size={16} />
-                    Thành công
                   </>
                 ) : (
                   <>
