@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Plus, Eye, Pencil, Trash2, Power, PowerOff, Wrench } from "lucide-react";
 import { courtData } from "../data/mockData";
+import AddCourtModal from "../modals/AddCourtModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -22,6 +23,7 @@ const ActionButton = ({ bg, Icon, onClick, title }) => (
 
 const Courts = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const filteredCourts = useMemo(
     () => courtData.filter(c => 
@@ -38,7 +40,7 @@ const Courts = () => {
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Quản lý sân</h1>
         <button
-          onClick={() => alert("TODO: Mở modal thêm sân mới")}
+          onClick={() => setIsModalOpen(true)}
           style={{ 
             display: "inline-flex", 
             alignItems: "center", 
@@ -49,8 +51,11 @@ const Courts = () => {
             borderRadius: 10, 
             padding: "10px 14px", 
             cursor: "pointer", 
-            fontWeight: 700 
+            fontWeight: 700,
+            transition: "all 0.2s"
           }}
+          onMouseEnter={(e) => e.target.style.background = "#059669"}
+          onMouseLeave={(e) => e.target.style.background = "#10b981"}
         >
           <Plus size={16}/> Thêm sân mới
         </button>
@@ -191,6 +196,9 @@ const Courts = () => {
           </table>
         </div>
       </div>
+
+      {/* Modal */}
+      <AddCourtModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   );
 };
