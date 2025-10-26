@@ -18,6 +18,8 @@ import { generalLimiter } from "./middleware/rateLimiter.js";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/user.js";
 import auditRoutes from "./routes/audit.js";
+import facilityRoutes from "./routes/facility.js";
+
 const app = express();
 
 // Validate configuration
@@ -91,6 +93,7 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/audit", auditRoutes);
+app.use("/api/facilities", facilityRoutes);
 // 404 handler
 app.use(notFound);
 
