@@ -60,7 +60,7 @@ const userSchema = new mongoose.Schema(
     // Trạng thái tài khoản
     isActive: {
       type: Boolean,
-      default: true,
+      default: false, // User needs OTP verification before activation
     },
     isEmailVerified: {
       type: Boolean,
@@ -248,6 +248,15 @@ userSchema.statics.findByGoogleId = function (googleId) {
 // Static method để tìm user bằng email
 userSchema.statics.findByEmail = function (email) {
   return this.findOne({ email: email.toLowerCase() });
+};
+
+// Static method để cleanup unverified users after 15 minutes
+userSchema.statics.cleanupUnverifiedUsers = function () {
+  const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
+  return this.deleteMany({
+    isEmailVerified: false,
+    createdAt: { $lt: new Date(fifteenMinutesAgo) }
+  });
 };
 
 // Static method để tạo user từ Google profile

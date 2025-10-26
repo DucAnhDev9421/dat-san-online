@@ -30,20 +30,50 @@ router.post("/register", authLimiter, async (req, res, next) => {
   try {
     const { email, password, name } = req.body;
 
+    // Check if email already exists (including unverified users)
     let user = await User.findByEmail(email);
     if (user) {
+      // If user exists but not verified, allow resending OTP
+      if (!user.isEmailVerified) {
+        // Regenerate OTP
+        const otp = generateOtp();
+        const otpExpires = Date.now() + 10 * 60 * 1000; // 10 phút
+        
+        user.otpCode = otp;
+        user.otpExpires = otpExpires;
+        await user.save();
+
+        // Gửi email OTP
+        await sendEmail({
+          to: user.email,
+          subject: "Mã xác thực OTP cho DAT-SAN-ONLINE",
+          html: `<p>Mã OTP của bạn là: <b>${otp}</b>. Mã này có hiệu lực trong 10 phút.</p>`,
+        });
+
+        res.status(200).json({
+          success: true,
+          message: "Mã OTP mới đã được gửi đến email của bạn.",
+        });
+        return;
+      }
+      
       return res.status(400).json({
         success: false,
         message: "Email đã được sử dụng",
       });
     }
 
+    // Create user but don't save yet - store in temporary location
+    // We'll use a new approach: save with pending state
     const otp = generateOtp();
     const otpExpires = Date.now() + 10 * 60 * 1000; // 10 phút
 
+    // Hash password before saving
+    const hashedPassword = await bcrypt.hash(password, 12);
+
     user = new User({
       email,
-      password,
+      password: hashedPassword,
       name,
       otpCode: otp,
       otpExpires: otpExpires,
@@ -51,6 +81,7 @@ router.post("/register", authLimiter, async (req, res, next) => {
       isActive: false, // Chưa active
     });
 
+    // Save user in pending state
     await user.save();
 
     // Gửi email OTP
@@ -60,7 +91,7 @@ router.post("/register", authLimiter, async (req, res, next) => {
       html: `<p>Mã OTP của bạn là: <b>${otp}</b>. Mã này có hiệu lực trong 10 phút.</p>`,
     });
 
-    logAudit("REGISTER", user._id, req);
+    logAudit("REGISTER_PENDING", user._id, req);
 
     res.status(201).json({
       success: true,
@@ -95,15 +126,22 @@ router.post("/verify-otp", authLimiter, async (req, res, next) => {
         });
     }
 
-    user.isEmailVerified = true;
-    user.isActive = true;
-    user.otpCode = undefined;
-    user.otpExpires = undefined;
-    await user.save();
+    // Only activate user if they haven't been activated yet
+    // This prevents unverified users from being active
+    if (!user.isEmailVerified) {
+      user.isEmailVerified = true;
+      user.isActive = true;
+      user.otpCode = undefined;
+      user.otpExpires = undefined;
+      await user.save();
 
-    logAudit("VERIFY_OTP", user._id, req);
+      logAudit("VERIFY_OTP", user._id, req);
 
-    res.json({ success: true, message: "Xác thực tài khoản thành công." });
+      res.json({ success: true, message: "Xác thực tài khoản thành công." });
+    } else {
+      // Already verified
+      res.json({ success: true, message: "Tài khoản đã được xác thực trước đó." });
+    }
   } catch (error) {
     next(error);
   }

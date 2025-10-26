@@ -20,6 +20,7 @@ import userRoutes from "./routes/user.js";
 import auditRoutes from "./routes/audit.js";
 import facilityRoutes from "./routes/facility.js";
 import courtRoutes from "./routes/court.js";
+import User from "./models/User.js";
 
 const app = express();
 
@@ -111,6 +112,16 @@ app.listen(PORT, () => {
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Google OAuth: http://localhost:${PORT}/api/auth/google`);
 });
+
+// Schedule cleanup job for unverified users every hour
+setInterval(async () => {
+  try {
+    const result = await User.cleanupUnverifiedUsers();
+    console.log(`🧹 Cleaned up ${result.deletedCount} unverified user(s)`);
+  } catch (error) {
+    console.error("Error cleaning up unverified users:", error);
+  }
+}, 60 * 60 * 1000); // Run every hour
 
 // Graceful shutdown
 process.on("SIGTERM", () => {
