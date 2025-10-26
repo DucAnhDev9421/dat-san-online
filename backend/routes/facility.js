@@ -8,6 +8,7 @@ import {
   requireAdmin,
 } from "../middleware/Auth.js";
 import { logAudit } from "../utils/auditLogger.js";
+import { uploadFacilityImage, cloudinaryUtils } from "../config/cloudinary.js";
 
 const router = express.Router();
 
@@ -240,6 +241,121 @@ router.delete(
       // logAudit("DELETE_FACILITY", req.user._id, req, { facilityId: req.params.id });
 
       res.json({ success: true, message: "Xóa cơ sở thành công" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * BE: POST /api/facilities/:id/upload
+ * Upload ảnh cho cơ sở (Tối đa 5 ảnh, chỉ Owner)
+ */
+router.post(
+  "/:id/upload",
+  authenticateToken,
+  checkOwnership,
+  uploadFacilityImage.array("images", 5), // Tối đa 5 ảnh
+  async (req, res, next) => {
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng chọn ít nhất 1 ảnh",
+        });
+      }
+
+      // Lấy danh sách ảnh hiện tại
+      const facility = await Facility.findById(req.params.id);
+      const currentImages = facility.images || [];
+
+      // Tạo mảng ảnh mới từ req.files
+      const newImages = req.files.map((file) => ({
+        url: file.path,
+        publicId: file.filename,
+      }));
+
+      // Kiểm tra tổng số ảnh không vượt quá 5
+      const totalImages = currentImages.length + newImages.length;
+      if (totalImages > 5) {
+        // Xóa các ảnh mới upload trên Cloudinary
+        for (const img of newImages) {
+          await cloudinaryUtils.deleteImage(img.publicId);
+        }
+        return res.status(400).json({
+          success: false,
+          message: "Tổng số ảnh không được vượt quá 5",
+        });
+      }
+
+      // Cập nhật facility với ảnh mới
+      facility.images = [...currentImages, ...newImages];
+      await facility.save();
+
+      res.json({
+        success: true,
+        message: "Upload ảnh thành công",
+        data: facility,
+      });
+    } catch (error) {
+      // Nếu có lỗi, xóa các ảnh đã upload trên Cloudinary
+      if (req.files) {
+        for (const file of req.files) {
+          try {
+            await cloudinaryUtils.deleteImage(file.filename);
+          } catch (deleteError) {
+            console.error("Error cleaning up uploaded files:", deleteError);
+          }
+        }
+      }
+      next(error);
+    }
+  }
+);
+
+/**
+ * BE: DELETE /api/facilities/:id/images/:imageId
+ * Xóa ảnh khỏi cơ sở (chỉ Owner)
+ */
+router.delete(
+  "/:id/images/:imageId",
+  authenticateToken,
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const facility = await Facility.findById(req.params.id);
+      if (!facility) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy cơ sở",
+        });
+      }
+
+      const imageToDelete = facility.images.id(req.params.imageId);
+      if (!imageToDelete) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy ảnh",
+        });
+      }
+
+      // Xóa ảnh trên Cloudinary
+      if (imageToDelete.publicId) {
+        try {
+          await cloudinaryUtils.deleteImage(imageToDelete.publicId);
+        } catch (deleteError) {
+          console.error("Error deleting image from Cloudinary:", deleteError);
+        }
+      }
+
+      // Xóa ảnh khỏi mảng
+      facility.images.pull(req.params.imageId);
+      await facility.save();
+
+      res.json({
+        success: true,
+        message: "Xóa ảnh thành công",
+      });
     } catch (error) {
       next(error);
     }
