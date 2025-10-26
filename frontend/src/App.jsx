@@ -29,6 +29,9 @@ import AuthCallback from "./pages/auth/AuthCallback.jsx";
 import AuthError from "./pages/auth/AuthError.jsx";
 import NotFound from "./pages/public/NotFoud.jsx";
 
+// Owner pages
+import OwnerSetup from "./pages/private/Owner/OwnerSetup.jsx";
+
 
 
 function App() {
@@ -51,6 +54,13 @@ function App() {
             <AdminRoute>
               <AdminLayout />
             </AdminRoute>
+          } />
+
+          {/* Owner Setup Route - Protected, separate page */}
+          <Route path="/owner/setup" element={
+            <OwnerRoute>
+              <OwnerSetup />
+            </OwnerRoute>
           } />
 
           {/* Owner Routes - Protected */}

@@ -74,19 +74,24 @@ const AdminPanel = () => {
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f8fafc" }}>
+    <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
         {/* Sidebar */}
         <div
           style={{
-          width: isSidebarOpen ? 280 : 0,
+            position: "fixed",
+            left: 0,
+            top: 0,
+            height: "100vh",
+            width: isSidebarOpen ? 280 : 0,
             background: "#fff",
-          borderRight: "1px solid #e5e7eb",
+            borderRight: "1px solid #e5e7eb",
             transition: "width 0.3s ease",
-          overflow: "hidden",
-          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+            overflow: "hidden",
+            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+            zIndex: 100,
           }}
         >
-        <div style={{ padding: "24px 0" }}>
+        <div style={{ padding: "24px 0", overflowY: "auto", height: "100%" }}>
               <div style={{ padding: "0 24px", marginBottom: 32 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div
@@ -149,16 +154,32 @@ const AdminPanel = () => {
         </div>
 
         {/* Main Content */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <div 
+          style={{ 
+            marginLeft: isSidebarOpen ? 280 : 0,
+            transition: "margin-left 0.3s ease",
+            minHeight: "100vh",
+            display: "flex",
+            flexDirection: "column"
+          }}
+        >
           {/* Header */}
-          <AdminHeader 
-            onToggleSidebar={toggleSidebar} 
-            isSidebarOpen={isSidebarOpen}
-            currentTabTitle={menuItems.find(item => item.id === activeTab)?.label}
-          />
+          <div style={{ 
+            position: "sticky", 
+            top: 0, 
+            zIndex: 90,
+            background: "#fff",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+          }}>
+            <AdminHeader 
+              onToggleSidebar={toggleSidebar} 
+              isSidebarOpen={isSidebarOpen}
+              currentTabTitle={menuItems.find(item => item.id === activeTab)?.label}
+            />
+          </div>
 
         {/* Content Area */}
-        <div style={{ flex: 1, padding: "24px", overflow: "auto" }}>
+        <div style={{ flex: 1, padding: "24px" }}>
           {renderContent()}
         </div>
       </div>
