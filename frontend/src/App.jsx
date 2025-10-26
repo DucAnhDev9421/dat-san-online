@@ -37,7 +37,7 @@ function App() {
       <BrowserRouter>
         <ChatButton />
         <Routes>
-          {/* Auth callback routes - No layout */}
+          {/* Auth callback routes-No layout */}
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/auth/error" element={<AuthError />} />
 
