@@ -4,12 +4,15 @@ import { useAuth } from '../../contexts/AuthContext'
 import NotificationButton from './NotificationButton'
 import NotificationDropdown from './NotificationDropdown'
 import UserMenu from './UserMenu'
+import NavigationBar from './NavigationBar'
 import { mockNotifications } from './constants'
+import { Menu, X } from 'lucide-react'
 
 function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(3) // Mock data
   const navigate = useNavigate()
 
@@ -70,6 +73,11 @@ function Header() {
     navigate('/profile?tab=settings')
   }
 
+  const handleBookingHistoryClick = () => {
+    setShowUserMenu(false)
+    navigate('/booking-history')
+  }
+
   const markAllAsRead = () => {
     setUnreadNotifications(0)
   }
@@ -77,24 +85,34 @@ function Header() {
   return (
     <header className="site-header">
       <div className="container header-inner">
-        <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
-          <div className="brand">
-            <img 
-              src="/Logo.png" 
-              alt="Booking Sport Logo" 
-              className="logo-image"
-              style={{ 
-                height: "40px", 
-                width: "auto",
-                objectFit: "contain"
-              }}
-            />
-            <span className="brand-name">Booking sport</span>
-          </div>
-          <nav className="nav">
-            <Link to="/">Trang chủ</Link>
-            <a href="/partner">Đối tác</a>
-          </nav>
+        <div className="header-left">
+          <button 
+            className="mobile-menu-toggle"
+            onClick={() => setShowMobileMenu(!showMobileMenu)}
+            aria-label="Toggle menu"
+          >
+            {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
+          </button>
+          
+          <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div className="brand">
+              <img 
+                src="/Logo.png" 
+                alt="Booking Sport Logo" 
+                className="logo-image"
+                style={{ 
+                  height: "56px", 
+                  width: "auto",
+                  objectFit: "contain"
+                }}
+              />
+              <span className="brand-name">Booking sport</span>
+            </div>
+          </Link>
+        </div>
+        
+        <div className="desktop-nav-wrapper">
+          <NavigationBar user={user} />
         </div>
         
         <div className="auth-actions">
@@ -146,13 +164,23 @@ function Header() {
                 onProfileClick={handleProfileClick}
                 onLogout={handleLogout}
                 onSettingsClick={handleSettingsClick}
+                onBookingHistoryClick={handleBookingHistoryClick}
               />
             </div>
           ) : (
-            <Link to="/login" className="btn btn-outline">Đăng ký / Đăng nhập</Link>
+            <Link to="/login" className="btn btn-outline">Đăng nhập</Link>
           )}
         </div>
       </div>
+
+      {/* Mobile Navigation Menu */}
+      {showMobileMenu && (
+        <div className="mobile-nav-overlay" onClick={() => setShowMobileMenu(false)}>
+          <div className="mobile-nav-menu" onClick={(e) => e.stopPropagation()}>
+            <NavigationBar user={user} mobile onLinkClick={() => setShowMobileMenu(false)} />
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes spin {
@@ -179,6 +207,99 @@ function Header() {
           100% {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+
+        /* Mobile menu toggle */
+        .mobile-menu-toggle {
+          display: none;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: #111827;
+          padding: 8px;
+        }
+
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex: 1;
+        }
+
+        /* Mobile Navigation Overlay */
+        .mobile-nav-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          z-index: 9998;
+          animation: fadeIn 0.2s ease;
+        }
+
+        .mobile-nav-menu {
+          position: fixed;
+          top: 64px;
+          left: 0;
+          right: 0;
+          background: white;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          z-index: 9999;
+          padding: 16px;
+          max-height: calc(100vh - 64px);
+          overflow-y: auto;
+          animation: slideDown 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        /* Responsive styles */
+        @media (max-width: 768px) {
+          .mobile-menu-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .desktop-nav-wrapper {
+            display: none !important;
+          }
+
+          .brand-name {
+            display: none;
+          }
+
+          .logo-image {
+            height: 40px !important;
+          }
+
+          .header-inner {
+            gap: 8px !important;
+          }
+
+          .auth-actions {
+            gap: 8px !important;
+          }
+
+          .btn {
+            padding: 8px 12px !important;
+            font-size: 14px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .brand-name {
+            display: block;
+            font-size: 14px;
+          }
+
+          .header-inner {
+            height: 56px !important;
           }
         }
       `}</style>

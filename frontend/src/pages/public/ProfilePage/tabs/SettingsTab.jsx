@@ -1,10 +1,14 @@
 import React, { useState } from 'react'
 import ToggleSwitch from '../components/ToggleSwitch'
 import ChangePasswordModal from '../modals/ChangePasswordModal'
+import Dialog from '@/components/ui/Dialog'
+import { AlertTriangle } from 'lucide-react'
 import '../modals/ChangePasswordModal.css'
 
 export default function SettingsTab({ notifications, setNotifications }) {
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
 
   return (
     <div className="settings-section">
@@ -131,10 +135,14 @@ export default function SettingsTab({ notifications, setNotifications }) {
                 Hành động này không thể hoàn tác. Tất cả dữ liệu của bạn sẽ bị xóa vĩnh viễn.
               </div>
             </div>
-            <button className="btn btn-dark" style={{ 
-              background: '#dc2626',
-              borderColor: '#dc2626'
-            }}>
+            <button 
+              className="btn btn-dark" 
+              style={{ 
+                background: '#dc2626',
+                borderColor: '#dc2626'
+              }}
+              onClick={() => setShowDeleteDialog(true)}
+            >
               Xóa tài khoản
             </button>
           </div>
@@ -146,6 +154,149 @@ export default function SettingsTab({ notifications, setNotifications }) {
         isOpen={showChangePasswordModal}
         onClose={() => setShowChangePasswordModal(false)}
       />
+
+      {/* Delete Account Dialog */}
+      <Dialog 
+        open={showDeleteDialog} 
+        onClose={() => {
+          setShowDeleteDialog(false)
+          setConfirmText('')
+        }}
+        maxWidth="500px"
+      >
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: '#fef2f2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <AlertTriangle size={24} style={{ color: '#dc2626' }} />
+            </div>
+            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
+              Xác nhận xóa tài khoản
+            </h2>
+          </div>
+          <div style={{ fontSize: '14px', color: '#6b7280', lineHeight: '1.6' }}>
+            <p style={{ marginBottom: '12px' }}>
+              Hành động này không thể hoàn tác. Tất cả dữ liệu của bạn sẽ bị xóa vĩnh viễn bao gồm:
+            </p>
+            <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+              <li>Tất cả lịch đặt sân</li>
+              <li>Thông tin cá nhân</li>
+              <li>Lịch sử thanh toán</li>
+              <li>Dữ liệu yêu thích</li>
+            </ul>
+            <p style={{ marginTop: '12px' }}>
+              Để xác nhận, vui lòng nhập <strong>"XÓA"</strong> vào ô bên dưới:
+            </p>
+          </div>
+        </div>
+
+        {/* Input */}
+        <div style={{ marginBottom: '24px' }}>
+          <input
+            type="text"
+            placeholder='Nhập "XÓA" để xác nhận'
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              fontSize: '14px',
+              outline: 'none',
+              transition: 'all 0.2s'
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = '#dc2626'
+              e.target.style.boxShadow = '0 0 0 3px rgba(220, 38, 38, 0.1)'
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = '#e5e7eb'
+              e.target.style.boxShadow = 'none'
+            }}
+          />
+        </div>
+
+        {/* Footer */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'flex-end', 
+          gap: '12px'
+        }}>
+          <button
+            onClick={() => {
+              setShowDeleteDialog(false)
+              setConfirmText('')
+            }}
+            style={{
+              padding: '10px 20px',
+              background: 'white',
+              color: '#374151',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = '#f9fafb'
+              e.target.style.borderColor = '#d1d5db'
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'white'
+              e.target.style.borderColor = '#e5e7eb'
+            }}
+          >
+            Hủy
+          </button>
+          <button
+            onClick={() => {
+              if (confirmText === 'XÓA') {
+                alert('Tài khoản đã được xóa')
+                setShowDeleteDialog(false)
+                setConfirmText('')
+              } else {
+                alert('Vui lòng nhập "XÓA" để xác nhận')
+              }
+            }}
+            disabled={confirmText !== 'XÓA'}
+            style={{
+              padding: '10px 20px',
+              background: confirmText === 'XÓA' ? 'linear-gradient(135deg, #dc2626, #b91c1c)' : '#fca5a5',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: confirmText === 'XÓA' ? 'pointer' : 'not-allowed',
+              transition: 'all 0.2s',
+              boxShadow: confirmText === 'XÓA' ? '0 4px 12px rgba(220, 38, 38, 0.4)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (confirmText === 'XÓA') {
+                e.target.style.boxShadow = '0 6px 16px rgba(220, 38, 38, 0.5)'
+                e.target.style.transform = 'translateY(-1px)'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (confirmText === 'XÓA') {
+                e.target.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.4)'
+                e.target.style.transform = 'translateY(0)'
+              }
+            }}
+          >
+            Xác nhận xóa tài khoản
+          </button>
+        </div>
+      </Dialog>
     </div>
   )
 }

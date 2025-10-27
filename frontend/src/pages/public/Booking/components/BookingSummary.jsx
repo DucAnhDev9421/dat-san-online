@@ -1,8 +1,12 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { formatDate } from '../utils/dateHelpers'
-import { Calendar, Clock, DollarSign, CheckCircle } from 'lucide-react'
+import { Calendar, Clock, DollarSign, CheckCircle, Tag } from 'lucide-react'
 
 export default function BookingSummary({ selectedDate, selectedSlots, onBookNow }) {
+  const [promoCode, setPromoCode] = useState('')
+  const [discount, setDiscount] = useState(0)
+  const [promoApplied, setPromoApplied] = useState(false)
+
   // Calculate total amount based on selected slots
   const calculateTotal = () => {
     const timeSlots = [
@@ -24,6 +28,30 @@ export default function BookingSummary({ selectedDate, selectedSlots, onBookNow 
       const slot = timeSlots.find(s => s.time === actualTime)
       return total + (slot?.price || 0)
     }, 0)
+  }
+
+  // Handle promo code apply
+  const handleApplyPromo = () => {
+    const promotions = {
+      'CUOITUAN50': 0.5, // 50% off
+      'SOM30': 0.3, // 30% off
+      'TANG1H': 0.33, // ~33% off (1 free hour)
+      'VIP20': 0.2 // 20% off
+    }
+
+    const promoDiscount = promotions[promoCode.toUpperCase()]
+    if (promoDiscount) {
+      setDiscount(promoDiscount)
+      setPromoApplied(true)
+    } else {
+      alert('Mã khuyến mãi không hợp lệ')
+    }
+  }
+
+  // Calculate final total with discount
+  const finalTotal = () => {
+    const total = calculateTotal()
+    return Math.round(total * (1 - discount))
   }
 
   return (
@@ -137,14 +165,85 @@ export default function BookingSummary({ selectedDate, selectedSlots, onBookNow 
           background: '#e5e7eb', 
           margin: '8px 0' 
         }}></div>
+
+        {/* Promo Code Section */}
+        <div style={{ marginTop: '12px' }}>
+          <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '8px', color: '#374151', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Tag size={14} style={{ color: '#6b7280' }} />
+            Mã khuyến mãi
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="text"
+              placeholder="Nhập mã khuyến mãi"
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value)}
+              disabled={promoApplied}
+              style={{
+                flex: 1,
+                padding: '10px 12px',
+                border: '1px solid #e5e7eb',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                background: promoApplied ? '#f3f4f6' : '#fff'
+              }}
+            />
+            <button
+              onClick={handleApplyPromo}
+              disabled={promoApplied || !promoCode}
+              style={{
+                padding: '10px 16px',
+                background: promoApplied || !promoCode ? '#d1d5db' : '#10b981',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: promoApplied || !promoCode ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {promoApplied ? 'Đã áp dụng' : 'Áp dụng'}
+            </button>
+          </div>
+          {promoApplied && (
+            <div style={{ marginTop: '8px', fontSize: '13px', color: '#059669', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <CheckCircle size={14} />
+              Giảm {Math.round(discount * 100)}%
+            </div>
+          )}
+        </div>
+
+        <div style={{ 
+          height: '1px', 
+          background: '#e5e7eb', 
+          margin: '12px 0' 
+        }}></div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+          <span style={{ fontSize: '14px', color: '#6b7280' }}>Tạm tính:</span>
+          <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+            {calculateTotal().toLocaleString('vi-VN')} VNĐ
+          </span>
+        </div>
+        
+        {promoApplied && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '14px', color: '#059669' }}>Giảm giá:</span>
+            <span style={{ fontSize: '14px', fontWeight: '500', color: '#059669' }}>
+              -{(calculateTotal() * discount).toLocaleString('vi-VN')} VNĐ
+            </span>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <DollarSign size={16} style={{ color: '#1f2937' }} />
             <span style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>Tổng cộng:</span>
           </div>
           <span style={{ fontSize: '16px', fontWeight: '600', color: '#059669' }}>
-            {calculateTotal().toLocaleString('vi-VN')} VNĐ
+            {finalTotal().toLocaleString('vi-VN')} VNĐ
           </span>
         </div>
       </div>
