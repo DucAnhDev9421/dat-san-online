@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { FiSearch, FiGrid, FiList } from "react-icons/fi";
 import VenueCard from "../../components/VenueCard";
+import { SkeletonVenueCard, SkeletonVenueCardList } from "../../components/ui/Skeleton";
 
 const mockFacilities = [
   { id: 6, name: "Sân futsal Bình Tân", sport: "Futsal", city: "TP. HCM", district: "Bình Tân", open: "07:00 - 23:00", price: 280000, rating: 4.8, status: "Còn trống", image: "https://images.unsplash.com/photo-1521417531071-6d1448c1d2e8?q=80&w=1200&auto=format&fit=crop" },
@@ -18,6 +19,45 @@ export default function Facilities() {
   const [sport, setSport] = useState("Tất cả");
   const [view, setView] = useState("grid");
   const [quick, setQuick] = useState("recent"); // recent | cheap | top
+  const [provinces, setProvinces] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [selectedProvince, setSelectedProvince] = useState("");
+  const [selectedDistrict, setSelectedDistrict] = useState("");
+  const [isPageLoading, setIsPageLoading] = useState(true);
+
+  // Fetch provinces data from API
+  useEffect(() => {
+    const fetchProvinces = async () => {
+      try {
+        setIsPageLoading(true);
+        const response = await fetch('https://provinces.open-api.vn/api/v1/?depth=2');
+        const data = await response.json();
+        setProvinces(data);
+        // Simulate API loading
+        setTimeout(() => {
+          setIsPageLoading(false);
+        }, 1200);
+      } catch (error) {
+        console.error('Error fetching provinces:', error);
+        setIsPageLoading(false);
+      }
+    };
+    fetchProvinces();
+  }, []);
+
+  // Fetch districts when province changes
+  useEffect(() => {
+    if (selectedProvince) {
+      const province = provinces.find(p => p.name === selectedProvince);
+      if (province && province.districts) {
+        setDistricts(province.districts);
+        setSelectedDistrict("");
+      }
+    } else {
+      setDistricts([]);
+      setSelectedDistrict("");
+    }
+  }, [selectedProvince, provinces]);
 
   const facilities = useMemo(() => {
     let data = [...mockFacilities];
@@ -27,13 +67,15 @@ export default function Facilities() {
       data = data.filter(x => x.name.toLowerCase().includes(q) || x.district.toLowerCase().includes(q) || x.city.toLowerCase().includes(q));
     }
     if (sport !== "Tất cả") data = data.filter(x => x.sport === sport);
+    if (selectedProvince) data = data.filter(x => x.city === selectedProvince);
+    if (selectedDistrict) data = data.filter(x => x.district === selectedDistrict);
 
     if (quick === "top") data.sort((a,b) => b.rating - a.rating);
     else if (quick === "cheap") data.sort((a,b) => a.price - b.price);
     else data.sort((a,b) => b.id - a.id);
 
     return data;
-  }, [query, sport, quick]);
+  }, [query, sport, quick, selectedProvince, selectedDistrict]);
 
   const QuickButton = ({ value, label }) => (
                             <button
@@ -56,30 +98,105 @@ export default function Facilities() {
   return (
     <div style={{ background: "#f8fafc", minHeight: "100vh" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: 16 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                        <div style={{ 
+        {/* Search Bar Row */}
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+          <div style={{ 
             flex: 1,
             background: "#fff",
             border: "1px solid #e5e7eb",
             borderRadius: 12,
             padding: "10px 14px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8
-                        }}>
+            display: "flex",
+            alignItems: "center",
+            gap: 8
+          }}>
             <FiSearch style={{ color: "#94a3b8" }} />
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Tìm kiếm theo tên sân hoặc khu vực..."
+              placeholder="Tìm kiếm theo tên sân..."
               style={{ border: "none", outline: "none", width: "100%", fontSize: 14 }}
             />
-                        </div>
+          </div>
           <select value={sport} onChange={e => setSport(e.target.value)} style={{
-            background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 12px", fontSize: 14
+            background: "#fff", 
+            border: "1px solid #e5e7eb", 
+            borderRadius: 10, 
+            padding: "10px 12px", 
+            fontSize: 14,
+            minWidth: 130
           }}>
             {sportChips.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+        </div>
+
+        {/* Filter Row */}
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+          <select 
+            value={selectedProvince} 
+            onChange={e => setSelectedProvince(e.target.value)}
+            style={{
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              padding: "10px 12px",
+              fontSize: 14,
+              minWidth: 200
+            }}
+          >
+            <option value="">Tất cả Tỉnh/Thành phố</option>
+            {provinces.map((province) => (
+              <option key={province.code} value={province.name}>
+                {province.name}
+              </option>
+            ))}
+          </select>
+          <select 
+            value={selectedDistrict} 
+            onChange={e => setSelectedDistrict(e.target.value)}
+            disabled={!selectedProvince}
+            style={{
+              background: selectedProvince ? "#fff" : "#f3f4f6",
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              padding: "10px 12px",
+              fontSize: 14,
+              minWidth: 200,
+              cursor: selectedProvince ? "pointer" : "not-allowed",
+              opacity: selectedProvince ? 1 : 0.6
+            }}
+          >
+            <option value="">Tất cả Quận/Huyện</option>
+            {districts.map((district) => (
+              <option key={district.code} value={district.name}>
+                {district.name}
+              </option>
+            ))}
+          </select>
+          {(selectedProvince || selectedDistrict) && (
+            <button
+              onClick={() => {
+                setSelectedProvince("");
+                setSelectedDistrict("");
+              }}
+              style={{
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                borderRadius: 10,
+                padding: "10px 16px",
+                fontSize: 14,
+                cursor: "pointer",
+                color: "#6b7280",
+                whiteSpace: "nowrap"
+              }}
+            >
+              Xóa bộ lọc
+            </button>
+          )}
+        </div>
+
+        {/* View Toggle Row */}
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
             <QuickButton value="recent" label="Gần đây" />
             <QuickButton value="cheap" label="Giá tốt" />
@@ -95,32 +212,48 @@ export default function Facilities() {
                 color: view === "list" ? "#fff" : "#374151",
                 border: "none", borderRadius: 8, padding: "8px 12px", cursor: "pointer"
               }}><FiList /></button>
-                                                </div>
-                                            </div>
-                                        </div>
+            </div>
+          </div>
+        </div>
                                         
         <div style={{ marginTop: 18, fontSize: 14, color: "#475569" }}>Tìm thấy {facilities.length} sân thể thao</div>
 
-        {view === "grid" ? (
-          <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
-            {facilities.map(f => (
-              <VenueCard
-                key={f.id}
-                image={f.image}
-                name={f.name}
-                address={`${f.district}, ${f.city}`}
-                rating={f.rating}
-                open={f.open}
-                price={`${f.price.toLocaleString()} VND/giờ`}
-                sport={f.sport}
-                status={f.status}
-                onBook={() => {}}
-              />
-            ))}
-                                            </div>
+        {isPageLoading ? (
+          view === "grid" ? (
+            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+              {[...Array(6)].map((_, i) => (
+                <SkeletonVenueCard key={i} />
+              ))}
+            </div>
+          ) : (
+            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+              {[...Array(6)].map((_, i) => (
+                <SkeletonVenueCardList key={i} />
+              ))}
+            </div>
+          )
         ) : (
-          <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-            {facilities.map(f => (
+          <>
+            {view === "grid" ? (
+              <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+                {facilities.map(f => (
+                  <VenueCard
+                    key={f.id}
+                    image={f.image}
+                    name={f.name}
+                    address={`${f.district}, ${f.city}`}
+                    rating={f.rating}
+                    open={f.open}
+                    price={`${f.price.toLocaleString()} VND/giờ`}
+                    sport={f.sport}
+                    status={f.status}
+                    onBook={() => {}}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+                {facilities.map(f => (
               <div key={f.id} style={{ 
                 display: "flex", 
                 background: "#fff", 
@@ -216,10 +349,12 @@ export default function Facilities() {
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
-            </div>
-        </div>
-    );
+      </div>
+    </div>
+  );
 }

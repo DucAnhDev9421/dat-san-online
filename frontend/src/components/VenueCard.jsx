@@ -14,9 +14,35 @@ export default function VenueCard({
   onBook,
   chip,
 }) {
+  const [mousePosition, setMousePosition] = React.useState({ x: 0, y: 0 })
+  const cardRef = React.useRef(null)
+
+  const handleMouseMove = (e) => {
+    if (!cardRef.current) return
+    const card = cardRef.current
+    const rect = card.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    
+    const centerX = rect.width / 2
+    const centerY = rect.height / 2
+    
+    const rotateX = ((y - centerY) / centerY) * 10
+    const rotateY = ((centerX - x) / centerX) * 10
+    
+    setMousePosition({ x: rotateY, y: rotateX })
+  }
+
+  const handleMouseLeave = () => {
+    setMousePosition({ x: 0, y: 0 })
+  }
+
   return (
     <div 
+      ref={cardRef}
       className="venue-card"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       style={{
         background: '#fff',
         border: '1px solid #eef2f7',
@@ -25,13 +51,32 @@ export default function VenueCard({
         boxShadow: '0 2px 8px rgba(16,24,40,0.04)',
         display: 'flex',
         flexDirection: 'column',
-        transition: 'all 0.3s ease',
-        cursor: 'pointer'
+        transition: 'transform 0.05s ease-out',
+        transform: `perspective(1000px) rotateX(${mousePosition.y}deg) rotateY(${mousePosition.x}deg)`,
+        cursor: 'pointer',
+        transformStyle: 'preserve-3d',
+        willChange: 'transform'
       }}
     >
-      <div className="venue-card-image" style={{ position: 'relative', width: '100%', height: 200, background: '#f3f4f6' }}>
+      <div className="venue-card-image" style={{ 
+        position: 'relative', 
+        width: '100%', 
+        height: 200, 
+        background: '#f3f4f6',
+        transform: 'translateZ(20px)',
+        transition: 'all 0.3s ease'
+      }}>
         {image ? (
-          <img src={image} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img 
+            src={image} 
+            alt={name} 
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'cover',
+              transition: 'transform 0.3s ease'
+            }} 
+          />
         ) : null}
         <span style={{
           position: 'absolute',
@@ -50,14 +95,48 @@ export default function VenueCard({
           <AiFillStar /> {rating}
         </span>
       </div>
-      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ 
+        padding: 16, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: 8,
+        transform: 'translateZ(10px)'
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {(chip || sport) && (
-            <span style={{ fontSize: 12, color: '#16a34a', background: '#f0fdf4', padding: '2px 8px', borderRadius: 999 }}>{chip || sport}</span>
+            <span style={{ 
+              fontSize: 12, 
+              color: '#16a34a', 
+              background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', 
+              padding: '4px 10px', 
+              borderRadius: 999,
+              fontWeight: 600,
+              boxShadow: '0 2px 4px rgba(22, 163, 74, 0.1)'
+            }}>
+              {chip || sport}
+            </span>
           )}
-          <span style={{ marginLeft: 'auto', fontSize: 12, color: '#10b981', background: '#ecfdf5', padding: '2px 8px', borderRadius: 999 }}>{status}</span>
+          <span style={{ 
+            marginLeft: 'auto', 
+            fontSize: 12, 
+            color: '#10b981', 
+            background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', 
+            padding: '4px 10px', 
+            borderRadius: 999,
+            fontWeight: 600,
+            boxShadow: '0 2px 4px rgba(16, 185, 129, 0.1)'
+          }}>
+            {status}
+          </span>
         </div>
-        <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{name}</div>
+        <div style={{ 
+          fontSize: 16, 
+          fontWeight: 800, 
+          color: '#0f172a',
+          textShadow: '0 1px 2px rgba(0,0,0,0.05)'
+        }}>
+          {name}
+        </div>
         {address && (
           <div style={{ fontSize: 13, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
             <FiMapPin /> {address}
@@ -77,7 +156,27 @@ export default function VenueCard({
               <button 
                 className="venue-card-button"
                 onClick={onBook} 
-                style={{ marginLeft: 'auto', background: '#111827', color: '#fff', fontWeight: 700, border: 'none', borderRadius: 10, padding: '10px 14px', cursor: 'pointer' }}
+                style={{ 
+                  marginLeft: 'auto', 
+                  background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)', 
+                  color: '#fff', 
+                  fontWeight: 700, 
+                  border: 'none', 
+                  borderRadius: 10, 
+                  padding: '10px 16px', 
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 4px 8px rgba(17, 24, 39, 0.2)',
+                  transform: 'translateZ(5px)'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateZ(5px) translateY(-2px)'
+                  e.target.style.boxShadow = '0 6px 16px rgba(17, 24, 39, 0.3)'
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateZ(5px)'
+                  e.target.style.boxShadow = '0 4px 8px rgba(17, 24, 39, 0.2)'
+                }}
               >
                 Đặt sân ngay
               </button>
