@@ -43,7 +43,7 @@ export default function ProfileHeader({ userData, favoriteVenues }) {
 
   return (
     <>
-      <section style={{
+      <section className="profile-header" style={{
         background: '#fff',
         borderRadius: '12px',
         padding: '32px',
