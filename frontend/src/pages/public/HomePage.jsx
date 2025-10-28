@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import VenueCard from '../../components/VenueCard'
 import { FiSearch } from 'react-icons/fi'
-import { Search, MapPin, Building2 } from 'lucide-react'
+import { Search, MapPin, Building2, Compass, Clock } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { SkeletonVenueCard } from '../../components/ui/Skeleton'
 import TypeWriter from '../../components/ui/TypeWriter'
@@ -104,6 +104,16 @@ function HomePage() {
 
   const handleBookVenue = (venueId) => {
     navigate(`/booking?venue=${venueId}`)
+  }
+
+  const scrollToFeatured = () => {
+    const element = document.getElementById('featured')
+    if (element) {
+      element.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      })
+    }
   }
 
   const scrollToRecent = () => {
@@ -319,6 +329,116 @@ function HomePage() {
                 speed={30}
               />
             </p>
+
+            {/* Action Buttons */}
+            <div style={{
+              display: 'flex',
+              gap: '16px',
+              justifyContent: 'center',
+              flexWrap: 'wrap'
+            }}>
+              {isAuthenticated ? (
+                <>
+                  <button
+                    onClick={scrollToFeatured}
+                    style={{
+                      padding: '14px 32px',
+                      background: 'rgba(255, 255, 255, 0.95)',
+                      color: '#111827',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+                      transition: 'all 0.3s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.transform = 'translateY(-2px)'
+                      e.target.style.boxShadow = '0 6px 24px rgba(0, 0, 0, 0.3)'
+                      e.target.style.background = '#fff'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0)'
+                      e.target.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.2)'
+                      e.target.style.background = 'rgba(255, 255, 255, 0.95)'
+                    }}
+                  >
+                    <Compass size={20} />
+                    Khám phá
+                  </button>
+                  <button
+                    onClick={scrollToRecent}
+                    style={{
+                      padding: '14px 32px',
+                      background: 'rgba(255, 255, 255, 0.15)',
+                      backdropFilter: 'blur(10px)',
+                      border: '2px solid rgba(255, 255, 255, 0.3)',
+                      color: '#fff',
+                      borderRadius: '12px',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+                      transition: 'all 0.3s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.transform = 'translateY(-2px)'
+                      e.target.style.boxShadow = '0 6px 24px rgba(255, 255, 255, 0.2)'
+                      e.target.style.background = 'rgba(255, 255, 255, 0.25)'
+                      e.target.style.borderColor = 'rgba(255, 255, 255, 0.5)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0)'
+                      e.target.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.2)'
+                      e.target.style.background = 'rgba(255, 255, 255, 0.15)'
+                      e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)'
+                    }}
+                  >
+                    <Clock size={20} />
+                    Sân gần đây
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => navigate('/login')}
+                  style={{
+                    padding: '16px 40px',
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    color: '#111827',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+                    transition: 'all 0.3s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.transform = 'translateY(-2px) scale(1.02)'
+                    e.target.style.boxShadow = '0 6px 24px rgba(0, 0, 0, 0.3)'
+                    e.target.style.background = '#fff'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.transform = 'translateY(0) scale(1)'
+                    e.target.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.2)'
+                    e.target.style.background = 'rgba(255, 255, 255, 0.95)'
+                  }}
+                >
+                  <Search size={22} />
+                  Bắt đầu ngay
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Search bar integrated into hero */}
@@ -349,7 +469,7 @@ function HomePage() {
                 text="Tìm kiếm sân phù hợp ngay" 
                 speed={40}
               />
-            </div>
+        </div>
             
             <div style={{
               display: 'grid',
@@ -368,18 +488,18 @@ function HomePage() {
                     pointerEvents: 'none'
                   }} 
                 />
-                <select 
-                  value={selectedSport}
-                  onChange={(e) => setSelectedSport(e.target.value)}
-                  style={{
+            <select 
+              value={selectedSport}
+              onChange={(e) => setSelectedSport(e.target.value)}
+              style={{
                     padding: '16px 50px 16px 50px',
                     border: '2px solid #e5e7eb',
                     borderRadius: '12px',
                     fontSize: '16px',
                     background: '#fff',
-                    appearance: 'none',
-                    backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
-                    backgroundRepeat: 'no-repeat',
+                appearance: 'none',
+                backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                backgroundRepeat: 'no-repeat',
                     backgroundPosition: 'right 16px center',
                     backgroundSize: '18px',
                     paddingRight: '50px',
@@ -390,11 +510,11 @@ function HomePage() {
                   }}
                 >
                   <option value="">Môn thể thao</option>
-                <option value="football">Bóng đá</option>
-                <option value="badminton">Cầu lông</option>
-                <option value="tennis">Tennis</option>
-                  <option value="pickleball">Pickleball</option>
-                </select>
+              <option value="football">Bóng đá</option>
+              <option value="badminton">Cầu lông</option>
+              <option value="tennis">Tennis</option>
+              <option value="pickleball">Pickleball</option>
+            </select>
               </div>
               
               <div style={{ position: 'relative' }}>
@@ -409,18 +529,18 @@ function HomePage() {
                     pointerEvents: 'none'
                   }} 
                 />
-                  <select 
-                  value={selectedProvince}
-                  onChange={(e) => setSelectedProvince(e.target.value)}
-                  style={{
+            <select 
+              value={selectedProvince}
+              onChange={(e) => setSelectedProvince(e.target.value)}
+              style={{
                     padding: '16px 50px 16px 50px',
                     border: '2px solid #e5e7eb',
                     borderRadius: '12px',
                     fontSize: '16px',
                     background: '#fff',
-                    appearance: 'none',
-                    backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
-                    backgroundRepeat: 'no-repeat',
+                appearance: 'none',
+                backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                backgroundRepeat: 'no-repeat',
                     backgroundPosition: 'right 16px center',
                     backgroundSize: '18px',
                     paddingRight: '50px',
@@ -428,15 +548,15 @@ function HomePage() {
                     transition: 'all 0.2s',
                     cursor: 'pointer',
                     width: '100%'
-                  }}
-                >
-                  <option value="">Tỉnh/Thành phố</option>
-                {provinces.map((province) => (
-                  <option key={province.code} value={province.name}>
-                    {province.name}
-                    </option>
-                  ))}
-                </select>
+              }}
+            >
+              <option value="">Tỉnh/Thành phố</option>
+              {provinces.map((province) => (
+                <option key={province.code} value={province.name}>
+                  {province.name}
+                </option>
+              ))}
+            </select>
               </div>
               
               <div style={{ position: 'relative' }}>
@@ -451,42 +571,42 @@ function HomePage() {
                     pointerEvents: 'none'
                   }} 
                 />
-                  <select 
-                  value={selectedDistrict}
-                  onChange={(e) => setSelectedDistrict(e.target.value)}
-                  disabled={!selectedProvince}
-                  style={{
+            <select 
+              value={selectedDistrict}
+              onChange={(e) => setSelectedDistrict(e.target.value)}
+              disabled={!selectedProvince}
+              style={{
                     padding: '16px 50px 16px 50px',
                     border: '2px solid #e5e7eb',
                     borderRadius: '12px',
                     fontSize: '16px',
                     background: selectedProvince ? '#fff' : '#f9fafb',
-                    appearance: 'none',
-                    backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
-                    backgroundRepeat: 'no-repeat',
+                appearance: 'none',
+                backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                backgroundRepeat: 'no-repeat',
                     backgroundPosition: 'right 16px center',
                     backgroundSize: '18px',
                     paddingRight: '50px',
                     fontWeight: 500,
-                    opacity: selectedProvince ? 1 : 0.6,
+                opacity: selectedProvince ? 1 : 0.6,
                     cursor: selectedProvince ? 'pointer' : 'not-allowed',
                     transition: 'all 0.2s',
                     width: '100%'
-                  }}
-                >
-                  <option value="">Quận/Huyện</option>
-                {districts.map((district) => (
-                  <option key={district.code} value={district.name}>
-                    {district.name}
-                    </option>
-                  ))}
-                </select>
+              }}
+            >
+              <option value="">Quận/Huyện</option>
+              {districts.map((district) => (
+                <option key={district.code} value={district.name}>
+                  {district.name}
+                </option>
+              ))}
+            </select>
               </div>
               
-              <button 
-                onClick={handleSearch}
-                disabled={loading}
-                style={{
+            <button 
+              onClick={handleSearch}
+              disabled={loading}
+              style={{
                   padding: '16px 32px',
                   background: loading 
                     ? 'linear-gradient(135deg, #9ca3af 0%, #6b7280 100%)' 
@@ -499,9 +619,9 @@ function HomePage() {
                   cursor: loading ? 'not-allowed' : 'pointer',
                   transition: 'all 0.3s',
                   boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                   gap: '10px',
                   minWidth: '180px'
                 }}
@@ -516,34 +636,34 @@ function HomePage() {
                     e.target.style.transform = 'translateY(0)'
                     e.target.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)'
                   }
-                }}
-              >
-                {loading ? (
-                  <>
-                    <div style={{
+              }}
+            >
+              {loading ? (
+                <>
+                  <div style={{
                       width: '20px',
                       height: '20px',
                       border: '3px solid rgba(255,255,255,0.3)',
                       borderTop: '3px solid #fff',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
                     }} />
-                    Đang tìm...
-                  </>
-                ) : (
-                  <>
+                  Đang tìm...
+                </>
+              ) : (
+                <>
                     <Search size={20} />
-                    Tìm kiếm ngay
-                  </>
-                )}
-              </button>
+                  Tìm kiếm ngay
+                </>
+              )}
+            </button>
             </div>
           </div>
         </div>
       </section>
 
       {/* Featured section below search */}
-      <section className="cards" style={{ marginTop: '8px' }}>
+      <section id="featured" className="cards" style={{ marginTop: '8px' }}>
         <div className="container">
           <div className="section-head">
             <h3>Sân thể thao nổi bật</h3>
@@ -561,26 +681,27 @@ function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="grid" style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: '24px',
-              padding: '0 16px'
-            }}>
-              {featuredVenues.map((v) => (
-                <VenueCard
-                  key={v.id}
-                  image={getVenueImage(v.id)}
-                  name={v.name}
-                  address={v.address}
-                  rating={v.rating}
-                  open={v.operatingHours}
-                  price={v.price}
-                  chip={v.facilities && v.facilities[0]}
-                  onBook={() => handleBookVenue(v.id)}
-                />
-              ))}
-            </div>
+          <div className="grid" style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '24px',
+            padding: '0 16px'
+          }}>
+            {featuredVenues.map((v) => (
+              <VenueCard
+                key={v.id}
+                  venueId={v.id}
+                image={getVenueImage(v.id)}
+                name={v.name}
+                address={v.address}
+                rating={v.rating}
+                open={v.operatingHours}
+                price={v.price}
+                chip={v.facilities && v.facilities[0]}
+                onBook={() => handleBookVenue(v.id)}
+              />
+            ))}
+          </div>
           )}
         </div>
       </section>
@@ -604,26 +725,27 @@ function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="grid" style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: '24px',
-              padding: '0 16px'
-            }}>
-              {venues.map((v) => (
-                <VenueCard
-                  key={v.id}
-                  image={getVenueImage(v.id)}
-                  name={v.name}
-                  address={v.address}
-                  rating={v.rating}
-                  open={v.operatingHours}
-                  price={v.price}
-                  chip={v.facilities && v.facilities[0]}
-                  onBook={() => handleBookVenue(v.id)}
-                />
-              ))}
-            </div>
+          <div className="grid" style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '24px',
+            padding: '0 16px'
+          }}>
+            {venues.map((v) => (
+              <VenueCard
+                key={v.id}
+                  venueId={v.id}
+                image={getVenueImage(v.id)}
+                name={v.name}
+                address={v.address}
+                rating={v.rating}
+                open={v.operatingHours}
+                price={v.price}
+                chip={v.facilities && v.facilities[0]}
+                onBook={() => handleBookVenue(v.id)}
+              />
+            ))}
+          </div>
           )}
         </div>
       </section>

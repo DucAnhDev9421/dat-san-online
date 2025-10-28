@@ -1,59 +1,75 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Gift, Zap, TrendingUp, Star, Tag, Clock, CheckCircle } from 'lucide-react'
+import { Gift, Zap, TrendingUp, Star, Tag, Clock, CheckCircle, Flame, Copy, Percent } from 'lucide-react'
 
 const Promotion = () => {
+  const [copiedCode, setCopiedCode] = useState(null)
+
+  const copyToClipboard = (code) => {
+    navigator.clipboard.writeText(code)
+    setCopiedCode(code)
+    setTimeout(() => setCopiedCode(null), 2000)
+  }
+
   const promotions = [
     {
       id: 1,
-      title: 'Giảm 50% cho đặt sân cuối tuần',
-      description: 'Áp dụng cho tất cả các sân bóng đá, tennis, cầu lông. Đặt sân vào thứ 7, Chủ nhật.',
+      title: 'Giảm 50% đặt sân đầu tiên',
+      description: 'Ưu đãi đặc biệt dành cho thành viên mới',
       discount: '50%',
       icon: Gift,
-      color: 'bg-red-500',
-      image: '/sports-meeting.webp',
-      validUntil: '31/12/2024',
-      code: 'CUOITUAN50',
-      features: ['Áp dụng cho khung giờ từ 15:00 - 22:00', 'Tối đa 2 giờ/sân', 'Không áp dụng chung voucher khác']
+      color: '#3b82f6',
+      image: '/pngtree-sports-poster-background.jpg',
+      validUntil: '33 ngày 13 giờ',
+      code: 'FIRST50',
+      usage: { current: 342, total: 1000 },
+      features: ['Áp dụng cho khách hàng mới', 'Giảm tối đa 200,000₫'],
+      badges: ['HOT', 'MỚI']
     },
     {
       id: 2,
-      title: 'Giảm 30% đặt sân theo giờ',
-      description: 'Đặt sân trước 1 ngày và được giảm 30% giá trị hóa đơn.',
+      title: 'Giảm 30% đặt sân cuối tuần',
+      description: 'Đặt sân vào thứ 7, Chủ nhật và nhận giảm giá',
       discount: '30%',
       icon: Clock,
-      color: 'bg-blue-500',
-      image: '/all-sports-banner.webp',
-      validUntil: '31/12/2024',
-      code: 'SOM30',
-      features: ['Đặt sân trước 24h', 'Áp dụng cho tất cả khung giờ', 'Không giới hạn số lần sử dụng']
+      color: '#ef4444',
+      image: '/sports-meeting.webp',
+      validUntil: '28 ngày 5 giờ',
+      code: 'WEEKEND30',
+      usage: { current: 156, total: 500 },
+      features: ['Áp dụng cho cuối tuần', 'Tối đa 3 giờ/sân'],
+      badges: ['HOT']
     },
     {
       id: 3,
       title: 'Tặng 1 giờ chơi miễn phí',
-      description: 'Đặt sân 3 giờ liên tiếp được tặng thêm 1 giờ chơi miễn phí.',
+      description: 'Đặt sân 3 giờ được tặng thêm 1 giờ',
       discount: '1h',
       icon: Star,
-      color: 'bg-yellow-500',
-      image: '/pngtree-sports-poster-background.jpg',
-      validUntil: '28/02/2025',
-      code: 'TANG1H',
-      features: ['Áp dụng cho đơn từ 3 giờ trở lên', 'Chỉ áp dụng vào giờ off-peak', 'Phải đặt trực tiếp']
+      color: '#f59e0b',
+      image: '/all-sports-banner.webp',
+      validUntil: '45 ngày 22 giờ',
+      code: 'FREE1H',
+      usage: { current: 89, total: 200 },
+      features: ['Áp dụng cho đơn từ 3 giờ', 'Chỉ áp dụng giờ off-peak'],
+      badges: ['MỚI']
     },
     {
       id: 4,
       title: 'Member VIP - Giảm 20% mãi mãi',
-      description: 'Đăng ký thành viên VIP để nhận giảm 20% cho mọi đặt sân.',
+      description: 'Đăng ký thành viên VIP cho giảm giá trọn đời',
       discount: '20%',
       icon: TrendingUp,
-      color: 'bg-purple-500',
+      color: '#8b5cf6',
       image: '/sports-meeting.webp',
       validUntil: 'Mãi mãi',
       code: 'VIP20',
-      features: ['Phí đăng ký: 500.000đ', 'Giảm 20% mọi đơn hàng', 'Quà tặng sinh nhật hàng năm']
+      usage: { current: 523, total: 1000 },
+      features: ['Phí đăng ký: 500.000đ', 'Giảm 20% mọi đơn hàng'],
+      badges: []
     }
   ]
 
@@ -134,122 +150,272 @@ const Promotion = () => {
         </div>
 
         {/* Promotions Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '24px', marginBottom: '48px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '32px', marginBottom: '48px' }}>
           {promotions.map((promo) => {
-            const IconComponent = promo.icon
+            const usagePercent = (promo.usage.current / promo.usage.total) * 100
             return (
               <Card key={promo.id} style={{ 
+                border: '1px solid #e5e7eb',
+                borderRadius: '16px',
                 overflow: 'hidden', 
-                transition: 'all 0.3s', 
+                transition: 'all 0.3s ease',
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'column',
-                height: '100%'
+                height: '100%',
+                background: 'white',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
               }} 
-                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-8px)'; e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.1)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)' }}>
-                <CardHeader style={{ 
+              onMouseEnter={(e) => { 
+                e.currentTarget.style.transform = 'translateY(-4px)'
+                e.currentTarget.style.boxShadow = '0 12px 32px rgba(0,0,0,0.12)' 
+              }}
+              onMouseLeave={(e) => { 
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)' 
+              }}>
+                {/* Image Header */}
+                <div style={{ 
+                  position: 'relative',
+                  height: '180px',
                   backgroundImage: `url(${promo.image})`,
                   backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  position: 'relative', 
-                  minHeight: '200px', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  padding: 0
+                  backgroundPosition: 'center'
                 }}>
+                  {/* Gradient Overlay */}
                   <div style={{ 
-                    position: 'absolute', 
-                    inset: 0, 
-                    background: 'linear-gradient(135deg, rgba(0,0,0,0.4), rgba(0,0,0,0.6))' 
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.3))'
                   }} />
-                  <div style={{ 
-                    position: 'absolute', 
-                    top: '16px', 
-                    right: '16px',
-                    fontSize: '20px',
-                    fontWeight: '800',
-                    padding: '10px 20px',
-                    background: 'white',
-                    color: promo.color,
-                    zIndex: 2,
-                    borderRadius: '25px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-                  }}>
-                    -{promo.discount}
-                  </div>
-                  <IconComponent size={48} style={{ color: 'white', zIndex: 1 }} />
-                </CardHeader>
-                <CardContent style={{ padding: '24px', display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-                  <CardTitle style={{ fontSize: '24px', fontWeight: '700', marginBottom: '12px' }}>
-                    {promo.title}
-                  </CardTitle>
-                  <CardDescription style={{ fontSize: '16px', color: '#6b7280', marginBottom: '20px' }}>
-                    {promo.description}
-                  </CardDescription>
                   
-                  <div style={{ background: '#f9fafb', padding: '16px', borderRadius: '8px', marginBottom: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                      <span style={{ color: '#6b7280', fontSize: '14px' }}>Mã khuyến mãi:</span>
-                      <div style={{ 
-                        fontSize: '16px', 
-                        fontWeight: '700', 
-                        letterSpacing: '2px', 
-                        background: 'linear-gradient(135deg, #10b981, #059669)', 
-                        color: 'white', 
-                        padding: '8px 16px',
-                        borderRadius: '20px',
-                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
-                      }}>
-                        {promo.code}
-                      </div>
+                  {/* Badges */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    left: '12px',
+                    display: 'flex',
+                    gap: '8px',
+                    zIndex: 10
+                  }}>
+                    {promo.badges.map((badge, idx) => (
+                      <Badge 
+                        key={idx}
+                        variant="default"
+                        className={badge === 'HOT' ? 'bg-gradient-to-r from-red-500 to-red-600 text-white border-none shadow-lg' : 'bg-gradient-to-r from-green-500 to-green-600 text-white border-none shadow-lg'}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '20px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                        }}
+                      >
+                        {badge === 'HOT' ? <Flame size={14} /> : <Star size={14} />}
+                        {badge}
+                      </Badge>
+                    ))}
+                  </div>
+
+                  {/* Discount Badge */}
+                  <span style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: '12px',
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '16px',
+                    fontWeight: '800',
+                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)',
+                    zIndex: 10
+                  }}>
+                    {promo.discount}
+                  </span>
+                </div>
+
+                <CardContent style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Title */}
+                  <div style={{ 
+                    fontSize: '20px', 
+                    fontWeight: '700', 
+                    color: '#111827',
+                    lineHeight: '1.3'
+                  }}>
+                    {promo.title}
+                  </div>
+
+                  {/* Description */}
+                  <div style={{ 
+                    fontSize: '14px', 
+                    color: '#6b7280',
+                    lineHeight: '1.5'
+                  }}>
+                    {promo.description}
+                  </div>
+
+                  {/* Timer */}
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px',
+                    color: '#f59e0b',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}>
+                    <Clock size={16} />
+                    <span>{promo.validUntil}</span>
+                  </div>
+
+                  {/* Usage Progress */}
+                  <div>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      marginBottom: '8px',
+                      fontSize: '13px',
+                      color: '#6b7280'
+                    }}>
+                      <span>Đã sử dụng</span>
+                      <span style={{ fontWeight: '600', color: '#374151' }}>
+                        {promo.usage.current}/{promo.usage.total}
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ color: '#6b7280', fontSize: '14px' }}>Hiệu lực đến:</span>
-                      <span style={{ color: '#dc2626', fontSize: '14px', fontWeight: '600' }}>{promo.validUntil}</span>
+                    <div style={{
+                      width: '100%',
+                      height: '8px',
+                      background: '#e5e7eb',
+                      borderRadius: '4px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${usagePercent}%`,
+                        height: '100%',
+                        background: 'linear-gradient(90deg, #10b981, #059669)',
+                        transition: 'width 0.3s ease'
+                      }} />
                     </div>
                   </div>
 
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, flexGrow: 1 }}>
-                    {promo.features.map((feature, index) => (
-                      <li key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', color: '#374151' }}>
-                        <CheckCircle size={16} style={{ color: '#10b981', marginRight: '8px' }} />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-                <CardFooter style={{ padding: '0 24px 24px 24px', marginTop: 'auto', display: 'flex', justifyContent: 'flex-end' }}>
+                  {/* Conditions Section */}
+                  <div style={{
+                    paddingTop: '16px',
+                    borderTop: '1px solid #e5e7eb'
+                  }}>
+                    <div style={{ 
+                      fontSize: '14px', 
+                      fontWeight: '600', 
+                      color: '#111827',
+                      marginBottom: '12px'
+                    }}>
+                      Điều kiện:
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {promo.features.map((feature, index) => (
+                        <div key={index} style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '8px',
+                          fontSize: '13px',
+                          color: '#374151'
+                        }}>
+                          <CheckCircle size={16} style={{ color: '#10b981', flexShrink: 0 }} />
+                          <span>{feature}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Promo Code */}
+                  <div style={{
+                    background: '#f9fafb',
+                    border: '2px dashed #d1d5db',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '12px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Tag size={16} style={{ color: '#6b7280' }} />
+                      <span style={{ 
+                        fontSize: '16px', 
+                        fontWeight: '700', 
+                        letterSpacing: '1px',
+                        color: '#111827'
+                      }}>
+                        {promo.code}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => copyToClipboard(promo.code)}
+                      style={{
+                        padding: '6px 12px',
+                        background: copiedCode === promo.code ? '#10b981' : '#f3f4f6',
+                        color: copiedCode === promo.code ? 'white' : '#6b7280',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <Copy size={14} />
+                      {copiedCode === promo.code ? 'Đã copy' : 'Copy'}
+                    </button>
+                  </div>
+
+                  {/* Action Button */}
                   <button
                     onClick={() => alert(`Áp dụng mã: ${promo.code}`)}
                     style={{
-                      padding: '10px 24px',
-                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      width: '100%',
+                      padding: '14px',
+                      background: 'linear-gradient(135deg, #111827, #1f2937)',
                       color: 'white',
                       border: 'none',
-                      borderRadius: '10px',
+                      borderRadius: '12px',
                       fontSize: '15px',
-                      fontWeight: '600',
+                      fontWeight: '700',
                       cursor: 'pointer',
-                      boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
-                      transition: 'all 0.2s',
+                      boxShadow: '0 4px 12px rgba(17, 24, 39, 0.2)',
+                      transition: 'all 0.3s ease',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px'
+                      justifyContent: 'center',
+                      gap: '8px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
                     }}
                     onMouseEnter={(e) => {
-                      e.target.style.boxShadow = '0 6px 20px rgba(16, 185, 129, 0.5)'
+                      e.target.style.background = 'linear-gradient(135deg, #1f2937, #374151)'
+                      e.target.style.boxShadow = '0 6px 20px rgba(17, 24, 39, 0.3)'
                       e.target.style.transform = 'translateY(-2px)'
                     }}
                     onMouseLeave={(e) => {
-                      e.target.style.boxShadow = '0 4px 14px rgba(16, 185, 129, 0.4)'
+                      e.target.style.background = 'linear-gradient(135deg, #111827, #1f2937)'
+                      e.target.style.boxShadow = '0 4px 12px rgba(17, 24, 39, 0.2)'
                       e.target.style.transform = 'translateY(0)'
                     }}
                   >
-                    Sử dụng mã này
+                    <Gift size={18} />
+                    Sử dụng ngay
                   </button>
-                </CardFooter>
+                </CardContent>
               </Card>
             )
           })}

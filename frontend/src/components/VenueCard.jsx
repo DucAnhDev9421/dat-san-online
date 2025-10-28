@@ -1,4 +1,5 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FiMapPin, FiClock, FiDollarSign } from 'react-icons/fi'
 import { AiFillStar } from 'react-icons/ai'
 
@@ -13,7 +14,9 @@ export default function VenueCard({
   status = 'Còn trống',
   onBook,
   chip,
+  venueId,
 }) {
+  const navigate = useNavigate()
   const [mousePosition, setMousePosition] = React.useState({ x: 0, y: 0 })
   const cardRef = React.useRef(null)
 
@@ -33,8 +36,31 @@ export default function VenueCard({
     setMousePosition({ x: rotateY, y: rotateX })
   }
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = (e) => {
     setMousePosition({ x: 0, y: 0 })
+    // Reset border and shadow
+    if (e.currentTarget) {
+      e.currentTarget.style.borderColor = '#cbd5e1'
+      e.currentTarget.style.boxShadow = '0 4px 12px rgba(16,24,40,0.08), 0 0 0 1px rgba(0,0,0,0.05)'
+    }
+  }
+
+  const handleMouseEnter = (e) => {
+    e.currentTarget.style.borderColor = '#667eea'
+    e.currentTarget.style.boxShadow = '0 8px 20px rgba(102, 126, 234, 0.15), 0 0 0 2px rgba(102, 126, 234, 0.1)'
+  }
+
+  const handleCardClick = (e) => {
+    // Don't navigate if clicking the button
+    if (e.target.closest('.venue-card-button')) {
+      return
+    }
+    
+    if (venueId) {
+      navigate(`/booking?venue=${venueId}`)
+    } else if (onBook) {
+      onBook()
+    }
   }
 
   return (
@@ -42,16 +68,18 @@ export default function VenueCard({
       ref={cardRef}
       className="venue-card"
       onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={handleCardClick}
       style={{
         background: '#fff',
-        border: '1px solid #eef2f7',
+        border: '2px solid #cbd5e1',
         borderRadius: 16,
         overflow: 'hidden',
-        boxShadow: '0 2px 8px rgba(16,24,40,0.04)',
+        boxShadow: '0 4px 12px rgba(16,24,40,0.08), 0 0 0 1px rgba(0,0,0,0.05)',
         display: 'flex',
         flexDirection: 'column',
-        transition: 'transform 0.05s ease-out',
+        transition: 'transform 0.05s ease-out, border-color 0.3s ease',
         transform: `perspective(1000px) rotateX(${mousePosition.y}deg) rotateY(${mousePosition.x}deg)`,
         cursor: 'pointer',
         transformStyle: 'preserve-3d',
