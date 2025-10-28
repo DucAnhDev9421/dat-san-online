@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { FiSearch, FiGrid, FiList } from "react-icons/fi";
 import VenueCard from "../../components/VenueCard";
 import { SkeletonVenueCard, SkeletonVenueCardList } from "../../components/ui/Skeleton";
@@ -15,6 +16,7 @@ const mockFacilities = [
 const sportChips = ["Tất cả", "Bóng đá", "Cầu lông", "Bóng rổ", "Bóng chuyền", "Tennis", "Futsal"];
 
 export default function Facilities() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [sport, setSport] = useState("Tất cả");
   const [view, setView] = useState("grid");
@@ -239,6 +241,7 @@ export default function Facilities() {
                 {facilities.map(f => (
                   <VenueCard
                     key={f.id}
+                    venueId={f.id}
                     image={f.image}
                     name={f.name}
                     address={`${f.district}, ${f.city}`}
@@ -254,24 +257,27 @@ export default function Facilities() {
             ) : (
               <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
                 {facilities.map(f => (
-              <div key={f.id} style={{ 
-                display: "flex", 
-                background: "#fff", 
-                border: "1px solid #eef2f7", 
-                borderRadius: 16, 
-                overflow: "hidden",
-                boxShadow: "0 2px 8px rgba(16,24,40,0.04)",
-                transition: "all 0.3s ease",
-                cursor: "pointer"
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow = "0 4px 16px rgba(16,24,40,0.08)";
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 2px 8px rgba(16,24,40,0.04)";
-              }}>
+              <div 
+                key={f.id} 
+                onClick={() => navigate(`/booking?venue=${f.id}`)}
+                style={{ 
+                  display: "flex", 
+                  background: "#fff", 
+                  border: "1px solid #eef2f7", 
+                  borderRadius: 16, 
+                  overflow: "hidden",
+                  boxShadow: "0 2px 8px rgba(16,24,40,0.04)",
+                  transition: "all 0.3s ease",
+                  cursor: "pointer"
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 4px 16px rgba(16,24,40,0.08)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 2px 8px rgba(16,24,40,0.04)";
+                }}>
                 {/* Image Section */}
                 <div style={{ width: 200, height: 150, background: "#f3f4f6", position: "relative", flexShrink: 0 }}>
                   <img 
@@ -332,7 +338,10 @@ export default function Facilities() {
                       💰 {f.price.toLocaleString()} VND/giờ
                     </div>
                     <button 
-                      onClick={() => {}}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/booking?venue=${f.id}`);
+                      }}
                       style={{ 
                         background: "#111827", 
                         color: "#fff", 
