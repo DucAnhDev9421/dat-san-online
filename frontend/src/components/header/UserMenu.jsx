@@ -1,5 +1,5 @@
 import React from 'react'
-import { User, LogOut, Settings, ChevronDown } from 'lucide-react'
+import { User, LogOut, Settings, ChevronDown, Calendar } from 'lucide-react'
 
 const UserMenu = ({ 
   user, 
@@ -7,7 +7,8 @@ const UserMenu = ({
   onToggle, 
   onProfileClick, 
   onLogout,
-  onSettingsClick
+  onSettingsClick,
+  onBookingHistoryClick
 }) => {
   return (
     <div style={{ position: 'relative' }}>
@@ -120,6 +121,29 @@ const UserMenu = ({
             >
               <User size={16} />
               Thông tin cá nhân
+            </button>
+            
+            <button
+              onClick={onBookingHistoryClick}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '10px 12px',
+                border: 'none',
+                background: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                color: '#374151',
+                textAlign: 'left'
+              }}
+              onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+              onMouseLeave={(e) => e.target.style.background = 'none'}
+            >
+              <Calendar size={16} />
+              Lịch đặt sân
             </button>
             
             <button

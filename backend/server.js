@@ -18,6 +18,10 @@ import { generalLimiter } from "./middleware/rateLimiter.js";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/user.js";
 import auditRoutes from "./routes/audit.js";
+import facilityRoutes from "./routes/facility.js";
+import courtRoutes from "./routes/court.js";
+import User from "./models/User.js";
+
 const app = express();
 
 // Validate configuration
@@ -91,6 +95,8 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/audit", auditRoutes);
+app.use("/api/facilities", facilityRoutes);
+app.use("/api/courts", courtRoutes);
 // 404 handler
 app.use(notFound);
 
@@ -106,6 +112,16 @@ app.listen(PORT, () => {
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Google OAuth: http://localhost:${PORT}/api/auth/google`);
 });
+
+// Schedule cleanup job for unverified users every hour
+setInterval(async () => {
+  try {
+    const result = await User.cleanupUnverifiedUsers();
+    console.log(`🧹 Cleaned up ${result.deletedCount} unverified user(s)`);
+  } catch (error) {
+    console.error("Error cleaning up unverified users:", error);
+  }
+}, 60 * 60 * 1000); // Run every hour
 
 // Graceful shutdown
 process.on("SIGTERM", () => {

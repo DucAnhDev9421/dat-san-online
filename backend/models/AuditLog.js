@@ -17,6 +17,7 @@ const auditLogSchema = new mongoose.Schema(
         "LOGOUT",
         "REFRESH_TOKEN",
         "REGISTER",
+        "REGISTER_PENDING",
         "VERIFY_OTP",
         "FORGOT_PASSWORD",
         "RESET_PASSWORD",

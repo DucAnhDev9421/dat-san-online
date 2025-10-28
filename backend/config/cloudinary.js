@@ -44,6 +44,72 @@ const upload = multer({
   }
 });
 
+// Configure Cloudinary Storage for Facility images
+const facilityStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'booking-sport/facilities',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [
+      { width: 1200, height: 800, crop: 'fill' },
+      { quality: 'auto' }
+    ],
+    public_id: (req, file) => {
+      const facilityId = req.params.id || 'facility';
+      const timestamp = Date.now();
+      return `facility_${facilityId}_${timestamp}`;
+    }
+  }
+});
+
+// Configure multer for Facility images
+export const uploadFacilityImage = multer({
+  storage: facilityStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
+// Configure Cloudinary Storage for Court images
+const courtStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'booking-sport/courts',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [
+      { width: 1000, height: 667, crop: 'fill' },
+      { quality: 'auto' }
+    ],
+    public_id: (req, file) => {
+      const courtId = req.params.id || 'court';
+      const timestamp = Date.now();
+      return `court_${courtId}_${timestamp}`;
+    }
+  }
+});
+
+// Configure multer for Court images
+export const uploadCourtImage = multer({
+  storage: courtStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
 // Cloudinary utility functions
 export const cloudinaryUtils = {
   // Upload image and return URL

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { FiX, FiUser, FiPhone, FiCamera, FiUpload } from 'react-icons/fi'
-import { authService } from '../../../../api/authService'
+import { toast } from 'react-toastify'
+import { userApi } from '../../../../api/userApi'
 
 export default function EditProfileModal({ isOpen, onClose, userData, onSave }) {
   const [formData, setFormData] = useState({
@@ -82,7 +83,7 @@ export default function EditProfileModal({ isOpen, onClose, userData, onSave }) 
 
     if (window.confirm('Bạn có chắc chắn muốn xóa ảnh đại diện?')) {
       try {
-        await authService.deleteAvatar()
+        await userApi.deleteAvatar()
         
         // Clear preview and form data
         setAvatarPreview(null)
@@ -91,10 +92,10 @@ export default function EditProfileModal({ isOpen, onClose, userData, onSave }) 
           avatar: null
         }))
         
-        alert('Xóa ảnh đại diện thành công!')
+        toast.success('Xóa ảnh đại diện thành công!')
       } catch (error) {
         console.error('Delete avatar error:', error)
-        alert('Có lỗi xảy ra khi xóa ảnh đại diện. Vui lòng thử lại.')
+        toast.error('Có lỗi xảy ra khi xóa ảnh đại diện. Vui lòng thử lại.')
       }
     }
   }
@@ -133,12 +134,12 @@ export default function EditProfileModal({ isOpen, onClose, userData, onSave }) 
       }
 
       // Update profile data first
-      const profileResult = await authService.updateProfile(updateData)
+      const profileResult = await userApi.updateProfile(updateData)
       
       // Upload avatar to Cloudinary if changed
       let avatarUrl = formData.avatar
       if (formData.avatar instanceof File) {
-        const avatarResult = await authService.uploadAvatar(formData.avatar)
+        const avatarResult = await userApi.uploadAvatar(formData.avatar)
         avatarUrl = avatarResult.data.uploadInfo.url
         console.log('✅ Avatar uploaded to Cloudinary:', avatarResult.data.uploadInfo)
       } else if (formData.avatar === null && userData?.avatar) {
@@ -158,20 +159,22 @@ export default function EditProfileModal({ isOpen, onClose, userData, onSave }) 
         })
       }
       
-      // Close modal
-      onClose()
-      
       // Show success message
-      alert(profileResult.message || 'Cập nhật thông tin thành công!')
+      toast.success(profileResult.message || 'Cập nhật thông tin thành công!')
+      
+      // Close modal after showing success message
+      setTimeout(() => {
+        onClose()
+      }, 1500)
       
     } catch (error) {
       console.error('Save profile error:', error)
       
       // Handle specific error messages
       if (error.message) {
-        alert(`Lỗi: ${error.message}`)
+        toast.error(`Lỗi: ${error.message}`)
       } else {
-        alert('Có lỗi xảy ra khi lưu thông tin. Vui lòng thử lại.')
+        toast.error('Có lỗi xảy ra khi lưu thông tin. Vui lòng thử lại.')
       }
     } finally {
       setIsLoading(false)

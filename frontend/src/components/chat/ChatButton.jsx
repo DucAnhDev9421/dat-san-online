@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import './ChatButton.css';
 
 const ChatButton = () => {
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  
+  // Hide chat button on auth pages
+  const authPages = ['/login', '/register', '/verify-otp', '/forgot-password', '/reset-password', '/auth/callback', '/auth/error'];
+  const isAuthPage = authPages.some(path => location.pathname.startsWith(path));
 
   const toggleChat = () => {
     setIsOpen(!isOpen);
@@ -19,6 +25,11 @@ const ChatButton = () => {
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
+
+  // Don't render chat button on auth pages
+  if (isAuthPage) {
+    return null;
+  }
 
   return (
     <>
