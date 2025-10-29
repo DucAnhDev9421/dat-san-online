@@ -192,27 +192,32 @@ export default function BookingSummary({ selectedDate, selectedSlots, selectedCo
             <Tag size={14} style={{ color: '#6b7280' }} />
             Mã khuyến mãi
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="promo-code-container" style={{ display: 'flex', gap: '8px' }}>
             <input
               type="text"
               placeholder="Nhập mã khuyến mãi"
               value={promoCode}
               onChange={(e) => setPromoCode(e.target.value)}
               disabled={promoApplied}
+              className="promo-code-input"
               style={{
-                flex: 1,
+                flex: '1 1 auto',
+                minWidth: '120px',
                 padding: '10px 12px',
                 border: '1px solid #e5e7eb',
                 borderRadius: '6px',
                 fontSize: '14px',
                 outline: 'none',
-                background: promoApplied ? '#f3f4f6' : '#fff'
+                background: promoApplied ? '#f3f4f6' : '#fff',
+                transition: 'all 0.2s'
               }}
             />
             <button
               onClick={handleApplyPromo}
               disabled={promoApplied || !promoCode}
+              className="promo-code-button"
               style={{
+                flex: '0 0 auto',
                 padding: '10px 16px',
                 background: promoApplied || !promoCode ? '#d1d5db' : '#10b981',
                 color: '#fff',
@@ -221,7 +226,8 @@ export default function BookingSummary({ selectedDate, selectedSlots, selectedCo
                 fontSize: '14px',
                 fontWeight: '500',
                 cursor: promoApplied || !promoCode ? 'not-allowed' : 'pointer',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s'
               }}
             >
               {promoApplied ? 'Đã áp dụng' : 'Áp dụng'}
@@ -313,6 +319,55 @@ export default function BookingSummary({ selectedDate, selectedSlots, selectedCo
       }}>
         Bằng việc đặt sân, bạn đồng ý với điều khoản sử dụng của chúng tôi
       </p>
+
+      <style>{`
+        /* Responsive styles for promo code section */
+        @media (max-width: 640px) {
+          .promo-code-container {
+            gap: 6px;
+          }
+          
+          .promo-code-input {
+            min-width: 100px !important;
+            flex: 1 1 0 !important;
+            padding: 8px 10px !important;
+            font-size: 13px !important;
+          }
+          
+          .promo-code-button {
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+            flex-shrink: 0;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .promo-code-input {
+            min-width: 80px !important;
+            padding: 8px !important;
+            font-size: 12px !important;
+          }
+          
+          .promo-code-button {
+            padding: 8px !important;
+            font-size: 12px !important;
+          }
+        }
+        
+        @media (max-width: 360px) {
+          .promo-code-input {
+            min-width: 60px !important;
+            padding: 6px 8px !important;
+            font-size: 11px !important;
+          }
+          
+          .promo-code-button {
+            padding: 6px 8px !important;
+            font-size: 11px !important;
+            white-space: nowrap;
+          }
+        }
+      `}</style>
     </div>
   )
 }
