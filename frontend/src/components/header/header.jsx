@@ -270,10 +270,6 @@ function Header() {
             display: none !important;
           }
 
-          .brand-name {
-            display: none;
-          }
-
           .logo-image {
             height: 40px !important;
           }
@@ -294,12 +290,17 @@ function Header() {
 
         @media (max-width: 480px) {
           .brand-name {
-            display: block;
             font-size: 14px;
           }
 
           .header-inner {
             height: 56px !important;
+          }
+        }
+
+        @media (max-width: 400px) {
+          .brand-name {
+            display: none !important;
           }
         }
       `}</style>

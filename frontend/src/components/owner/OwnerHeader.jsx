@@ -6,28 +6,101 @@ import {
   Settings, 
   LogOut, 
   Menu,
-  ChevronDown,
-  Sun,
-  Moon,
   Home,
   MapPin
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import UserMenu from "../header/UserMenu";
+import NotificationDropdown from "../header/NotificationDropdown";
 
 export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
-  const notifications = [
-    { id: 1, message: "Có 2 đơn đặt sân mới cần xác nhận", time: "10 phút trước", type: "booking" },
-    { id: 2, message: "Sân 1 đã được đặt thành công", time: "30 phút trước", type: "success" },
-    { id: 3, message: "Báo cáo doanh thu tuần này", time: "1 giờ trước", type: "report" },
-  ];
+  const [notifications, setNotifications] = useState([
+    { 
+      id: 1, 
+      title: "Đơn đặt mới",
+      message: "Có 2 đơn đặt sân mới cần xác nhận", 
+      time: "10 phút trước", 
+      type: "booking",
+      icon: Bell,
+      iconColor: "#3b82f6",
+      isRead: false
+    },
+    { 
+      id: 2, 
+      title: "Đặt sân thành công",
+      message: "Sân 1 đã được đặt thành công", 
+      time: "30 phút trước", 
+      type: "success",
+      icon: Settings,
+      iconColor: "#10b981",
+      isRead: true
+    },
+    { 
+      id: 3, 
+      title: "Báo cáo doanh thu",
+      message: "Báo cáo doanh thu tuần này", 
+      time: "1 giờ trước", 
+      type: "report",
+      icon: User,
+      iconColor: "#f59e0b",
+      isRead: false
+    },
+  ]);
 
-  const handleLogout = () => {
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  const handleLogout = async () => {
     if (confirm("Bạn có chắc chắn muốn đăng xuất?")) {
-      // TODO: Implement logout logic
-      alert("Đăng xuất thành công!");
+      await logout();
+      navigate("/");
     }
+  };
+
+  const handleProfileClick = () => {
+    setIsProfileOpen(false);
+    navigate("/profile");
+  };
+
+  const handleSettingsClick = () => {
+    setIsProfileOpen(false);
+    navigate("/profile?tab=settings");
+  };
+
+  const handleBookingHistoryClick = () => {
+    setIsProfileOpen(false);
+    navigate("/profile?tab=bookings");
+  };
+
+  const handleNotificationClick = () => {
+    setIsNotificationOpen(!isNotificationOpen);
+    setIsProfileOpen(false);
+  };
+
+  const handleNotificationItemClick = (notification) => {
+    // Mark as read if unread
+    setNotifications(prev => 
+      prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
+    );
+    setIsNotificationOpen(false);
+    // Navigate based on type
+    if (notification.type === 'booking') {
+      navigate('/owner');
+    }
+  };
+
+  const markAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
+
+  const handleViewAllNotifications = () => {
+    setIsNotificationOpen(false);
+    navigate('/owner');
   };
 
   return (
@@ -133,28 +206,10 @@ export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
 
       {/* Right side - Actions */}
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        {/* Dark mode toggle */}
-        <button
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 8,
-            borderRadius: 8,
-            cursor: "pointer",
-            color: "#6b7280",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          title={isDarkMode ? "Chế độ sáng" : "Chế độ tối"}
-        >
-          {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
-
         {/* Notifications */}
         <div style={{ position: "relative" }}>
           <button
+            onClick={handleNotificationClick}
             style={{
               background: "none",
               border: "none",
@@ -177,7 +232,7 @@ export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
             }}
           >
             <Bell size={18} />
-            {notifications.length > 0 && (
+            {unreadCount > 0 && (
               <span
                 style={{
                   position: "absolute",
@@ -195,187 +250,32 @@ export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
                   fontWeight: 700,
                 }}
               >
-                {notifications.length}
+                {unreadCount}
               </span>
             )}
           </button>
+          <NotificationDropdown
+            isOpen={isNotificationOpen}
+            onClose={() => setIsNotificationOpen(false)}
+            notifications={notifications}
+            unreadCount={unreadCount}
+            onNotificationClick={handleNotificationItemClick}
+            onMarkAllAsRead={markAllAsRead}
+            onViewAll={handleViewAllNotifications}
+          />
         </div>
 
-        {/* Profile dropdown */}
-        <div style={{ position: "relative" }}>
-          <button
-            onClick={() => setIsProfileOpen(!isProfileOpen)}
-            style={{
-              background: "none",
-              border: "none",
-              padding: "8px 12px",
-              borderRadius: 8,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              color: "#374151",
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = "#f3f4f6";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = "none";
-            }}
-          >
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#fff",
-                fontSize: 14,
-                fontWeight: 600,
-              }}
-            >
-              O
-            </div>
-            <div style={{ textAlign: "left" }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "#1f2937" }}>
-                Chủ Sân ABC
-              </div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>
-                Owner
-              </div>
-            </div>
-            <ChevronDown size={16} color="#6b7280" />
-          </button>
-
-          {/* Profile dropdown menu */}
-          {isProfileOpen && (
-            <div
-              style={{
-                position: "absolute",
-                top: "100%",
-                right: 0,
-                marginTop: 8,
-                background: "#fff",
-                border: "1px solid #e5e7eb",
-                borderRadius: 12,
-                boxShadow: "0 10px 25px rgba(0,0,0,.15)",
-                minWidth: 200,
-                zIndex: 1000,
-              }}
-            >
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid #f3f4f6" }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#1f2937" }}>
-                  Chủ Sân ABC
-                </div>
-                <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  owner@datsanonline.com
-                </div>
-              </div>
-              
-              <div style={{ padding: 8 }}>
-                <button
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "10px 12px",
-                    border: "none",
-                    background: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontSize: 14,
-                    color: "#374151",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = "#f3f4f6";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = "none";
-                  }}
-                >
-                  <User size={16} />
-                  Thông tin cá nhân
-                </button>
-                
-                <button
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "10px 12px",
-                    border: "none",
-                    background: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontSize: 14,
-                    color: "#374151",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = "#f3f4f6";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = "none";
-                  }}
-                >
-                  <Settings size={16} />
-                  Cài đặt
-                </button>
-                
-                <hr style={{ margin: "8px 0", border: "none", borderTop: "1px solid #e5e7eb" }} />
-                
-                <button
-                  onClick={handleLogout}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "10px 12px",
-                    border: "none",
-                    background: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontSize: 14,
-                    color: "#ef4444",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = "#fef2f2";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = "none";
-                  }}
-                >
-                  <LogOut size={16} />
-                  Đăng xuất
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Click outside to close dropdown */}
-      {isProfileOpen && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 999,
-          }}
-          onClick={() => setIsProfileOpen(false)}
+        {/* Profile dropdown - Using UserMenu component */}
+        <UserMenu
+          user={user}
+          isOpen={isProfileOpen}
+          onToggle={() => setIsProfileOpen(!isProfileOpen)}
+          onProfileClick={handleProfileClick}
+          onLogout={handleLogout}
+          onSettingsClick={handleSettingsClick}
+          onBookingHistoryClick={handleBookingHistoryClick}
         />
-      )}
+      </div>
     </header>
   );
 }

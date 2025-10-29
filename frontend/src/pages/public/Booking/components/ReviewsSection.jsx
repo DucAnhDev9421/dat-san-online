@@ -7,7 +7,7 @@ export default function ReviewsSection({ reviews, venueRating }) {
   const [sortBy, setSortBy] = useState('newest')
   const [filterRating, setFilterRating] = useState('all')
   
-  const itemsPerPage = 10
+  const itemsPerPage = 5
 
   // Filter and sort reviews
   const filteredReviews = useMemo(() => {
