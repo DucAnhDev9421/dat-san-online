@@ -25,6 +25,8 @@ function Booking() {
     return today
   })
   const [selectedSlots, setSelectedSlots] = useState([])
+  const [selectedCourt, setSelectedCourt] = useState('Sân số 1')
+  const [selectedFieldType, setSelectedFieldType] = useState('Bóng đá mini')
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -55,6 +57,8 @@ function Booking() {
       venueId: venueData.id,
       venueName: venueData.name,
       sport: venueData.sport,
+      courtNumber: selectedCourt,
+      fieldType: selectedFieldType,
       date: selectedDate.toLocaleDateString('vi-VN'),
       time: selectedSlots.map(slot => slot.split('-')[2]).join(', '),
       duration: selectedSlots.length,
@@ -168,6 +172,10 @@ function Booking() {
             selectedSlots={selectedSlots}
             onSlotSelect={setSelectedSlots}
             venuePrice={venueData.price}
+            selectedCourt={selectedCourt}
+            onCourtChange={setSelectedCourt}
+            selectedFieldType={selectedFieldType}
+            onFieldTypeChange={setSelectedFieldType}
           />
         </div>
 
@@ -181,6 +189,8 @@ function Booking() {
           <BookingSummary 
             selectedDate={selectedDate}
             selectedSlots={selectedSlots}
+            selectedCourt={selectedCourt}
+            selectedFieldType={selectedFieldType}
             onBookNow={handleBookNow}
           />
         </div>
@@ -238,6 +248,8 @@ function Booking() {
         <BookingModal 
           selectedDate={selectedDate}
           selectedSlots={selectedSlots}
+          selectedCourt={selectedCourt}
+          selectedFieldType={selectedFieldType}
           venueData={venueData}
           onClose={() => setShowBookingModal(false)}
           onSubmit={handleBookingSubmit}

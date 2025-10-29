@@ -12,7 +12,8 @@ import {
   FiX,
   FiArrowRight,
   FiInfo,
-  FiAlertTriangle
+  FiAlertTriangle,
+  FiActivity
 } from 'react-icons/fi'
 import '../../styles/Payment.css'
 
@@ -22,28 +23,119 @@ function Payment() {
   const [selectedMethod, setSelectedMethod] = useState('')
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [showQRCode, setShowQRCode] = useState(false)
 
   // Get booking data from navigation state, fallback to mock data
-  const bookingData = location.state?.bookingData || {
+  const rawBookingData = location.state?.bookingData || {
     venueName: 'Sân bóng đá ABC',
     sport: 'Bóng đá',
+    courtNumber: 'Sân số 1',
+    fieldType: 'Bóng đá mini',
     date: '25/01/2024',
     time: '18:00 - 20:00',
+    slots: [
+      { time: '18:00', nextTime: '19:00', price: 250000 },
+      { time: '19:00', nextTime: '20:00', price: 250000 }
+    ],
     duration: 2,
-    pricePerHour: 200000,
-    subtotal: 400000,
-    serviceFee: 20000,
+    pricePerHour: 250000,
+    subtotal: 500000,
+    serviceFee: 25000,
     discount: 0,
-    total: 420000
+    total: 525000
   }
+
+  // Convert selectedSlots to slots format
+  const convertSelectedSlotsToSlots = (selectedSlots) => {
+    if (!selectedSlots || selectedSlots.length === 0) return []
+    
+    const timeSlotPrices = [
+      { time: '06:00', price: 150000 }, { time: '07:00', price: 180000 },
+      { time: '08:00', price: 200000 }, { time: '09:00', price: 200000 },
+      { time: '10:00', price: 200000 }, { time: '11:00', price: 200000 },
+      { time: '12:00', price: 200000 }, { time: '13:00', price: 200000 },
+      { time: '14:00', price: 200000 }, { time: '15:00', price: 200000 },
+      { time: '16:00', price: 200000 }, { time: '17:00', price: 220000 },
+      { time: '18:00', price: 250000 }, { time: '19:00', price: 250000 },
+      { time: '20:00', price: 220000 }, { time: '21:00', price: 200000 },
+      { time: '22:00', price: 180000 }
+    ]
+    
+    return selectedSlots.map(slotKey => {
+      // Parse slot key: format is "YYYY-MM-DD-HH:MM"
+      const parts = slotKey.split('-')
+      const time = parts[3] // Get "HH:MM"
+      
+      // Get next hour
+      const nextHour = time === '22:00' ? '23:00' : 
+                      time === '21:00' ? '22:00' :
+                      time === '20:00' ? '21:00' :
+                      time === '19:00' ? '20:00' :
+                      time === '18:00' ? '19:00' :
+                      time === '17:00' ? '18:00' :
+                      time === '16:00' ? '17:00' :
+                      time === '15:00' ? '16:00' :
+                      time === '14:00' ? '15:00' :
+                      time === '13:00' ? '14:00' :
+                      time === '12:00' ? '13:00' :
+                      time === '11:00' ? '12:00' :
+                      time === '10:00' ? '11:00' :
+                      time === '09:00' ? '10:00' :
+                      time === '08:00' ? '09:00' :
+                      time === '07:00' ? '08:00' :
+                      time === '06:00' ? '07:00' : '07:00'
+      
+      const slotData = timeSlotPrices.find(s => s.time === time)
+      
+      return {
+        time: time,
+        nextTime: nextHour,
+        price: slotData?.price || 150000
+      }
+    })
+  }
+
+  const slots = rawBookingData.selectedSlots?.length > 0 
+    ? convertSelectedSlotsToSlots(rawBookingData.selectedSlots)
+    : (rawBookingData.slots || [])
+
+  // Calculate totals if not provided or if slots are available
+  const calculateTotals = () => {
+    if (slots.length === 0) {
+      return {
+        subtotal: rawBookingData.subtotal || 0,
+        serviceFee: rawBookingData.serviceFee || 0,
+        total: rawBookingData.total || 0
+      }
+    }
+    
+    const subtotal = slots.reduce((sum, slot) => sum + slot.price, 0)
+    const serviceFee = Math.round(subtotal * 0.05) // 5% service fee
+    const total = subtotal + serviceFee - (rawBookingData.discount || 0)
+    
+    return { subtotal, serviceFee, total }
+  }
+
+  const totals = calculateTotals()
+
+  const bookingData = {
+    ...rawBookingData,
+    slots,
+    subtotal: rawBookingData.subtotal && rawBookingData.subtotal > 0 ? rawBookingData.subtotal : totals.subtotal,
+    serviceFee: rawBookingData.serviceFee && rawBookingData.serviceFee > 0 ? rawBookingData.serviceFee : totals.serviceFee,
+    total: rawBookingData.total && rawBookingData.total > 0 ? rawBookingData.total : totals.total
+  }
+
+  // Debug: Log booking data
+  console.log('Booking Data:', bookingData)
+  console.log('Slots:', bookingData.slots)
+  console.log('Totals:', { subtotal: bookingData.subtotal, serviceFee: bookingData.serviceFee, total: bookingData.total })
 
   const paymentMethods = [
     {
       id: 'momo',
       name: 'Ví MoMo',
       description: 'Thanh toán qua ví điện tử MoMo',
-      icon: <FiSmartphone size={28} />,
+      icon: <img src="/MoMo_Logo.png" alt="MoMo" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '8px' }} />,
       color: '#A50064',
       gradient: 'linear-gradient(135deg, #A50064, #D91C81)'
     },
@@ -51,7 +143,7 @@ function Payment() {
       id: 'vnpay',
       name: 'VNPay',
       description: 'Thanh toán qua cổng VNPay',
-      icon: <FiCreditCard size={28} />,
+      icon: <img src="/Vnpay.jpg" alt="VNPay" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />,
       color: '#0071BA',
       gradient: 'linear-gradient(135deg, #0071BA, #0090E3)'
     },
@@ -59,7 +151,7 @@ function Payment() {
       id: 'cash',
       name: 'Tiền mặt',
       description: 'Thanh toán trực tiếp tại sân',
-      icon: <FiDollarSign size={28} />,
+      icon: <FiDollarSign size={28} color="#22c55e" />,
       color: '#22c55e',
       gradient: 'linear-gradient(135deg, #22c55e, #10b981)'
     }
@@ -75,21 +167,7 @@ function Payment() {
       return
     }
     
-    // If MoMo is selected, show QR code option
-    if (selectedMethod === 'momo') {
-      setShowQRCode(true)
-    } else {
-      setShowConfirmModal(true)
-    }
-  }
-
-  const handleQRPayment = () => {
-    setShowQRCode(false)
-    setShowConfirmModal(true)
-  }
-
-  const handleDirectPayment = () => {
-    setShowQRCode(false)
+    // Show confirmation modal for all payment methods
     setShowConfirmModal(true)
   }
 
@@ -152,7 +230,11 @@ function Payment() {
                     
                      <div 
                        className="method-icon"
-                       style={{ background: method.gradient }}
+                       style={{ 
+                         background: method.id === 'cash' ? '#ffffff' : method.gradient,
+                         border: method.id === 'cash' ? '2px solid #e5e7eb' : 'none',
+                         boxShadow: method.id === 'cash' ? 'none' : undefined
+                       }}
                      >
                        {method.icon}
                      </div>
@@ -266,20 +348,61 @@ function Payment() {
               <div className="summary-divider"></div>
 
                <div className="summary-section">
+                 <h4 className="price-title">Thông tin đặt chỗ</h4>
+                 
+                 {bookingData.courtNumber && (
+                   <div className="summary-row">
+                     <span className="label">
+                       <FiMapPin size={16} style={{ marginRight: '8px' }} />
+                       Sân:
+                     </span>
+                     <span className="value">{bookingData.courtNumber}</span>
+                   </div>
+                 )}
+
+                 {bookingData.fieldType && (
+                   <div className="summary-row">
+                     <span className="label">
+                       <FiActivity size={16} style={{ marginRight: '8px' }} />
+                       Loại sân:
+                     </span>
+                     <span className="value">{bookingData.fieldType}</span>
+                   </div>
+                 )}
+                 
                  <div className="summary-row">
                    <span className="label">
                      <FiCalendar size={16} style={{ marginRight: '8px' }} />
-                     Ngày:
+                     Ngày đặt:
                    </span>
                    <span className="value">{bookingData.date}</span>
                  </div>
-                 <div className="summary-row">
-                   <span className="label">
-                     <FiClock size={16} style={{ marginRight: '8px' }} />
-                     Giờ:
-                   </span>
-                   <span className="value">{bookingData.time}</span>
-                 </div>
+                 
+                 {bookingData.slots && bookingData.slots.length > 0 && (
+                   <>
+                     {bookingData.slots.map((slot, index) => (
+                       <div 
+                         key={index}
+                         className="summary-row"
+                         style={{ 
+                           backgroundColor: '#f0f9ff',
+                           padding: '8px 12px',
+                           borderRadius: '8px',
+                           marginBottom: '4px'
+                         }}
+                       >
+                         <span className="label">
+                           <FiClock size={16} style={{ marginRight: '8px', color: '#0ea5e9' }} />
+                           {slot.time} - {slot.nextTime}:
+                         </span>
+                         <span className="value" style={{ fontWeight: '600', color: '#0ea5e9' }}>
+                           {slot.price.toLocaleString('vi-VN')} đ
+                         </span>
+                       </div>
+                     ))}
+                   </>
+                 )}
+                 
                  <div className="summary-row">
                    <span className="label">⏱️ Thời lượng:</span>
                    <span className="value">{bookingData.duration} giờ</span>
@@ -327,153 +450,6 @@ function Payment() {
             </div>
           </div>
         </div>
-
-        {/* QR Code Modal for MoMo */}
-        {showQRCode && (
-          <div className="modal-overlay" onClick={() => setShowQRCode(false)}>
-            <div className="qr-modal" onClick={(e) => e.stopPropagation()}>
-               <div className="modal-header">
-                 <h3>Thanh toán MoMo</h3>
-                 <button 
-                   className="close-btn"
-                   onClick={() => setShowQRCode(false)}
-                 >
-                   <FiX size={24} />
-                 </button>
-               </div>
-
-              <div className="qr-modal-body">
-                 <div className="qr-tabs">
-                   <div className="qr-tab active">
-                     <FiSmartphone className="tab-icon" size={32} />
-                     <div>
-                       <h4>Quét mã QR</h4>
-                       <p>Sử dụng app MoMo để quét</p>
-                     </div>
-                   </div>
-                 </div>
-
-                <div className="qr-content">
-                  <div className="qr-code-wrapper">
-                    <div className="qr-code-container">
-                      {/* Mock QR Code - In real app, this would be generated from backend */}
-                      <div className="qr-code-placeholder">
-                        <svg viewBox="0 0 200 200" className="qr-code-svg">
-                          {/* QR Code pattern simulation */}
-                          <rect x="0" y="0" width="200" height="200" fill="#ffffff"/>
-                          
-                          {/* Corner markers */}
-                          <rect x="10" y="10" width="50" height="50" fill="#000000"/>
-                          <rect x="20" y="20" width="30" height="30" fill="#ffffff"/>
-                          <rect x="25" y="25" width="20" height="20" fill="#000000"/>
-                          
-                          <rect x="140" y="10" width="50" height="50" fill="#000000"/>
-                          <rect x="150" y="20" width="30" height="30" fill="#ffffff"/>
-                          <rect x="155" y="25" width="20" height="20" fill="#000000"/>
-                          
-                          <rect x="10" y="140" width="50" height="50" fill="#000000"/>
-                          <rect x="20" y="150" width="30" height="30" fill="#ffffff"/>
-                          <rect x="25" y="155" width="20" height="20" fill="#000000"/>
-                          
-                          {/* Random QR pattern */}
-                          <rect x="70" y="15" width="8" height="8" fill="#000000"/>
-                          <rect x="85" y="15" width="8" height="8" fill="#000000"/>
-                          <rect x="100" y="15" width="8" height="8" fill="#000000"/>
-                          <rect x="70" y="30" width="8" height="8" fill="#000000"/>
-                          <rect x="100" y="30" width="8" height="8" fill="#000000"/>
-                          <rect x="115" y="30" width="8" height="8" fill="#000000"/>
-                          <rect x="70" y="45" width="8" height="8" fill="#000000"/>
-                          <rect x="85" y="45" width="8" height="8" fill="#000000"/>
-                          <rect x="115" y="45" width="8" height="8" fill="#000000"/>
-                          <rect x="15" y="70" width="8" height="8" fill="#000000"/>
-                          <rect x="30" y="70" width="8" height="8" fill="#000000"/>
-                          <rect x="45" y="70" width="8" height="8" fill="#000000"/>
-                          <rect x="70" y="70" width="8" height="8" fill="#000000"/>
-                          <rect x="100" y="70" width="8" height="8" fill="#000000"/>
-                          <rect x="145" y="70" width="8" height="8" fill="#000000"/>
-                          <rect x="175" y="70" width="8" height="8" fill="#000000"/>
-                          <rect x="15" y="85" width="8" height="8" fill="#000000"/>
-                          <rect x="45" y="85" width="8" height="8" fill="#000000"/>
-                          <rect x="85" y="85" width="8" height="8" fill="#000000"/>
-                          <rect x="115" y="85" width="8" height="8" fill="#000000"/>
-                          <rect x="160" y="85" width="8" height="8" fill="#000000"/>
-                          <rect x="30" y="100" width="8" height="8" fill="#000000"/>
-                          <rect x="70" y="100" width="8" height="8" fill="#000000"/>
-                          <rect x="100" y="100" width="8" height="8" fill="#000000"/>
-                          <rect x="130" y="100" width="8" height="8" fill="#000000"/>
-                          <rect x="175" y="100" width="8" height="8" fill="#000000"/>
-                          <rect x="15" y="115" width="8" height="8" fill="#000000"/>
-                          <rect x="45" y="115" width="8" height="8" fill="#000000"/>
-                          <rect x="85" y="115" width="8" height="8" fill="#000000"/>
-                          <rect x="145" y="115" width="8" height="8" fill="#000000"/>
-                          <rect x="175" y="115" width="8" height="8" fill="#000000"/>
-                          <rect x="70" y="145" width="8" height="8" fill="#000000"/>
-                          <rect x="85" y="145" width="8" height="8" fill="#000000"/>
-                          <rect x="115" y="145" width="8" height="8" fill="#000000"/>
-                          <rect x="145" y="145" width="8" height="8" fill="#000000"/>
-                          <rect x="175" y="145" width="8" height="8" fill="#000000"/>
-                          <rect x="70" y="160" width="8" height="8" fill="#000000"/>
-                          <rect x="100" y="160" width="8" height="8" fill="#000000"/>
-                          <rect x="130" y="160" width="8" height="8" fill="#000000"/>
-                          <rect x="160" y="160" width="8" height="8" fill="#000000"/>
-                          <rect x="85" y="175" width="8" height="8" fill="#000000"/>
-                          <rect x="115" y="175" width="8" height="8" fill="#000000"/>
-                          <rect x="145" y="175" width="8" height="8" fill="#000000"/>
-                          <rect x="175" y="175" width="8" height="8" fill="#000000"/>
-                        </svg>
-                      </div>
-                      <div className="momo-logo-overlay">
-                        <div className="momo-logo">M</div>
-                      </div>
-                    </div>
-                    
-                    <div className="qr-amount">
-                      <span className="amount-label">Số tiền thanh toán</span>
-                      <span className="amount-value">{bookingData.total.toLocaleString('vi-VN')} đ</span>
-                    </div>
-                  </div>
-
-                   <div className="qr-instructions">
-                     <h4>
-                       <FiSmartphone size={18} style={{ marginRight: '8px' }} />
-                       Hướng dẫn thanh toán
-                     </h4>
-                    <ol>
-                      <li>Mở ứng dụng <strong>MoMo</strong> trên điện thoại</li>
-                      <li>Chọn <strong>"Quét mã QR"</strong></li>
-                      <li>Quét mã QR bên trái</li>
-                      <li>Kiểm tra thông tin và xác nhận thanh toán</li>
-                    </ol>
-
-                    <div className="qr-divider">
-                      <span>Hoặc</span>
-                    </div>
-
-                     <button 
-                       className="btn btn-momo"
-                       onClick={handleDirectPayment}
-                     >
-                       <FiSmartphone size={20} />
-                       Mở ứng dụng MoMo
-                     </button>
-
-                     <div className="qr-note">
-                       <FiClock size={20} />
-                       <p>Mã QR có hiệu lực trong <strong>15 phút</strong></p>
-                     </div>
-                  </div>
-                </div>
-
-                 <div className="qr-footer">
-                   <p>
-                     <FiInfo size={16} style={{ marginRight: '8px' }} />
-                     Nếu đã thanh toán thành công, vui lòng chờ hệ thống xác nhận (khoảng 30 giây)
-                   </p>
-                 </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Confirmation Modal */}
         {showConfirmModal && (
