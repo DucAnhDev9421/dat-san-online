@@ -24,6 +24,7 @@ import Partner from "./pages/public/Partner.jsx";
 import Facilities from "./pages/public/Facilities.jsx";
 import Promotion from "./pages/public/Promotion.jsx";
 import BookingHistory from "./pages/public/BookingHistory.jsx";
+import NotificationsPage from "./pages/public/Notifications.jsx";
 import Login from "./pages/auth/Login.jsx";
 import Register from "./pages/auth/Register.jsx";
 import VerifyOtp from "./pages/auth/VerifyOtp.jsx";
@@ -123,6 +124,11 @@ function App() {
                 <Route path="/booking-history" element={
                   <ProtectedRoute>
                     <BookingHistory />
+                  </ProtectedRoute>
+                } />
+                <Route path="/notifications" element={
+                  <ProtectedRoute>
+                    <NotificationsPage />
                   </ProtectedRoute>
                 } />
                 <Route path="/partner" element={<Partner />} />
