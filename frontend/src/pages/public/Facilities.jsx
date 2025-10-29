@@ -80,9 +80,10 @@ export default function Facilities() {
   }, [query, sport, quick, selectedProvince, selectedDistrict]);
 
   const QuickButton = ({ value, label }) => (
-                            <button
+    <button
       onClick={() => setQuick(value)}
-                                style={{
+      className="quick-filter-button"
+      style={{
         border: "1px solid #e5e7eb",
         background: quick === value ? "#111827" : "#fff",
         color: quick === value ? "#fff" : "#111827",
@@ -90,20 +91,23 @@ export default function Facilities() {
         borderRadius: 999,
         fontSize: 12,
         fontWeight: 600,
-        cursor: "pointer"
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        transition: "all 0.2s"
       }}
     >
       {label}
-                            </button>
+    </button>
   );
 
   return (
     <div style={{ background: "#f8fafc", minHeight: "100vh" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: 16 }}>
+      <div className="facilities-container" style={{ maxWidth: 1200, margin: "0 auto", padding: 16 }}>
         {/* Search Bar Row */}
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-          <div style={{ 
+        <div className="search-bar-row" style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+          <div className="search-input-wrapper" style={{ 
             flex: 1,
+            minWidth: "200px",
             background: "#fff",
             border: "1px solid #e5e7eb",
             borderRadius: 12,
@@ -112,7 +116,7 @@ export default function Facilities() {
             alignItems: "center",
             gap: 8
           }}>
-            <FiSearch style={{ color: "#94a3b8" }} />
+            <FiSearch style={{ color: "#94a3b8", flexShrink: 0 }} />
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
@@ -120,21 +124,23 @@ export default function Facilities() {
               style={{ border: "none", outline: "none", width: "100%", fontSize: 14 }}
             />
           </div>
-          <select value={sport} onChange={e => setSport(e.target.value)} style={{
+          <select className="sport-select" value={sport} onChange={e => setSport(e.target.value)} style={{
             background: "#fff", 
             border: "1px solid #e5e7eb", 
             borderRadius: 10, 
             padding: "10px 12px", 
             fontSize: 14,
-            minWidth: 130
+            minWidth: 130,
+            flexShrink: 0
           }}>
             {sportChips.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 
         {/* Filter Row */}
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+        <div className="filter-row" style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
           <select 
+            className="province-select"
             value={selectedProvince} 
             onChange={e => setSelectedProvince(e.target.value)}
             style={{
@@ -143,7 +149,8 @@ export default function Facilities() {
               borderRadius: 10,
               padding: "10px 12px",
               fontSize: 14,
-              minWidth: 200
+              minWidth: 200,
+              flex: "1 1 auto"
             }}
           >
             <option value="">Tất cả Tỉnh/Thành phố</option>
@@ -154,6 +161,7 @@ export default function Facilities() {
             ))}
           </select>
           <select 
+            className="district-select"
             value={selectedDistrict} 
             onChange={e => setSelectedDistrict(e.target.value)}
             disabled={!selectedProvince}
@@ -164,6 +172,7 @@ export default function Facilities() {
               padding: "10px 12px",
               fontSize: 14,
               minWidth: 200,
+              flex: "1 1 auto",
               cursor: selectedProvince ? "pointer" : "not-allowed",
               opacity: selectedProvince ? 1 : 0.6
             }}
@@ -177,6 +186,7 @@ export default function Facilities() {
           </select>
           {(selectedProvince || selectedDistrict) && (
             <button
+              className="clear-filter-btn"
               onClick={() => {
                 setSelectedProvince("");
                 setSelectedDistrict("");
@@ -189,7 +199,8 @@ export default function Facilities() {
                 fontSize: 14,
                 cursor: "pointer",
                 color: "#6b7280",
-                whiteSpace: "nowrap"
+                whiteSpace: "nowrap",
+                flexShrink: 0
               }}
             >
               Xóa bộ lọc
@@ -198,12 +209,21 @@ export default function Facilities() {
         </div>
 
         {/* View Toggle Row */}
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-            <QuickButton value="recent" label="Gần đây" />
-            <QuickButton value="cheap" label="Giá tốt" />
-            <QuickButton value="top" label="Đánh giá cao" />
-            <div style={{ display: "flex", background: "#e5e7eb", borderRadius: 10, padding: 4 }}>
+        <div className="view-toggle-row" style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+          <div className="quick-buttons-wrapper" style={{ 
+            marginLeft: "auto", 
+            display: "flex", 
+            alignItems: "center", 
+            gap: 8,
+            flexWrap: "wrap",
+            width: "100%"
+          }}>
+            <div className="quick-buttons-group" style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
+              <QuickButton value="recent" label="Gần đây" />
+              <QuickButton value="cheap" label="Giá tốt" />
+              <QuickButton value="top" label="Đánh giá cao" />
+            </div>
+            <div className="view-toggle-group" style={{ display: "flex", background: "#e5e7eb", borderRadius: 10, padding: 4, flexShrink: 0 }}>
               <button onClick={() => setView("grid")} style={{
                 background: view === "grid" ? "#111827" : "transparent",
                 color: view === "grid" ? "#fff" : "#374151",
@@ -222,7 +242,7 @@ export default function Facilities() {
 
         {isPageLoading ? (
           view === "grid" ? (
-            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+            <div className="venues-grid" style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
               {[...Array(6)].map((_, i) => (
                 <SkeletonVenueCard key={i} />
               ))}
@@ -237,7 +257,7 @@ export default function Facilities() {
         ) : (
           <>
             {view === "grid" ? (
-              <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+              <div className="venues-grid" style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
                 {facilities.map(f => (
                   <VenueCard
                     key={f.id}
@@ -259,6 +279,7 @@ export default function Facilities() {
                 {facilities.map(f => (
               <div 
                 key={f.id} 
+                className="venue-list-item"
                 onClick={() => navigate(`/booking?venue=${f.id}`)}
                 style={{ 
                   display: "flex", 
@@ -279,7 +300,7 @@ export default function Facilities() {
                   e.currentTarget.style.boxShadow = "0 2px 8px rgba(16,24,40,0.04)";
                 }}>
                 {/* Image Section */}
-                <div style={{ width: 200, height: 150, background: "#f3f4f6", position: "relative", flexShrink: 0 }}>
+                <div className="venue-list-image" style={{ width: 200, height: 150, background: "#f3f4f6", position: "relative", flexShrink: 0 }}>
                   <img 
                     src={f.image} 
                     alt={f.name} 
@@ -333,7 +354,7 @@ export default function Facilities() {
                   </div>
                   
                   {/* Bottom Section */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div className="venue-list-bottom" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ color: "#16a34a", fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
                       💰 {f.price.toLocaleString()} VND/giờ
                     </div>
@@ -364,6 +385,160 @@ export default function Facilities() {
           </>
         )}
       </div>
+
+      <style>{`
+        /* Container responsive */
+        @media (max-width: 768px) {
+          .facilities-container {
+            padding: 12px !important;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .facilities-container {
+            padding: 8px !important;
+          }
+        }
+        
+        /* Responsive styles for filters */
+        @media (max-width: 768px) {
+          .search-bar-row {
+            flex-direction: column !important;
+          }
+          
+          .search-input-wrapper {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          
+          .sport-select {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          
+          .filter-row {
+            flex-direction: column !important;
+          }
+          
+          .province-select,
+          .district-select {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          
+          .clear-filter-btn {
+            width: 100% !important;
+          }
+          
+          .view-toggle-row {
+            margin-left: 0 !important;
+          }
+          
+          .quick-buttons-wrapper {
+            margin-left: 0 !important;
+            justify-content: space-between !important;
+          }
+          
+          .quick-buttons-group {
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .search-input-wrapper {
+            padding: 8px 12px !important;
+          }
+          
+          .sport-select,
+          .province-select,
+          .district-select {
+            padding: 8px 10px !important;
+            font-size: 13px !important;
+          }
+          
+          .clear-filter-btn {
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+          }
+          
+          .quick-buttons-wrapper {
+            flex-direction: column !important;
+            gap: 12px !important;
+          }
+          
+          .quick-buttons-group {
+            width: 100% !important;
+            justify-content: flex-start !important;
+          }
+          
+          .view-toggle-group {
+            align-self: flex-end !important;
+          }
+          
+          .quick-filter-button {
+            padding: 6px 10px !important;
+            font-size: 11px !important;
+          }
+        }
+        
+        @media (max-width: 360px) {
+          .search-input-wrapper {
+            padding: 6px 10px !important;
+          }
+          
+          .sport-select,
+          .province-select,
+          .district-select {
+            padding: 6px 8px !important;
+            font-size: 12px !important;
+          }
+          
+          .clear-filter-btn {
+            padding: 6px 10px !important;
+            font-size: 12px !important;
+          }
+        }
+        
+        /* Grid layout responsive */
+        @media (max-width: 768px) {
+          .venues-grid {
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+            gap: 12px !important;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .venues-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+        }
+        
+        /* List view responsive */
+        @media (max-width: 768px) {
+          .venue-list-item {
+            flex-direction: column !important;
+          }
+          
+          .venue-list-image {
+            width: 100% !important;
+            height: 200px !important;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .venue-list-bottom {
+            flex-direction: column !important;
+            gap: 12px !important;
+            align-items: flex-start !important;
+          }
+          
+          .venue-list-bottom button {
+            width: 100% !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
