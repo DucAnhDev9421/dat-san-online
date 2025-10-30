@@ -75,7 +75,7 @@ function Header() {
 
   const handleBookingHistoryClick = () => {
     setShowUserMenu(false)
-    navigate('/booking-history')
+    navigate('/profile?tab=bookings')
   }
 
   const markAllAsRead = () => {
