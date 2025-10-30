@@ -10,6 +10,7 @@ import {
   requireAdmin,
 } from "../middleware/auth.js";
 import { logAudit } from "../utils/auditLogger.js";
+import QRCode from "qrcode";
 
 const router = express.Router();
 
@@ -238,6 +239,12 @@ router.post("/", authenticateToken, async (req, res, next) => {
       paymentStatus: "pending",
     });
 
+    await booking.save();
+
+    // Sinh mã QR chứa bookingId (có thể mở rộng thông tin nếu cần)
+    let qrPayload = { bookingId: booking._id.toString() };
+    const qrData = JSON.stringify(qrPayload);
+    booking.qrCode = await QRCode.toDataURL(qrData);
     await booking.save();
 
     // Populate for response
@@ -598,6 +605,72 @@ router.patch("/:id/cancel", authenticateToken, checkBookingOwnership, async (req
         refundStatus: refundAmount > 0 ? "processing" : "not_eligible",
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bookings/:id/checkin
+ * Check-in booking (owner hoặc admin)
+ */
+router.post("/:id/checkin", authenticateToken, async (req, res, next) => {
+  try {
+    // Lấy booking và facility owner để kiểm tra quyền
+    const booking = await Booking.findById(req.params.id).populate({
+      path: "facility",
+      select: "owner",
+    });
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy booking" });
+    }
+
+    // Xác thực quyền: chủ cơ sở chứa sân hoặc admin
+    let facilityOwnerId = null;
+    if (booking.facility && booking.facility.owner) {
+      facilityOwnerId = booking.facility.owner._id
+        ? booking.facility.owner._id.toString()
+        : booking.facility.owner.toString();
+    }
+
+    const isFacilityOwner = facilityOwnerId === req.user._id.toString();
+    const isAdmin = req.user.role === "admin";
+
+    if (!isFacilityOwner && !isAdmin) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền check-in cho booking này" });
+    }
+
+    // Không cho check-in nếu đã hủy hoặc đã hoàn tất
+    if (booking.status === "cancelled") {
+      return res.status(400).json({ success: false, message: "Booking đã bị hủy" });
+    }
+    if (booking.status === "completed") {
+      return res.status(400).json({ success: false, message: "Booking đã hoàn tất" });
+    }
+
+    // Kiểm tra điều kiện cơ bản: đã thanh toán hoặc đã được xác nhận
+    if (!(booking.paymentStatus === "paid" || booking.status === "confirmed")) {
+      return res.status(400).json({ success: false, message: "Booking chưa đủ điều kiện check-in (cần paid hoặc confirmed)" });
+    }
+
+    // (Tuỳ chọn) Ràng buộc ngày: chỉ cho phép check-in trong ngày đặt
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const bookingDay = new Date(booking.date);
+    bookingDay.setHours(0, 0, 0, 0);
+    if (bookingDay > today) {
+      return res.status(400).json({ success: false, message: "Chưa đến ngày check-in" });
+    }
+
+    // Cập nhật check-in
+    booking.checkedInAt = new Date();
+    booking.checkedInBy = req.user._id;
+    booking.status = "completed"; // Đánh dấu hoàn tất khi check-in
+
+    await booking.save();
+
+    return res.json({ success: true, message: "Check-in thành công", data: booking });
   } catch (error) {
     next(error);
   }

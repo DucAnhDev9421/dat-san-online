@@ -114,6 +114,22 @@ const bookingSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Mã QR điện tử Booking (base64)
+    qrCode: {
+      type: String,
+      default: null,
+    },
+    // Thời điểm check-in tại cơ sở
+    checkedInAt: {
+      type: Date,
+      default: null,
+    },
+    // Người thực hiện check-in (owner/admin)
+    checkedInBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -84,7 +84,7 @@ function ProfilePage() {
               style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
             >
               <Calendar size={18} />
-              Lịch sử đặt sân
+              Đặt sân của tôi
             </button>
             <button 
               className={`tab ${activeTab === 'favorites' ? 'active' : ''}`}
