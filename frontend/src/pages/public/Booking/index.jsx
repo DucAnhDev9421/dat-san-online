@@ -4,6 +4,7 @@ import VenueGallery from './components/VenueGallery'
 import VenueInfo from './components/VenueInfo'
 import MapDisplay from '../../../components/map/MapDisplay'
 import ReviewsSection from './components/ReviewsSection'
+import CourtAndFieldTypeSelector from './components/CourtAndFieldTypeSelector'
 import TimeSlotSelector from './components/TimeSlotSelector'
 import BookingSummary from './components/BookingSummary'
 import CalendarModal from './modals/CalendarModal'
@@ -165,6 +166,14 @@ function Booking() {
             <VenueInfo venueData={venueData} />
           </div>
 
+          {/* Court and Field Type Selector */}
+          <CourtAndFieldTypeSelector 
+            selectedCourt={selectedCourt}
+            onCourtChange={setSelectedCourt}
+            selectedFieldType={selectedFieldType}
+            onFieldTypeChange={setSelectedFieldType}
+          />
+
           {/* Time Slot Selector */}
           <TimeSlotSelector 
             selectedDate={selectedDate}
@@ -172,10 +181,6 @@ function Booking() {
             selectedSlots={selectedSlots}
             onSlotSelect={setSelectedSlots}
             venuePrice={venueData.price}
-            selectedCourt={selectedCourt}
-            onCourtChange={setSelectedCourt}
-            selectedFieldType={selectedFieldType}
-            onFieldTypeChange={setSelectedFieldType}
           />
         </div>
 
