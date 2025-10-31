@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Clock, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import useDeviceType from '../../../../hook/use-device-type'
 import { formatDate, generateCalendarDays } from '../utils/dateHelpers'
 import { getBookedSlots } from '../mockData'
 
@@ -10,6 +11,7 @@ export default function TimeSlotSelector({
   onSlotSelect,
   venuePrice
 }) {
+  const { isMobile, isTablet } = useDeviceType()
   const [showDatePicker, setShowDatePicker] = useState(false)
   
   const datePickerRef = useRef(null)
@@ -108,21 +110,21 @@ export default function TimeSlotSelector({
   return (
     <div style={{ 
       background: '#fff', 
-      padding: '24px', 
+      padding: isMobile ? '16px' : isTablet ? '20px' : '24px', 
       borderRadius: '12px',
       boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         {/* Header */}
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: isMobile ? '16px' : '20px' }}>
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
             gap: '8px', 
             marginBottom: '16px' 
           }}>
-            <Clock size={20} color="#374151" />
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>
+            <Clock size={isMobile ? 18 : isTablet ? 19 : 20} color="#374151" />
+            <h3 style={{ margin: 0, fontSize: isMobile ? '16px' : isTablet ? '17px' : '18px', fontWeight: '600', color: '#1f2937' }}>
               Chọn khung giờ
             </h3>
           </div>
@@ -307,7 +309,7 @@ export default function TimeSlotSelector({
         <div style={{ marginBottom: '20px' }}>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: window.innerWidth <= 768 ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)',
             gap: '12px'
           }}>
             {timeSlots.map((slot) => {
@@ -369,9 +371,9 @@ export default function TimeSlotSelector({
         {/* Legend */}
         <div style={{
           display: 'flex',
-          flexDirection: window.innerWidth <= 768 ? 'column' : 'row',
+          flexDirection: isMobile ? 'column' : 'row',
           alignItems: 'center',
-          gap: window.innerWidth <= 768 ? '12px' : '24px',
+          gap: isMobile ? '12px' : '24px',
           paddingTop: '16px',
           borderTop: '1px solid #e5e7eb'
         }}>

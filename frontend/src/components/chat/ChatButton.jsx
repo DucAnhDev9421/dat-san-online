@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import useMobile from '../../hook/use-mobile';
 import chatbotAvatar from '../../assets/chatbot.png';
 import './ChatButton.css';
 
 const ChatButton = () => {
   const location = useLocation();
+  const isMobile = useMobile(768);
   const [isOpen, setIsOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   
@@ -60,7 +62,16 @@ const ChatButton = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="chat-window">
+        <div 
+          className="chat-window"
+          style={isMobile ? {
+            width: 'calc(100vw - 40px)',
+            height: 'calc(100vh - 120px)',
+            bottom: '80px',
+            right: '20px',
+            left: '20px'
+          } : undefined}
+        >
           <div className="chat-header">
             <div className="chat-header-info">
               <div className="chat-avatar">

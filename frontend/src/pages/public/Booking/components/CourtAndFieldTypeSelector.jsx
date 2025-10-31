@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { MapPin, Grid3x3 } from 'lucide-react'
+import useDeviceType from '../../../../hook/use-device-type'
 
 export default function CourtAndFieldTypeSelector({ 
   selectedCourt,
@@ -7,6 +8,7 @@ export default function CourtAndFieldTypeSelector({
   selectedFieldType,
   onFieldTypeChange
 }) {
+  const { isMobile, isTablet } = useDeviceType()
   const [showCourtPicker, setShowCourtPicker] = useState(false)
   const [showFieldTypePicker, setShowFieldTypePicker] = useState(false)
   
@@ -39,17 +41,17 @@ export default function CourtAndFieldTypeSelector({
   return (
     <div style={{ 
       background: '#fff', 
-      padding: '24px', 
+      padding: isMobile ? '16px' : isTablet ? '20px' : '24px', 
       borderRadius: '12px',
       boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-      marginBottom: '20px'
+      marginBottom: isMobile ? '16px' : isTablet ? '18px' : '20px'
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         {/* Header */}
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: isMobile ? '16px' : '20px' }}>
           <h3 style={{ 
             margin: '0 0 16px 0', 
-            fontSize: '18px', 
+            fontSize: isMobile ? '16px' : isTablet ? '17px' : '18px', 
             fontWeight: '600', 
             color: '#1f2937' 
           }}>
@@ -59,11 +61,12 @@ export default function CourtAndFieldTypeSelector({
           {/* Court and Field Type Pickers */}
           <div style={{ 
             display: 'flex', 
-            gap: '12px', 
-            flexWrap: 'wrap'
+            gap: isMobile ? '8px' : isTablet ? '10px' : '12px', 
+            flexWrap: 'wrap',
+            flexDirection: isMobile ? 'column' : 'row'
           }}>
             {/* Court Picker */}
-            <div ref={courtPickerRef} style={{ position: 'relative', flex: '1', minWidth: '150px' }}>
+            <div ref={courtPickerRef} style={{ position: 'relative', flex: isMobile ? 'none' : '1', minWidth: isMobile ? '100%' : '150px', width: isMobile ? '100%' : 'auto' }}>
               <button
                 onClick={() => {
                   setShowCourtPicker(!showCourtPicker)
@@ -151,7 +154,7 @@ export default function CourtAndFieldTypeSelector({
             </div>
 
             {/* Field Type Picker */}
-            <div ref={fieldTypePickerRef} style={{ position: 'relative', flex: '1', minWidth: '150px' }}>
+            <div ref={fieldTypePickerRef} style={{ position: 'relative', flex: isMobile ? 'none' : '1', minWidth: isMobile ? '100%' : '150px', width: isMobile ? '100%' : 'auto' }}>
               <button
                 onClick={() => {
                   setShowFieldTypePicker(!showFieldTypePicker)

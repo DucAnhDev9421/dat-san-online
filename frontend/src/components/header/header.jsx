@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import useDeviceType from '../../hook/use-device-type'
 import NotificationButton from './NotificationButton'
 import NotificationDropdown from './NotificationDropdown'
 import UserMenu from './UserMenu'
@@ -10,6 +11,7 @@ import { Menu, X } from 'lucide-react'
 
 function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth()
+  const { isMobile, isTablet } = useDeviceType()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
@@ -17,6 +19,13 @@ function Header() {
   const navigate = useNavigate()
 
   const notifications = mockNotifications
+
+  // Đóng mobile menu khi chuyển từ mobile sang desktop/tablet
+  useEffect(() => {
+    if (!isMobile) {
+      setShowMobileMenu(false)
+    }
+  }, [isMobile])
 
   // Reset user menu when authentication state changes
   useEffect(() => {
@@ -86,13 +95,15 @@ function Header() {
     <header className="site-header">
       <div className="container header-inner">
         <div className="header-left">
-          <button 
-            className="mobile-menu-toggle"
-            onClick={() => setShowMobileMenu(!showMobileMenu)}
-            aria-label="Toggle menu"
-          >
-            {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
-          </button>
+          {isMobile && (
+            <button 
+              className="mobile-menu-toggle"
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              aria-label="Toggle menu"
+            >
+              {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          )}
           
           <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div className="brand">
@@ -101,7 +112,7 @@ function Header() {
                 alt="Booking Sport Logo" 
                 className="logo-image"
                 style={{ 
-                  height: "56px", 
+                  height: isMobile ? "40px" : isTablet ? "48px" : "56px", 
                   width: "auto",
                   objectFit: "contain"
                 }}
@@ -111,11 +122,13 @@ function Header() {
           </Link>
         </div>
         
-        <div className="desktop-nav-wrapper">
-          <NavigationBar user={user} />
-        </div>
+        {!isMobile && (
+          <div className="desktop-nav-wrapper">
+            <NavigationBar user={user} />
+          </div>
+        )}
         
-        <div className="auth-actions">
+        <div className="auth-actions" style={{ gap: isMobile ? '8px' : isTablet ? '10px' : '12px' }}>
           {loading ? (
             <div style={{ 
               display: 'flex', 
@@ -134,7 +147,7 @@ function Header() {
               Đang tải...
             </div>
           ) : isAuthenticated ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : isTablet ? '10px' : '12px' }}>
               {/* Notification Button with Dropdown */}
               <div style={{ position: 'relative' }}>
                 <NotificationButton 
@@ -168,13 +181,22 @@ function Header() {
               />
             </div>
           ) : (
-            <Link to="/login" className="btn btn-outline">Đăng nhập</Link>
+            <Link 
+              to="/login" 
+              className="btn btn-outline"
+              style={{ 
+                padding: isMobile ? '8px 12px' : isTablet ? '9px 14px' : undefined,
+                fontSize: isMobile ? '14px' : isTablet ? '15px' : undefined
+              }}
+            >
+              Đăng nhập
+            </Link>
           )}
         </div>
       </div>
 
       {/* Mobile Navigation Menu */}
-      {showMobileMenu && (
+      {isMobile && showMobileMenu && (
         <div className="mobile-nav-overlay" onClick={() => setShowMobileMenu(false)}>
           <div className="mobile-nav-menu" onClick={(e) => e.stopPropagation()}>
             <NavigationBar user={user} mobile onLinkClick={() => setShowMobileMenu(false)} />
@@ -210,14 +232,16 @@ function Header() {
           }
         }
 
-        /* Mobile menu toggle */
+        /* Mobile menu toggle - chỉ hiển thị khi isMobile = true (được điều khiển bởi JS) */
         .mobile-menu-toggle {
-          display: none;
           background: none;
           border: none;
           cursor: pointer;
           color: #111827;
           padding: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .header-left {
@@ -258,33 +282,10 @@ function Header() {
           to { opacity: 1; }
         }
 
-        /* Responsive styles */
+        /* Responsive styles - chỉ cho styling bổ sung, logic chính đã dùng useMobile hook */
         @media (max-width: 768px) {
-          .mobile-menu-toggle {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .desktop-nav-wrapper {
-            display: none !important;
-          }
-
-          .logo-image {
-            height: 40px !important;
-          }
-
           .header-inner {
             gap: 8px !important;
-          }
-
-          .auth-actions {
-            gap: 8px !important;
-          }
-
-          .btn {
-            padding: 8px 12px !important;
-            font-size: 14px !important;
           }
         }
 
