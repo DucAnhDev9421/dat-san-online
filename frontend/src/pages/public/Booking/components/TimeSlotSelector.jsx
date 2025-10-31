@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState } from 'react'
 import { Clock, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import useDeviceType from '../../../../hook/use-device-type'
+import useClickOutside from '../../../../hook/use-click-outside'
+import useToggle from '../../../../hook/use-toggle'
 import { formatDate, generateCalendarDays } from '../utils/dateHelpers'
 import { getBookedSlots } from '../mockData'
 
@@ -12,26 +14,9 @@ export default function TimeSlotSelector({
   venuePrice
 }) {
   const { isMobile, isTablet } = useDeviceType()
-  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [showDatePicker, { toggle: toggleDatePicker, setFalse: closeDatePicker }] = useToggle(false)
   
-  const datePickerRef = useRef(null)
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (datePickerRef.current && !datePickerRef.current.contains(event.target)) {
-        setShowDatePicker(false)
-      }
-    }
-
-    if (showDatePicker) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showDatePicker])
+  const datePickerRef = useClickOutside(() => closeDatePicker(), showDatePicker)
   
   // Time slots 1 tiếng với giá tiền (hiển thị dạng range)
   const timeSlots = [
@@ -132,9 +117,7 @@ export default function TimeSlotSelector({
           {/* Date Picker */}
           <div ref={datePickerRef} style={{ position: 'relative', marginBottom: '16px' }}>
             <button
-              onClick={() => {
-                setShowDatePicker(!showDatePicker)
-              }}
+              onClick={toggleDatePicker}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -265,7 +248,7 @@ export default function TimeSlotSelector({
                       onClick={() => {
                         if (!day.isPast) {
                           onDateChange(day.date)
-                          setShowDatePicker(false)
+                          closeDatePicker()
                         }
                       }}
                       disabled={day.isPast}

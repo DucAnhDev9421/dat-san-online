@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import useDeviceType from '../../hook/use-device-type'
+import useToggle from '../../hook/use-toggle'
 import NotificationButton from './NotificationButton'
 import NotificationDropdown from './NotificationDropdown'
 import UserMenu from './UserMenu'
@@ -12,9 +13,9 @@ import { Menu, X } from 'lucide-react'
 function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth()
   const { isMobile, isTablet } = useDeviceType()
-  const [showUserMenu, setShowUserMenu] = useState(false)
-  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false)
-  const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [showUserMenu, { toggle: toggleUserMenu, setFalse: closeUserMenu }] = useToggle(false)
+  const [showNotificationDropdown, { toggle: toggleNotificationDropdown, setFalse: closeNotificationDropdown }] = useToggle(false)
+  const [showMobileMenu, { toggle: toggleMobileMenu, setFalse: closeMobileMenu }] = useToggle(false)
   const [unreadNotifications, setUnreadNotifications] = useState(3) // Mock data
   const navigate = useNavigate()
 
@@ -22,15 +23,17 @@ function Header() {
 
   // Đóng mobile menu khi chuyển từ mobile sang desktop/tablet
   useEffect(() => {
-    if (!isMobile) {
-      setShowMobileMenu(false)
+    if (!isMobile && showMobileMenu) {
+      closeMobileMenu()
     }
-  }, [isMobile])
+  }, [isMobile, showMobileMenu]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset user menu when authentication state changes
   useEffect(() => {
-    setShowUserMenu(false)
-  }, [isAuthenticated, user])
+    if (showUserMenu) {
+      closeUserMenu()
+    }
+  }, [isAuthenticated, user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debug logs
   console.log('🔍 Header - Auth state:', { isAuthenticated, user, loading });
@@ -45,17 +48,17 @@ function Header() {
   }
 
   const handleUserMenuClick = () => {
-    setShowUserMenu(!showUserMenu)
+    toggleUserMenu()
   }
 
   const handleProfileClick = () => {
-    setShowUserMenu(false)
+    closeUserMenu()
     navigate('/profile')
   }
 
   const handleNotificationClick = () => {
-    setShowNotificationDropdown(!showNotificationDropdown)
-    setShowUserMenu(false) // Close user menu if open
+    toggleNotificationDropdown()
+    closeUserMenu() // Close user menu if open
   }
 
   const handleNotificationItemClick = (notification) => {
@@ -98,7 +101,7 @@ function Header() {
           {isMobile && (
             <button 
               className="mobile-menu-toggle"
-              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              onClick={toggleMobileMenu}
               aria-label="Toggle menu"
             >
               {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
@@ -157,13 +160,13 @@ function Header() {
                 />
                 <NotificationDropdown
                   isOpen={showNotificationDropdown}
-                  onClose={() => setShowNotificationDropdown(false)}
+                  onClose={closeNotificationDropdown}
                   notifications={notifications}
                   unreadCount={unreadNotifications}
                   onNotificationClick={handleNotificationItemClick}
                   onMarkAllAsRead={markAllAsRead}
                   onViewAll={() => {
-                    setShowNotificationDropdown(false)
+                    closeNotificationDropdown()
                     navigate('/notifications')
                   }}
                 />
@@ -197,9 +200,9 @@ function Header() {
 
       {/* Mobile Navigation Menu */}
       {isMobile && showMobileMenu && (
-        <div className="mobile-nav-overlay" onClick={() => setShowMobileMenu(false)}>
+        <div className="mobile-nav-overlay" onClick={closeMobileMenu}>
           <div className="mobile-nav-menu" onClick={(e) => e.stopPropagation()}>
-            <NavigationBar user={user} mobile onLinkClick={() => setShowMobileMenu(false)} />
+            <NavigationBar user={user} mobile onLinkClick={closeMobileMenu} />
           </div>
         </div>
       )}

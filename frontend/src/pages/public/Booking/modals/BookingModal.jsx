@@ -1,8 +1,20 @@
 import React, { useState } from 'react'
 import { formatDate } from '../utils/dateHelpers'
 import { MapPin, Grid3x3 } from 'lucide-react'
+import useClickOutside from '../../../../hook/use-click-outside'
+import useBodyScrollLock from '../../../../hook/use-body-scroll-lock'
+import useEscapeKey from '../../../../hook/use-escape-key'
 
 export default function BookingModal({ selectedDate, selectedSlots, selectedCourt, selectedFieldType, venueData, onClose, onSubmit }) {
+  // Lock body scroll
+  useBodyScrollLock(true)
+  
+  // Handle escape key
+  useEscapeKey(onClose, true)
+  
+  // Handle click outside
+  const modalRef = useClickOutside(onClose, true)
+
   const [bookingForm, setBookingForm] = useState({
     name: '',
     phone: '',
@@ -44,6 +56,7 @@ export default function BookingModal({ selectedDate, selectedSlots, selectedCour
       onClick={onClose}
     >
       <div 
+        ref={modalRef}
         style={{
           background: '#fff',
           borderRadius: '12px',

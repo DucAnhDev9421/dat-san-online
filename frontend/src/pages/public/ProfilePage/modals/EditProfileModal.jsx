@@ -2,8 +2,19 @@ import React, { useState } from 'react'
 import { FiX, FiUser, FiPhone, FiCamera, FiUpload } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import { userApi } from '../../../../api/userApi'
+import useClickOutside from '../../../../hook/use-click-outside'
+import useBodyScrollLock from '../../../../hook/use-body-scroll-lock'
+import useEscapeKey from '../../../../hook/use-escape-key'
 
 export default function EditProfileModal({ isOpen, onClose, userData, onSave }) {
+  // Lock body scroll
+  useBodyScrollLock(isOpen)
+  
+  // Handle escape key
+  useEscapeKey(onClose, isOpen)
+  
+  // Handle click outside
+  const modalRef = useClickOutside(onClose, isOpen)
   const [formData, setFormData] = useState({
     name: userData?.name || '',
     phone: userData?.phone || '',
@@ -185,7 +196,7 @@ export default function EditProfileModal({ isOpen, onClose, userData, onSave }) 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={modalRef} className="modal" onClick={(e) => e.stopPropagation()}>
         {/* Modal Header */}
         <div className="modal-header">
           <h3>Chỉnh sửa thông tin cá nhân</h3>

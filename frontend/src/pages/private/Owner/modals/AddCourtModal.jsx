@@ -1,7 +1,18 @@
 import React, { useState } from "react";
 import { Plus, X } from "lucide-react";
+import useClickOutside from "../../../../hook/use-click-outside";
+import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
+import useEscapeKey from "../../../../hook/use-escape-key";
 
 const AddCourtModal = ({ isOpen, onClose }) => {
+  // Lock body scroll
+  useBodyScrollLock(isOpen)
+  
+  // Handle escape key
+  useEscapeKey(onClose, isOpen)
+  
+  // Handle click outside
+  const modalRef = useClickOutside(onClose, isOpen)
   const [formData, setFormData] = useState({
     name: "",
     type: "",
@@ -44,6 +55,7 @@ const AddCourtModal = ({ isOpen, onClose }) => {
       onClick={onClose}
     >
       <div
+        ref={modalRef}
         style={{
           background: "#fff",
           borderRadius: 16,

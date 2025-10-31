@@ -1,22 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import useMobile from '../../hook/use-mobile';
+import useToggle from '../../hook/use-toggle';
 import chatbotAvatar from '../../assets/chatbot.png';
 import './ChatButton.css';
 
 const ChatButton = () => {
   const location = useLocation();
   const isMobile = useMobile(768);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, { toggle: toggleChat }] = useToggle(false);
   const [isTyping, setIsTyping] = useState(false);
   
   // Hide chat button on auth pages
   const authPages = ['/login', '/register', '/verify-otp', '/forgot-password', '/reset-password', '/auth/callback', '/auth/error'];
   const isAuthPage = authPages.some(path => location.pathname.startsWith(path));
-
-  const toggleChat = () => {
-    setIsOpen(!isOpen);
-  };
 
   // Simulate typing effect
   useEffect(() => {

@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState } from 'react'
 import { MapPin, Grid3x3 } from 'lucide-react'
 import useDeviceType from '../../../../hook/use-device-type'
+import useClickOutside from '../../../../hook/use-click-outside'
+import useToggle from '../../../../hook/use-toggle'
 
 export default function CourtAndFieldTypeSelector({ 
   selectedCourt,
@@ -9,34 +11,14 @@ export default function CourtAndFieldTypeSelector({
   onFieldTypeChange
 }) {
   const { isMobile, isTablet } = useDeviceType()
-  const [showCourtPicker, setShowCourtPicker] = useState(false)
-  const [showFieldTypePicker, setShowFieldTypePicker] = useState(false)
+  const [showCourtPicker, { toggle: toggleCourtPicker, setFalse: closeCourtPicker }] = useToggle(false)
+  const [showFieldTypePicker, { toggle: toggleFieldTypePicker, setFalse: closeFieldTypePicker }] = useToggle(false)
   
-  const courtPickerRef = useRef(null)
-  const fieldTypePickerRef = useRef(null)
+  const courtPickerRef = useClickOutside(() => closeCourtPicker(), showCourtPicker)
+  const fieldTypePickerRef = useClickOutside(() => closeFieldTypePicker(), showFieldTypePicker)
 
   const courts = ['Sân số 1', 'Sân số 2', 'Sân số 3', 'Sân số 4', 'Sân số 5']
   const fieldTypes = ['Bóng đá mini', 'Bóng đá 7 người', 'Bóng đá 11 người', 'Bóng rổ', 'Tennis']
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (courtPickerRef.current && !courtPickerRef.current.contains(event.target)) {
-        setShowCourtPicker(false)
-      }
-      if (fieldTypePickerRef.current && !fieldTypePickerRef.current.contains(event.target)) {
-        setShowFieldTypePicker(false)
-      }
-    }
-
-    if (showCourtPicker || showFieldTypePicker) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showCourtPicker, showFieldTypePicker])
 
   return (
     <div style={{ 
@@ -69,8 +51,8 @@ export default function CourtAndFieldTypeSelector({
             <div ref={courtPickerRef} style={{ position: 'relative', flex: isMobile ? 'none' : '1', minWidth: isMobile ? '100%' : '150px', width: isMobile ? '100%' : 'auto' }}>
               <button
                 onClick={() => {
-                  setShowCourtPicker(!showCourtPicker)
-                  setShowFieldTypePicker(false)
+                  toggleCourtPicker()
+                  closeFieldTypePicker()
                 }}
                 style={{
                   display: 'flex',
@@ -118,7 +100,7 @@ export default function CourtAndFieldTypeSelector({
                       key={court}
                       onClick={() => {
                         onCourtChange(court)
-                        setShowCourtPicker(false)
+                        closeCourtPicker()
                       }}
                       style={{
                         display: 'flex',
@@ -157,8 +139,8 @@ export default function CourtAndFieldTypeSelector({
             <div ref={fieldTypePickerRef} style={{ position: 'relative', flex: isMobile ? 'none' : '1', minWidth: isMobile ? '100%' : '150px', width: isMobile ? '100%' : 'auto' }}>
               <button
                 onClick={() => {
-                  setShowFieldTypePicker(!showFieldTypePicker)
-                  setShowCourtPicker(false)
+                  toggleFieldTypePicker()
+                  closeCourtPicker()
                 }}
                 style={{
                   display: 'flex',
@@ -206,7 +188,7 @@ export default function CourtAndFieldTypeSelector({
                       key={type}
                       onClick={() => {
                         onFieldTypeChange(type)
-                        setShowFieldTypePicker(false)
+                        closeFieldTypePicker()
                       }}
                       style={{
                         display: 'flex',
