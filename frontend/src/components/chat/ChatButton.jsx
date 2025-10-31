@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import chatbotAvatar from '../../assets/chatbot.png';
 import './ChatButton.css';
 
 const ChatButton = () => {
@@ -63,9 +64,7 @@ const ChatButton = () => {
           <div className="chat-header">
             <div className="chat-header-info">
               <div className="chat-avatar">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4H19V9Z" fill="currentColor"/>
-                </svg>
+                <img src={chatbotAvatar} alt="Chatbot Avatar" />
               </div>
               <div className="chat-header-text">
                 <h4>AI Assistant</h4>
@@ -82,9 +81,7 @@ const ChatButton = () => {
           <div className="chat-messages">
             <div className="message bot-message">
               <div className="message-avatar">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4H19V9Z" fill="currentColor"/>
-                </svg>
+                <img src={chatbotAvatar} alt="Chatbot Avatar" />
               </div>
               <div className="message-content">
                 <p>Xin chào! Tôi là AI Assistant. Tôi có thể giúp bạn:</p>
@@ -100,9 +97,7 @@ const ChatButton = () => {
             {isTyping && (
               <div className="message bot-message typing-message">
                 <div className="message-avatar">
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4H19V9Z" fill="currentColor"/>
-                  </svg>
+                  <img src={chatbotAvatar} alt="Chatbot Avatar" />
                 </div>
                 <div className="message-content typing-content">
                   <div className="typing-indicator">
