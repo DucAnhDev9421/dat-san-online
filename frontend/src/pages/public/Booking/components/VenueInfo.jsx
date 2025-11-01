@@ -1,11 +1,19 @@
 import React from 'react'
 import { Star, MapPin, Phone, Clock, Users, Wifi, Car, Coffee, Shield } from 'lucide-react'
+import useDeviceType from '../../../../hook/use-device-type'
 
 export default function VenueInfo({ venueData }) {
+  const { isMobile, isTablet } = useDeviceType()
+  
   return (
     <div>
       <div style={{ marginBottom: '16px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937', margin: '0 0 8px 0' }}>
+        <h2 style={{ 
+          fontSize: isMobile ? '20px' : isTablet ? '22px' : '24px', 
+          fontWeight: '700', 
+          color: '#1f2937', 
+          margin: '0 0 8px 0' 
+        }}>
           {venueData.name}
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>

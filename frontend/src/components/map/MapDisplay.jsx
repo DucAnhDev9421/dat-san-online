@@ -1,7 +1,11 @@
 import React from 'react';
+import useMobile from '../../hook/use-mobile';
 import './MapDisplay.css';
 
 const MapDisplay = ({ venueData }) => {
+  const isMobile = useMobile(768);
+  const isSmallMobile = useMobile(480);
+  
   // Function to generate Google Maps embed URL
   const getGoogleMapsEmbedUrl = (address) => {
     // Encode the address for URL
@@ -20,12 +24,14 @@ const MapDisplay = ({ venueData }) => {
     );
   }
 
+  const mapHeight = isSmallMobile ? 160 : isMobile ? 180 : 300;
+
   return (
     <div className="map-display-simple">
       <iframe
         src={getGoogleMapsEmbedUrl(venueData.address)}
         width="100%"
-        height="300"
+        height={mapHeight}
         style={{ border: 0 }}
         allowFullScreen=""
         loading="lazy"

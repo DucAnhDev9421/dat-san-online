@@ -1,8 +1,13 @@
 import React, { useState } from 'react'
+import useDeviceType from '../../../../hook/use-device-type'
+import useMobile from '../../../../hook/use-mobile'
 import { formatDate } from '../utils/dateHelpers'
 import { Calendar, Clock, DollarSign, CheckCircle, Tag, MapPin, Grid3x3 } from 'lucide-react'
 
 export default function BookingSummary({ selectedDate, selectedSlots, selectedCourt, selectedFieldType, onBookNow }) {
+  const { isMobile, isTablet } = useDeviceType()
+  const isSmallMobile = useMobile(480)
+  const isVerySmallMobile = useMobile(360)
   const [promoCode, setPromoCode] = useState('')
   const [discount, setDiscount] = useState(0)
   const [promoApplied, setPromoApplied] = useState(false)
@@ -59,13 +64,13 @@ export default function BookingSummary({ selectedDate, selectedSlots, selectedCo
       background: '#fff',
       border: '1px solid #e5e7eb',
       borderRadius: '12px',
-      padding: '24px',
+      padding: isMobile ? '16px' : isTablet ? '20px' : '24px',
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
     }}>
       {/* Header */}
       <h3 style={{ 
         margin: '0 0 20px 0', 
-        fontSize: '18px', 
+        fontSize: isMobile ? '16px' : isTablet ? '17px' : '18px', 
         fontWeight: '600', 
         color: '#1f2937' 
       }}>
@@ -192,7 +197,10 @@ export default function BookingSummary({ selectedDate, selectedSlots, selectedCo
             <Tag size={14} style={{ color: '#6b7280' }} />
             Mã khuyến mãi
           </div>
-          <div className="promo-code-container" style={{ display: 'flex', gap: '8px' }}>
+          <div className="promo-code-container" style={{ 
+            display: 'flex', 
+            gap: isMobile ? '6px' : '8px' 
+          }}>
             <input
               type="text"
               placeholder="Nhập mã khuyến mãi"
@@ -202,11 +210,11 @@ export default function BookingSummary({ selectedDate, selectedSlots, selectedCo
               className="promo-code-input"
               style={{
                 flex: '1 1 auto',
-                minWidth: '120px',
-                padding: '10px 12px',
+                minWidth: isVerySmallMobile ? '60px' : isSmallMobile ? '80px' : isMobile ? '100px' : '120px',
+                padding: isVerySmallMobile ? '6px 8px' : isSmallMobile ? '8px' : isMobile ? '8px 10px' : '10px 12px',
                 border: '1px solid #e5e7eb',
                 borderRadius: '6px',
-                fontSize: '14px',
+                fontSize: isVerySmallMobile ? '11px' : isSmallMobile ? '12px' : isMobile ? '13px' : '14px',
                 outline: 'none',
                 background: promoApplied ? '#f3f4f6' : '#fff',
                 transition: 'all 0.2s'
@@ -218,12 +226,12 @@ export default function BookingSummary({ selectedDate, selectedSlots, selectedCo
               className="promo-code-button"
               style={{
                 flex: '0 0 auto',
-                padding: '10px 16px',
+                padding: isVerySmallMobile ? '6px 8px' : isSmallMobile ? '8px' : isMobile ? '8px 12px' : '10px 16px',
                 background: promoApplied || !promoCode ? '#d1d5db' : '#10b981',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '6px',
-                fontSize: '14px',
+                fontSize: isVerySmallMobile ? '11px' : isSmallMobile ? '12px' : isMobile ? '13px' : '14px',
                 fontWeight: '500',
                 cursor: promoApplied || !promoCode ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
@@ -320,54 +328,7 @@ export default function BookingSummary({ selectedDate, selectedSlots, selectedCo
         Bằng việc đặt sân, bạn đồng ý với điều khoản sử dụng của chúng tôi
       </p>
 
-      <style>{`
-        /* Responsive styles for promo code section */
-        @media (max-width: 640px) {
-          .promo-code-container {
-            gap: 6px;
-          }
-          
-          .promo-code-input {
-            min-width: 100px !important;
-            flex: 1 1 0 !important;
-            padding: 8px 10px !important;
-            font-size: 13px !important;
-          }
-          
-          .promo-code-button {
-            padding: 8px 12px !important;
-            font-size: 13px !important;
-            flex-shrink: 0;
-          }
-        }
-        
-        @media (max-width: 480px) {
-          .promo-code-input {
-            min-width: 80px !important;
-            padding: 8px !important;
-            font-size: 12px !important;
-          }
-          
-          .promo-code-button {
-            padding: 8px !important;
-            font-size: 12px !important;
-          }
-        }
-        
-        @media (max-width: 360px) {
-          .promo-code-input {
-            min-width: 60px !important;
-            padding: 6px 8px !important;
-            font-size: 11px !important;
-          }
-          
-          .promo-code-button {
-            padding: 6px 8px !important;
-            font-size: 11px !important;
-            white-space: nowrap;
-          }
-        }
-      `}</style>
+      {/* CSS media queries đã được thay thế bằng useMobile hook */}
     </div>
   )
 }

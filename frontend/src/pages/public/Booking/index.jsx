@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import useDeviceType from '../../../hook/use-device-type'
 import VenueGallery from './components/VenueGallery'
 import VenueInfo from './components/VenueInfo'
 import MapDisplay from '../../../components/map/MapDisplay'
 import ReviewsSection from './components/ReviewsSection'
+import CourtAndFieldTypeSelector from './components/CourtAndFieldTypeSelector'
 import TimeSlotSelector from './components/TimeSlotSelector'
 import BookingSummary from './components/BookingSummary'
 import CalendarModal from './modals/CalendarModal'
@@ -14,6 +16,7 @@ function Booking() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const venueId = searchParams.get('venue')
+  const { isMobile, isTablet, isDesktop } = useDeviceType()
   
   // Get venue data based on ID from URL
   const venueData = venuesData.find(venue => venue.id === parseInt(venueId)) || venuesData[0]
@@ -125,12 +128,12 @@ function Booking() {
       {/* Gallery Section */}
       <div style={{ 
         maxWidth: '1200px',
-        margin: '20px auto',
-        padding: '0 20px'
+        margin: isMobile ? '12px auto' : isTablet ? '16px auto' : '20px auto',
+        padding: isMobile ? '0 12px' : isTablet ? '0 16px' : '0 20px'
       }}>
         <div style={{
           background: '#fff',
-          padding: '24px',
+          padding: isMobile ? '16px' : isTablet ? '20px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
         }}>
@@ -141,29 +144,37 @@ function Booking() {
       {/* Main Content - Responsive Layout */}
       <div style={{ 
         display: 'flex', 
-        flexDirection: window.innerWidth <= 768 ? 'column' : 'row',
-        gap: '24px', 
+        flexDirection: isMobile ? 'column' : isTablet ? 'column' : 'row',
+        gap: isMobile ? '16px' : isTablet ? '20px' : '24px', 
         alignItems: 'flex-start',
         maxWidth: '1200px',
         margin: '0 auto 20px auto',
-        padding: '0 20px'
+        padding: isMobile ? '0 12px' : isTablet ? '0 16px' : '0 20px'
       }}>
         {/* Left Column - Venue Info */}
         <div style={{ 
           flex: 1, 
-          minWidth: window.innerWidth <= 768 ? 'auto' : '600px',
-          width: window.innerWidth <= 768 ? '100%' : 'auto'
+          minWidth: isMobile ? 'auto' : '600px',
+          width: isMobile ? '100%' : 'auto'
         }}>
           {/* Venue Details Card */}
           <div style={{
             background: '#fff',
             borderRadius: '12px',
-            padding: '24px',
-            marginBottom: '20px',
+            padding: isMobile ? '16px' : isTablet ? '20px' : '24px',
+            marginBottom: isMobile ? '16px' : isTablet ? '18px' : '20px',
             boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
           }}>
             <VenueInfo venueData={venueData} />
           </div>
+
+          {/* Court and Field Type Selector */}
+          <CourtAndFieldTypeSelector 
+            selectedCourt={selectedCourt}
+            onCourtChange={setSelectedCourt}
+            selectedFieldType={selectedFieldType}
+            onFieldTypeChange={setSelectedFieldType}
+          />
 
           {/* Time Slot Selector */}
           <TimeSlotSelector 
@@ -172,19 +183,15 @@ function Booking() {
             selectedSlots={selectedSlots}
             onSlotSelect={setSelectedSlots}
             venuePrice={venueData.price}
-            selectedCourt={selectedCourt}
-            onCourtChange={setSelectedCourt}
-            selectedFieldType={selectedFieldType}
-            onFieldTypeChange={setSelectedFieldType}
           />
         </div>
 
         {/* Right Column - Booking Summary */}
         <div style={{ 
-          width: window.innerWidth <= 768 ? '100%' : '320px',
-          position: window.innerWidth <= 768 ? 'static' : 'sticky',
-          top: window.innerWidth <= 768 ? 'auto' : '100px',
-          order: window.innerWidth <= 768 ? -1 : 'auto'
+          width: isMobile ? '100%' : isTablet ? '100%' : '320px',
+          position: isMobile || isTablet ? 'static' : 'sticky',
+          top: isMobile || isTablet ? 'auto' : '100px',
+          order: isMobile || isTablet ? -1 : 'auto'
         }}>
           <BookingSummary 
             selectedDate={selectedDate}
@@ -200,16 +207,16 @@ function Booking() {
       <div style={{ 
         maxWidth: '1200px',
         margin: '0 auto 20px auto',
-        padding: '0 20px'
+        padding: isMobile ? '0 12px' : isTablet ? '0 16px' : '0 20px'
       }}>
         <div style={{
           background: '#fff',
-          padding: '24px',
+          padding: isMobile ? '16px' : isTablet ? '20px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
         }}>
           <h3 style={{ 
-            fontSize: '20px', 
+            fontSize: isMobile ? '18px' : isTablet ? '19px' : '20px', 
             fontWeight: '700', 
             color: '#1f2937', 
             margin: '0 0 20px 0' 
@@ -224,11 +231,11 @@ function Booking() {
       <div style={{ 
         maxWidth: '1200px',
         margin: '0 auto 20px auto',
-        padding: '0 20px'
+        padding: isMobile ? '0 12px' : isTablet ? '0 16px' : '0 20px'
       }}>
         <div style={{
           background: '#fff',
-          padding: '24px',
+          padding: isMobile ? '16px' : isTablet ? '20px' : '24px',
           borderRadius: '12px',
           boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
         }}>
