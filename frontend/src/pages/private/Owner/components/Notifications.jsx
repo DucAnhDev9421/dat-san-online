@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { Send, Eye, Trash2 } from "lucide-react";
 import { notificationData } from "../data/mockData";
+import NotificationDetailModal from "../modals/NotificationDetailModal";
+import DeleteNotificationModal from "../modals/DeleteNotificationModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -21,40 +23,59 @@ const ActionButton = ({ bg, Icon, onClick, title }) => (
 );
 
 const Notifications = () => {
+  // use local state so viewing/marking read updates UI immediately
+  const [notifications, setNotifications] = useState(notificationData);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
 
   const filteredNotifications = useMemo(
     () =>
-      notificationData.filter((r) =>
+      notifications.filter((r) =>
         [r.title, r.message, r.type, r.status]
           .join(" ")
           .toLowerCase()
           .includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [searchQuery, notifications]
   );
+
+  const handleDeleteNotification = (notificationToDelete) => {
+    setNotifications((prev) =>
+      prev.filter((n) => n.id !== notificationToDelete.id)
+    );
+    setSelectedNotification(null);
+    setIsDeleteOpen(false);
+  };
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 12,
+        }}
+      >
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Quản lý thông báo</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={() => alert("TODO: Gửi thông báo mới")}
-            style={{ 
-              display: "inline-flex", 
-              alignItems: "center", 
-              gap: 8, 
-              background: "#10b981", 
-              color: "#fff", 
-              border: 0, 
-              borderRadius: 10, 
-              padding: "10px 14px", 
-              cursor: "pointer", 
-              fontWeight: 700 
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              background: "#10b981",
+              color: "#fff",
+              border: 0,
+              borderRadius: 10,
+              padding: "10px 14px",
+              cursor: "pointer",
+              fontWeight: 700,
             }}
           >
-            <Send size={16}/> Gửi thông báo
+            <Send size={16} /> Gửi thông báo
           </button>
         </div>
       </div>
@@ -80,8 +101,13 @@ const Notifications = () => {
               <strong>Tổng:</strong> {filteredNotifications.length} thông báo
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <select 
-                style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 14 }}
+              <select
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  fontSize: 14,
+                }}
                 onChange={(e) => {
                   if (e.target.value === "all") {
                     setSearchQuery("");
@@ -97,8 +123,13 @@ const Notifications = () => {
                 <option value="review">Đánh giá</option>
                 <option value="maintenance">Bảo trì</option>
               </select>
-              <select 
-                style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 14 }}
+              <select
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  fontSize: 14,
+                }}
                 onChange={(e) => {
                   if (e.target.value === "all") {
                     setSearchQuery("");
@@ -117,12 +148,12 @@ const Notifications = () => {
             placeholder="Tìm theo tiêu đề, nội dung, loại…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ 
-              padding: "8px 12px", 
-              borderRadius: 8, 
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
               border: "1px solid #e5e7eb",
               minWidth: "300px",
-              fontSize: 14
+              fontSize: 14,
             }}
           />
         </div>
@@ -158,69 +189,112 @@ const Notifications = () => {
             <tbody>
               {filteredNotifications.map((r) => (
                 <tr key={r.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                  <td style={{ padding: 12, fontWeight: 700, color: "#1f2937" }}>{r.id}</td>
+                  <td
+                    style={{ padding: 12, fontWeight: 700, color: "#1f2937" }}
+                  >
+                    {r.id}
+                  </td>
                   <td style={{ padding: 12 }}>
                     <div style={{ fontWeight: 600 }}>{r.title}</div>
                   </td>
                   <td style={{ padding: 12, maxWidth: "300px" }}>
-                    <div style={{ 
-                      fontSize: 14,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap"
-                    }} title={r.message}>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={r.message}
+                    >
                       {r.message}
                     </div>
                   </td>
                   <td style={{ padding: 12 }}>
-                    <span style={{
-                      background: r.type === "booking" ? "#e6f3ff" : 
-                                 r.type === "payment" ? "#e6f9f0" : 
-                                 r.type === "cancellation" ? "#fee2e2" : 
-                                 r.type === "review" ? "#fef3c7" : "#e6f3ff",
-                      color: r.type === "booking" ? "#1d4ed8" : 
-                            r.type === "payment" ? "#059669" : 
-                            r.type === "cancellation" ? "#ef4444" : 
-                            r.type === "review" ? "#d97706" : "#1d4ed8",
-                      padding: "4px 8px",
-                      borderRadius: 999,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      textTransform: "capitalize"
-                    }}>
-                      {r.type === "booking" ? "Đặt sân" : 
-                       r.type === "payment" ? "Thanh toán" : 
-                       r.type === "cancellation" ? "Hủy đặt sân" : 
-                       r.type === "review" ? "Đánh giá" : "Bảo trì"}
+                    <span
+                      style={{
+                        background:
+                          r.type === "booking"
+                            ? "#e6f3ff"
+                            : r.type === "payment"
+                            ? "#e6f9f0"
+                            : r.type === "cancellation"
+                            ? "#fee2e2"
+                            : r.type === "review"
+                            ? "#fef3c7"
+                            : "#e6f3ff",
+                        color:
+                          r.type === "booking"
+                            ? "#1d4ed8"
+                            : r.type === "payment"
+                            ? "#059669"
+                            : r.type === "cancellation"
+                            ? "#ef4444"
+                            : r.type === "review"
+                            ? "#d97706"
+                            : "#1d4ed8",
+                        padding: "4px 8px",
+                        borderRadius: 999,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {r.type === "booking"
+                        ? "Đặt sân"
+                        : r.type === "payment"
+                        ? "Thanh toán"
+                        : r.type === "cancellation"
+                        ? "Hủy đặt sân"
+                        : r.type === "review"
+                        ? "Đánh giá"
+                        : "Bảo trì"}
                     </span>
                   </td>
                   <td style={{ padding: 12 }}>
-                    <span style={{
-                      background: r.status === "unread" ? "#e6f3ff" : "#e6f9f0",
-                      color: r.status === "unread" ? "#1d4ed8" : "#059669",
-                      padding: "4px 8px",
-                      borderRadius: 999,
-                      fontSize: 12,
-                      fontWeight: 700,
-                    }}>
+                    <span
+                      style={{
+                        background:
+                          r.status === "unread" ? "#e6f3ff" : "#e6f9f0",
+                        color: r.status === "unread" ? "#1d4ed8" : "#059669",
+                        padding: "4px 8px",
+                        borderRadius: 999,
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                    >
                       {r.status === "unread" ? "Chưa đọc" : "Đã đọc"}
                     </span>
                   </td>
                   <td style={{ padding: 12 }}>
                     <div style={{ fontSize: 14 }}>{r.date}</div>
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>{r.time}</div>
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>
+                      {r.time}
+                    </div>
                   </td>
                   <td style={{ padding: 12, whiteSpace: "nowrap" }}>
                     <ActionButton
                       bg="#06b6d4"
                       Icon={Eye}
-                      onClick={() => alert("Xem chi tiết " + r.id)}
+                      onClick={() => {
+                        // mark as read locally and open detail modal
+                        setNotifications((prev) =>
+                          prev.map((n) =>
+                            n.id === r.id ? { ...n, status: "read" } : n
+                          )
+                        );
+                        setSelectedNotification(r);
+                        setIsDetailOpen(true);
+                      }}
                       title="Xem chi tiết"
                     />
                     <ActionButton
                       bg="#ef4444"
                       Icon={Trash2}
-                      onClick={() => alert("Xóa " + r.id)}
+                      onClick={() => {
+                        setSelectedNotification(r);
+                        setIsDeleteOpen(true);
+                      }}
                       title="Xóa"
                     />
                   </td>
@@ -245,6 +319,28 @@ const Notifications = () => {
           </table>
         </div>
       </div>
+      {/* Notification detail modal */}
+      {isDetailOpen && selectedNotification && (
+        <NotificationDetailModal
+          isOpen={isDetailOpen}
+          notification={selectedNotification}
+          onClose={() => {
+            setIsDetailOpen(false);
+            setSelectedNotification(null);
+          }}
+        />
+      )}
+
+      {/* Delete modal */}
+      <DeleteNotificationModal
+        isOpen={isDeleteOpen}
+        onClose={() => {
+          setIsDeleteOpen(false);
+          setSelectedNotification(null);
+        }}
+        notification={selectedNotification}
+        onConfirm={handleDeleteNotification}
+      />
     </div>
   );
 };
