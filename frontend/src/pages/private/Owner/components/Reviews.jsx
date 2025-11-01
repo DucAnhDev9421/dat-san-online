@@ -1,25 +1,32 @@
 import React, { useState, useMemo } from "react";
 import { Star, Reply, Flag, ThumbsUp, ThumbsDown } from "lucide-react";
 import { reviewData } from "../data/mockData";
+import ReplyReviewModal from "../modals/ReplyReviewModal";
+import ReportReviewModal from "../modals/ReportReviewModal";
 
 const Reviews = () => {
+  // keep local reviews state so replies update UI immediately
+  const [reviews, setReviews] = useState(reviewData);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isReplyOpen, setIsReplyOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [replyingReview, setReplyingReview] = useState(null);
 
   const filteredReviews = useMemo(
     () =>
-      reviewData.filter((r) =>
+      reviews.filter((r) =>
         [r.customer, r.court, r.comment, r.status]
           .join(" ")
           .toLowerCase()
           .includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [searchQuery, reviews]
   );
 
-  const averageRating = reviewData.reduce((sum, r) => sum + r.rating, 0) / reviewData.length;
-  const totalReviews = reviewData.length;
-  const repliedReviews = reviewData.filter(r => r.isOwnerReplied).length;
-  const reportedReviews = reviewData.filter(r => r.status === 'reported').length;
+  const averageRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+  const totalReviews = reviews.length;
+  const repliedReviews = reviews.filter((r) => r.isOwnerReplied).length;
+  const reportedReviews = reviews.filter((r) => r.status === 'reported').length;
 
   const renderStars = (rating) => {
     return Array.from({ length: 5 }, (_, i) => (
@@ -137,7 +144,10 @@ const Reviews = () => {
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
-                    onClick={() => alert("Phản hồi đánh giá " + review.id)}
+                    onClick={() => {
+                      setReplyingReview(review);
+                      setIsReplyOpen(true);
+                    }}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -156,7 +166,11 @@ const Reviews = () => {
                     Phản hồi
                   </button>
                   <button
-                    onClick={() => alert("Báo cáo đánh giá " + review.id)}
+                      onClick={() => {
+                        setReplyingReview(review);
+                        // reuse replyingReview state to hold the item being operated on
+                        setIsReportOpen(true);
+                      }}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -227,6 +241,49 @@ const Reviews = () => {
           )}
         </div>
       </div>
+
+      {/* Reply modal */}
+      {isReplyOpen && replyingReview && (
+        <ReplyReviewModal
+          isOpen={isReplyOpen}
+          review={replyingReview}
+          onClose={() => {
+            setIsReplyOpen(false);
+            setReplyingReview(null);
+          }}
+          onSubmit={(replyText) => {
+            const now = new Date().toISOString().split('T')[0];
+            setReviews((prev) =>
+              prev.map((r) =>
+                r.id === replyingReview.id
+                  ? { ...r, isOwnerReplied: true, ownerReply: replyText, replyDate: now }
+                  : r
+              )
+            );
+          }}
+        />
+      )}
+      {/* Report modal */}
+      {isReportOpen && replyingReview && (
+        <ReportReviewModal
+          isOpen={isReportOpen}
+          review={replyingReview}
+          onClose={() => {
+            setIsReportOpen(false);
+            setReplyingReview(null);
+          }}
+          onSubmit={({ reason, note }) => {
+            // mark review as reported locally and attach report metadata
+            setReviews((prev) =>
+              prev.map((r) =>
+                r.id === replyingReview.id
+                  ? { ...r, status: 'reported', report: { reason, note, date: new Date().toISOString().split('T')[0] } }
+                  : r
+              )
+            );
+          }}
+        />
+      )}
     </div>
   );
 };

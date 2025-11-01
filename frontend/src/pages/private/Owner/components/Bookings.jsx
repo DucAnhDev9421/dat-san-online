@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Download, Eye, Pencil, CheckCircle2, XCircle, Clock5 } from "lucide-react";
-import { bookingData } from "../data/mockData";
+import { bookingData, courtData } from "../data/mockData";
+import EditBookingModal from "../modals/EditBookingModal";
+
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -66,17 +68,35 @@ const Status = ({ value }) => {
 
 const Bookings = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [detailImageIdx, setDetailImageIdx] = useState(0);
+  // local editable bookings state so edit modal can persist changes locally
+  const [bookings, setBookings] = useState(bookingData);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingBooking, setEditingBooking] = useState(null);
+
 
   const filteredBookings = useMemo(
     () =>
-      bookingData.filter((r) =>
+      bookings.filter((r) =>
         [r.id, r.customer, r.court, r.phone, r.email, r.courtType, r.notes]
           .join(" ")
           .toLowerCase()
           .includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [searchQuery, bookings]
   );
+
+  // when a booking is selected, find the court info (images, etc.) from mock data
+  const courtInfo = selectedBooking
+    ? courtData.find((c) => c.name === selectedBooking.court)
+    : null;
+
+  // reset selected image index when user opens a different booking
+  useEffect(() => {
+    setDetailImageIdx(0);
+  }, [selectedBooking]);
 
   return (
     <div>
@@ -202,8 +222,12 @@ const Bookings = () => {
                     <div style={{ fontSize: 12, color: "#6b7280" }}>Đặt: {r.bookingDate}</div>
                   </td>
                   <td style={{ padding: 12 }}>
-                    <div style={{ fontWeight: 600 }}>{r.court}</div>
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>{r.courtType}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{r.court}</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>{r.courtType}</div>
+                      </div>
+                    </div>
                   </td>
                   <td style={{ padding: 12, fontWeight: 600 }}>{r.date}</td>
                   <td style={{ padding: 12, color: "#059669", fontWeight: 600 }}>{r.time}</td>
@@ -247,7 +271,10 @@ const Bookings = () => {
                     <ActionButton
                       bg="#06b6d4"
                       Icon={Eye}
-                      onClick={() => alert("Xem chi tiết " + r.id)}
+                      onClick={() => {
+                        setSelectedBooking(r);
+                        setIsDetailOpen(true);
+                      }}
                       title="Xem chi tiết"
                     />
                     {r.status === "pending" && (
@@ -269,7 +296,10 @@ const Bookings = () => {
                     <ActionButton
                       bg="#6b7280"
                       Icon={Pencil}
-                      onClick={() => alert("Sửa " + r.id)}
+                      onClick={() => {
+                        setEditingBooking(r);
+                        setIsEditOpen(true);
+                      }}
                       title="Sửa"
                     />
                   </td>
@@ -294,6 +324,154 @@ const Bookings = () => {
           </table>
         </div>
       </div>
+
+        {/* Booking detail modal */}
+        {isDetailOpen && selectedBooking && (
+          <div
+            onClick={() => {
+              setIsDetailOpen(false);
+              setSelectedBooking(null);
+            }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 20,
+              zIndex: 1000,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: 640,
+                background: "#fff",
+                borderRadius: 12,
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottom: "1px solid #eee" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Chi tiết đơn {selectedBooking.id}</h3>
+                  <div style={{ fontSize: 13, color: "#6b7280" }}>{selectedBooking.customer}</div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsDetailOpen(false);
+                    setSelectedBooking(null);
+                  }}
+                  style={{ background: "transparent", border: "none", cursor: "pointer", padding: 6 }}
+                  aria-label="Đóng"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: 16, padding: 12, flexWrap: "wrap" }}>
+                {/* Left: image gallery */}
+                <div style={{ flex: "0 0 280px", minWidth: 220 }}>
+                  <div style={{ borderRadius: 8, overflow: "hidden", background: "#f3f4f6" }}>
+                    {courtInfo?.images && courtInfo.images.length > 0 ? (
+                      <img
+                        src={courtInfo.images[detailImageIdx]}
+                        alt={`${selectedBooking.court} - ${detailImageIdx + 1}`}
+                        style={{ width: "100%", height: 220, objectFit: "cover", display: "block" }}
+                      />
+                    ) : (
+                      <div style={{ width: "100%", height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af" }}>
+                        Không có ảnh sân
+                      </div>
+                    )}
+                  </div>
+
+                  {courtInfo?.images && courtInfo.images.length > 1 && (
+                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                      {courtInfo.images.map((src, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setDetailImageIdx(i)}
+                          style={{
+                            border: detailImageIdx === i ? "2px solid #10b981" : "2px solid transparent",
+                            padding: 0,
+                            borderRadius: 6,
+                            overflow: "hidden",
+                            cursor: "pointer",
+                            width: 84,
+                            height: 56,
+                            background: "#fff",
+                          }}
+                        >
+                          <img src={src} alt={`thumb-${i}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Right: booking info stacked (contact, court, date/time/price, notes) */}
+                <div style={{ flex: "1 1 320px", minWidth: 260, display: "flex", flexDirection: "column" }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>Liên hệ</div>
+                    <div style={{ fontWeight: 700 }}>{selectedBooking.phone}</div>
+                    <div style={{ color: "#6b7280", fontSize: 13 }}>{selectedBooking.email}</div>
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>Sân</div>
+                    <div style={{ fontWeight: 700 }}>{selectedBooking.court}</div>
+                    <div style={{ color: "#6b7280", fontSize: 13 }}>{selectedBooking.courtType}</div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 12, marginTop: 14, alignItems: "flex-start" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>Ngày</div>
+                      <div style={{ fontWeight: 700 }}>{selectedBooking.date}</div>
+                    </div>
+
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>Khung giờ</div>
+                      <div style={{ fontWeight: 700, color: "#059669" }}>{selectedBooking.time}</div>
+                    </div>
+
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>Giá</div>
+                      <div style={{ fontWeight: 700 }}>{selectedBooking.price.toLocaleString()} VNĐ</div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>Ghi chú</div>
+                    <div style={{ fontSize: 14, color: "#374151", whiteSpace: "pre-wrap" }}>{selectedBooking.notes || '-'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: 16, borderTop: "1px solid #eee" }}>
+                <button onClick={() => { setIsDetailOpen(false); setSelectedBooking(null); }} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer" }}>Đóng</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Edit booking modal */}
+        {isEditOpen && editingBooking && (
+          <EditBookingModal
+            isOpen={isEditOpen}
+            booking={editingBooking}
+            onClose={() => {
+              setIsEditOpen(false);
+              setEditingBooking(null);
+            }}
+            onSave={(updated) => {
+              // update local bookings array
+              setBookings((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+              // if detail modal showing this booking, update it too
+              if (selectedBooking?.id === updated.id) setSelectedBooking(updated);
+            }}
+          />
+        )}
     </div>
   );
 };

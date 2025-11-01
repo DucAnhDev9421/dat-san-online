@@ -113,7 +113,8 @@ export const courtData = [
     status: "active", 
     description: "Sân bóng đá 7 người chất lượng cao với cỏ nhân tạo",
     amenities: ["Cỏ nhân tạo", "Ánh sáng LED", "Ghế ngồi", "Nhà vệ sinh"],
-    images: ["/images/court1-1.jpg", "/images/court1-2.jpg"],
+    images: ["https://th.bing.com/th/id/OIP.bgEjFfMTC5jhVbdI35ON3gHaFj?w=248&h=186&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3", 
+      "https://th.bing.com/th/id/OIP.I7symxL7x2MxaKv0F23sWQHaFs?w=212&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3"],
     maintenance: "Không có lịch bảo trì"
   },
   { 

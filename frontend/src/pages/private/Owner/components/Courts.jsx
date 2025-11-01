@@ -10,11 +10,13 @@ import {
 } from "lucide-react";
 import { courtData } from "../data/mockData";
 import AddCourtModal from "../modals/AddCourtModal";
-import EditCourtModal from "../modals/EditCourtModal";
 import DetailCourtModal from "../modals/DetailCourtModal";
 import ActivateCourtModal from "../modals/ActivateCourtModal";
+import EditCourtModal from "../modals/EditCourtModal";
 import DeleteCourtModal from "../modals/DeleteCourtModal";
+import SetMaintenanceModal from "../modals/SetMaintenanceModal";
 import ScheduleMaintenanceModal from "../modals/ScheduleMaintenanceModal";
+
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -46,6 +48,8 @@ const Courts = () => {
   const [selectedCourt, setSelectedCourt] = useState(null);
   const [isActivateOpen, setIsActivateOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isSetMaintenanceOpen, setIsSetMaintenanceOpen] = useState(false);
+  const [isScheduleMaintenanceOpen, setIsScheduleMaintenanceOpen] = useState(false);
 
   const filteredCourts = useMemo(
     () =>
@@ -365,6 +369,7 @@ const Courts = () => {
                         onClick={() => {
                           // open quick set-to-maintenance confirmation
                           setSelectedCourt(court);
+                          setIsSetMaintenanceOpen(true);
                         }}
                         title="Đặt bảo trì"
                       />
@@ -384,6 +389,7 @@ const Courts = () => {
                       Icon={Wrench}
                       onClick={() => {
                         setSelectedCourt(court);
+                        setIsScheduleMaintenanceOpen(true);
                       }}
                       title="Lên lịch bảo trì"
                     />
@@ -460,6 +466,32 @@ const Courts = () => {
           setSelectedCourt(null);
         }}
         court={selectedCourt || {}}
+      />
+
+      {/* Set maintenance (quick) modal */}
+      <SetMaintenanceModal
+        isOpen={isSetMaintenanceOpen}
+        onClose={() => {
+          setIsSetMaintenanceOpen(false);
+          setSelectedCourt(null);
+        }}
+        court={selectedCourt}
+        onConfirm={(c) => {
+          setCourts((prev) => prev.map((it) => (it.id === c.id ? { ...it, ...c } : it)));
+        }}
+      />
+
+      {/* Schedule maintenance modal */}
+      <ScheduleMaintenanceModal
+        isOpen={isScheduleMaintenanceOpen}
+        onClose={() => {
+          setIsScheduleMaintenanceOpen(false);
+          setSelectedCourt(null);
+        }}
+        court={selectedCourt}
+        onConfirm={(c) => {
+          setCourts((prev) => prev.map((it) => (it.id === c.id ? { ...it, ...c } : it)));
+        }}
       />
     </div>
   );
