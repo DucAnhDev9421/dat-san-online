@@ -14,6 +14,7 @@ import OwnerLayout from "./layouts/OwnerLayout.jsx";
 // Components
 import ProtectedRoute, { AdminRoute, OwnerRoute } from "./components/ProtectedRoute.jsx";
 import ChatButton from "./components/chat/ChatButton.jsx";
+import ScrollToTop from "./components/ScrollToTop.jsx";
 
 // Public pages
 import HomePage from "./pages/public/HomePage.jsx";
@@ -23,7 +24,7 @@ import Payment from "./pages/public/Payment.jsx";
 import Partner from "./pages/public/Partner.jsx";
 import Facilities from "./pages/public/Facilities.jsx";
 import Promotion from "./pages/public/Promotion.jsx";
-import BookingHistory from "./pages/public/BookingHistory.jsx";
+import NotificationsPage from "./pages/public/Notifications.jsx";
 import Login from "./pages/auth/Login.jsx";
 import Register from "./pages/auth/Register.jsx";
 import VerifyOtp from "./pages/auth/VerifyOtp.jsx";
@@ -42,6 +43,7 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <ScrollToTop />
         <ToastContainer
           position="top-right"
           autoClose={3000}
@@ -120,9 +122,10 @@ function App() {
                     <ProfilePage />
                   </ProtectedRoute>
                 } />
-                <Route path="/booking-history" element={
+
+                <Route path="/notifications" element={
                   <ProtectedRoute>
-                    <BookingHistory />
+                    <NotificationsPage />
                   </ProtectedRoute>
                 } />
                 <Route path="/partner" element={<Partner />} />

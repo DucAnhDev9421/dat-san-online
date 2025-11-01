@@ -43,7 +43,10 @@ export const mockBookingHistory = [
     date: '2024-01-20',
     time: '18:00 - 20:00',
     status: 'completed',
-    price: '200,000 VNĐ'
+    price: '200,000 VNĐ',
+    location: '123 Nguyễn Huệ, Quận 1, TP. HCM',
+    paymentMethod: 'MoMo',
+    imageUrl: '/all-sports-banner.webp'
   },
   {
     id: 2,
@@ -52,7 +55,10 @@ export const mockBookingHistory = [
     date: '2024-01-18',
     time: '19:00 - 21:00',
     status: 'completed',
-    price: '150,000 VNĐ'
+    price: '150,000 VNĐ',
+    location: '45 Lê Lợi, Quận 1, TP. HCM',
+    paymentMethod: 'VNPAY',
+    imageUrl: '/sports-meeting.webp'
   },
   {
     id: 3,
@@ -61,7 +67,10 @@ export const mockBookingHistory = [
     date: '2024-01-25',
     time: '16:00 - 18:00',
     status: 'upcoming',
-    price: '300,000 VNĐ'
+    price: '300,000 VNĐ',
+    location: '10 Trường Chinh, Quận Tân Bình, TP. HCM',
+    paymentMethod: 'Tiền mặt',
+    imageUrl: '/pngtree-sports-poster-background.jpg'
   }
 ]
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import { formatDate } from '../utils/dateHelpers'
-import { Calendar, Clock, DollarSign, CheckCircle, Tag } from 'lucide-react'
+import { Calendar, Clock, DollarSign, CheckCircle, Tag, MapPin, Grid3x3 } from 'lucide-react'
 
-export default function BookingSummary({ selectedDate, selectedSlots, onBookNow }) {
+export default function BookingSummary({ selectedDate, selectedSlots, selectedCourt, selectedFieldType, onBookNow }) {
   const [promoCode, setPromoCode] = useState('')
   const [discount, setDiscount] = useState(0)
   const [promoApplied, setPromoApplied] = useState(false)
@@ -10,14 +10,14 @@ export default function BookingSummary({ selectedDate, selectedSlots, onBookNow 
   // Calculate total amount based on selected slots
   const calculateTotal = () => {
     const timeSlots = [
-      { time: '06:00', price: 200000 }, { time: '07:00', price: 200000 },
-      { time: '08:00', price: 200000 }, { time: '09:00', price: 250000 },
-      { time: '10:00', price: 250000 }, { time: '11:00', price: 250000 },
-      { time: '12:00', price: 250000 }, { time: '13:00', price: 250000 },
-      { time: '14:00', price: 300000 }, { time: '15:00', price: 300000 },
-      { time: '16:00', price: 300000 }, { time: '17:00', price: 350000 },
-      { time: '18:00', price: 350000 }, { time: '19:00', price: 350000 },
-      { time: '20:00', price: 350000 }, { time: '21:00', price: 300000 },
+      { time: '06:00', price: 150000 }, { time: '07:00', price: 180000 },
+      { time: '08:00', price: 200000 }, { time: '09:00', price: 200000 },
+      { time: '10:00', price: 200000 }, { time: '11:00', price: 200000 },
+      { time: '12:00', price: 200000 }, { time: '13:00', price: 200000 },
+      { time: '14:00', price: 200000 }, { time: '15:00', price: 200000 },
+      { time: '16:00', price: 200000 }, { time: '17:00', price: 220000 },
+      { time: '18:00', price: 250000 }, { time: '19:00', price: 250000 },
+      { time: '20:00', price: 220000 }, { time: '21:00', price: 200000 },
       { time: '22:00', price: 180000 }
     ]
     
@@ -76,6 +76,26 @@ export default function BookingSummary({ selectedDate, selectedSlots, onBookNow 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MapPin size={16} style={{ color: '#6b7280' }} />
+            <span style={{ fontSize: '14px', color: '#6b7280' }}>Sân:</span>
+          </div>
+          <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+            {selectedCourt}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Grid3x3 size={16} style={{ color: '#6b7280' }} />
+            <span style={{ fontSize: '14px', color: '#6b7280' }}>Loại sân:</span>
+          </div>
+          <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+            {selectedFieldType}
+          </span>
+        </div>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Calendar size={16} style={{ color: '#6b7280' }} />
             <span style={{ fontSize: '14px', color: '#6b7280' }}>Ngày đặt:</span>
           </div>
@@ -107,14 +127,14 @@ export default function BookingSummary({ selectedDate, selectedSlots, onBookNow 
               const actualTime = parts[3] // Get "HH:MM"
               
               const timeSlots = [
-                { time: '06:00', price: 200000 }, { time: '07:00', price: 200000 },
-                { time: '08:00', price: 200000 }, { time: '09:00', price: 250000 },
-                { time: '10:00', price: 250000 }, { time: '11:00', price: 250000 },
-                { time: '12:00', price: 250000 }, { time: '13:00', price: 250000 },
-                { time: '14:00', price: 300000 }, { time: '15:00', price: 300000 },
-                { time: '16:00', price: 300000 }, { time: '17:00', price: 350000 },
-                { time: '18:00', price: 350000 }, { time: '19:00', price: 350000 },
-                { time: '20:00', price: 350000 }, { time: '21:00', price: 300000 },
+                { time: '06:00', price: 150000 }, { time: '07:00', price: 180000 },
+                { time: '08:00', price: 200000 }, { time: '09:00', price: 200000 },
+                { time: '10:00', price: 200000 }, { time: '11:00', price: 200000 },
+                { time: '12:00', price: 200000 }, { time: '13:00', price: 200000 },
+                { time: '14:00', price: 200000 }, { time: '15:00', price: 200000 },
+                { time: '16:00', price: 200000 }, { time: '17:00', price: 220000 },
+                { time: '18:00', price: 250000 }, { time: '19:00', price: 250000 },
+                { time: '20:00', price: 220000 }, { time: '21:00', price: 200000 },
                 { time: '22:00', price: 180000 }
               ]
               const slotData = timeSlots.find(s => s.time === actualTime)
@@ -172,27 +192,32 @@ export default function BookingSummary({ selectedDate, selectedSlots, onBookNow 
             <Tag size={14} style={{ color: '#6b7280' }} />
             Mã khuyến mãi
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="promo-code-container" style={{ display: 'flex', gap: '8px' }}>
             <input
               type="text"
               placeholder="Nhập mã khuyến mãi"
               value={promoCode}
               onChange={(e) => setPromoCode(e.target.value)}
               disabled={promoApplied}
+              className="promo-code-input"
               style={{
-                flex: 1,
+                flex: '1 1 auto',
+                minWidth: '120px',
                 padding: '10px 12px',
                 border: '1px solid #e5e7eb',
                 borderRadius: '6px',
                 fontSize: '14px',
                 outline: 'none',
-                background: promoApplied ? '#f3f4f6' : '#fff'
+                background: promoApplied ? '#f3f4f6' : '#fff',
+                transition: 'all 0.2s'
               }}
             />
             <button
               onClick={handleApplyPromo}
               disabled={promoApplied || !promoCode}
+              className="promo-code-button"
               style={{
+                flex: '0 0 auto',
                 padding: '10px 16px',
                 background: promoApplied || !promoCode ? '#d1d5db' : '#10b981',
                 color: '#fff',
@@ -201,7 +226,8 @@ export default function BookingSummary({ selectedDate, selectedSlots, onBookNow 
                 fontSize: '14px',
                 fontWeight: '500',
                 cursor: promoApplied || !promoCode ? 'not-allowed' : 'pointer',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s'
               }}
             >
               {promoApplied ? 'Đã áp dụng' : 'Áp dụng'}
@@ -293,6 +319,55 @@ export default function BookingSummary({ selectedDate, selectedSlots, onBookNow 
       }}>
         Bằng việc đặt sân, bạn đồng ý với điều khoản sử dụng của chúng tôi
       </p>
+
+      <style>{`
+        /* Responsive styles for promo code section */
+        @media (max-width: 640px) {
+          .promo-code-container {
+            gap: 6px;
+          }
+          
+          .promo-code-input {
+            min-width: 100px !important;
+            flex: 1 1 0 !important;
+            padding: 8px 10px !important;
+            font-size: 13px !important;
+          }
+          
+          .promo-code-button {
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+            flex-shrink: 0;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .promo-code-input {
+            min-width: 80px !important;
+            padding: 8px !important;
+            font-size: 12px !important;
+          }
+          
+          .promo-code-button {
+            padding: 8px !important;
+            font-size: 12px !important;
+          }
+        }
+        
+        @media (max-width: 360px) {
+          .promo-code-input {
+            min-width: 60px !important;
+            padding: 6px 8px !important;
+            font-size: 11px !important;
+          }
+          
+          .promo-code-button {
+            padding: 6px 8px !important;
+            font-size: 11px !important;
+            white-space: nowrap;
+          }
+        }
+      `}</style>
     </div>
   )
 }

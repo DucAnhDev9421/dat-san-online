@@ -559,20 +559,7 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.momo-logo {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #A50064, #D91C81);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  font-weight: 800;
-  font-size: 24px;
-  font-family: 'Arial Black', sans-serif;
+  padding: 4px;
 }
 
 .qr-amount {

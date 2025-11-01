@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { formatDate } from '../utils/dateHelpers'
+import { MapPin, Grid3x3 } from 'lucide-react'
 
-export default function BookingModal({ selectedDate, selectedSlots, venueData, onClose, onSubmit }) {
+export default function BookingModal({ selectedDate, selectedSlots, selectedCourt, selectedFieldType, venueData, onClose, onSubmit }) {
   const [bookingForm, setBookingForm] = useState({
     name: '',
     phone: '',
@@ -91,21 +92,35 @@ export default function BookingModal({ selectedDate, selectedSlots, venueData, o
               Thông tin đặt sân
             </h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <MapPin size={14} color="#6b7280" />
+                  <span style={{ color: '#6b7280' }}>Sân:</span>
+                </div>
+                <span style={{ fontWeight: '500' }}>{selectedCourt}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Grid3x3 size={14} color="#6b7280" />
+                  <span style={{ color: '#6b7280' }}>Loại sân:</span>
+                </div>
+                <span style={{ fontWeight: '500' }}>{selectedFieldType}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#6b7280' }}>Địa điểm:</span>
+                <span style={{ fontWeight: '500' }}>{venueData.name}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#6b7280' }}>Ngày:</span>
                 <span style={{ fontWeight: '500' }}>{formatDate(selectedDate)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#6b7280' }}>Sân:</span>
-                <span style={{ fontWeight: '500' }}>{venueData.name}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#6b7280' }}>Số khung giờ:</span>
                 <span style={{ fontWeight: '500' }}>{selectedSlots.length} khung giờ</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#6b7280' }}>Tổng tiền:</span>
-                <span style={{ fontWeight: '600', color: '#059669' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
+                <span style={{ color: '#1f2937', fontWeight: '600' }}>Tổng tiền:</span>
+                <span style={{ fontWeight: '700', color: '#059669', fontSize: '16px' }}>
                   {calculateTotal().toLocaleString('vi-VN')} VNĐ
                 </span>
               </div>

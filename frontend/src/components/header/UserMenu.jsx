@@ -86,15 +86,15 @@ const UserMenu = ({
             <div style={{ fontSize: '12px', color: '#6b7280' }}>
               {user?.email}
             </div>
-            {user?.role && (
+            {(user?.role || user?.userType) && (
               <div style={{ 
                 fontSize: '12px', 
                 color: '#3b82f6',
                 marginTop: '4px',
-                textTransform: 'capitalize'
+                fontWeight: '500'
               }}>
-                {user.role === 'admin' ? 'Quản trị viên' : 
-                 user.role === 'owner' ? 'Chủ sân' : 'Người dùng'}
+                {(user.role || user.userType) === 'admin' ? 'Quản trị viên' : 
+                 (user.role || user.userType) === 'owner' ? 'Chủ sân' : 'Người dùng'}
               </div>
             )}
           </div>
@@ -143,7 +143,7 @@ const UserMenu = ({
               onMouseLeave={(e) => e.target.style.background = 'none'}
             >
               <Calendar size={16} />
-              Lịch đặt sân
+              Đặt sân của tôi
             </button>
             
             <button
