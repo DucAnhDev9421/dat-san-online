@@ -267,6 +267,7 @@ userSchema.statics.createFromGoogleProfile = function (profile) {
     name: profile.displayName,
     avatar: profile.photos[0]?.value,
     isEmailVerified: true,
+    isActive: true, // Google users should be active immediately
   });
 };
 
