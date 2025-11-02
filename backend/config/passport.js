@@ -52,6 +52,7 @@ passport.use(new GoogleStrategy({
         user.googleId = profile.id;
         user.avatar = profile.photos[0]?.value || user.avatar;
         user.isEmailVerified = true;
+        user.isActive = true; // Activate the account when linking with Google
         await user.updateLoginInfo();
         return done(null, user);
       }

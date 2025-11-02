@@ -159,7 +159,7 @@ router.get("/", async (req, res, next) => {
     }
 
     const courts = await Court.find(query)
-      .populate("facility", "name location")
+      .populate("facility", "name address location")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -234,7 +234,7 @@ router.put(
         req.params.id,
         req.body,
         { new: true, runValidators: true }
-      ).populate("facility", "name location");
+      ).populate("facility", "name address location");
 
       res.json({
         success: true,
@@ -270,7 +270,7 @@ router.patch(
         req.params.id,
         { status },
         { new: true }
-      ).populate("facility", "name location");
+      ).populate("facility", "name address location");
 
       res.json({
         success: true,

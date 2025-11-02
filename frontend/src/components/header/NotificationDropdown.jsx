@@ -1,5 +1,6 @@
 import React from 'react'
 import { Bell, CheckCircle, Clock, AlertCircle, Info } from 'lucide-react'
+import useClickOutside from '../../hook/use-click-outside'
 
 const NotificationDropdown = ({ 
   isOpen, 
@@ -10,11 +11,13 @@ const NotificationDropdown = ({
   onMarkAllAsRead,
   onViewAll 
 }) => {
+  const dropdownRef = useClickOutside(onClose, isOpen)
+
   if (!isOpen) return null
 
   return (
     <>
-      <div style={{
+      <div ref={dropdownRef} style={{
         position: 'absolute',
         top: '100%',
         right: 0,
@@ -181,19 +184,6 @@ const NotificationDropdown = ({
           </button>
         </div>
       </div>
-
-      {/* Click outside to close dropdown */}
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 999,
-        }}
-        onClick={onClose}
-      />
     </>
   )
 }

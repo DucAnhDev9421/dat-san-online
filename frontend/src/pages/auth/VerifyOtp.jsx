@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { authService } from '../../api/authService'
 import { useAuth } from '../../contexts/AuthContext'
+import useCountdown from '../../hook/use-countdown'
 import RotatingText from '../../components/RotatingText'
 
 function VerifyOtp() {
@@ -9,7 +10,7 @@ function VerifyOtp() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [resendLoading, setResendLoading] = useState(false)
-  const [countdown, setCountdown] = useState(0)
+  const { count: countdown, start: startCountdown } = useCountdown(0)
   
   const navigate = useNavigate()
   const location = useLocation()
@@ -17,14 +18,6 @@ function VerifyOtp() {
   
   const email = location.state?.email || ''
   const message = location.state?.message || ''
-
-  // Countdown timer for resend
-  useEffect(() => {
-    if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
-      return () => clearTimeout(timer)
-    }
-  }, [countdown])
 
   // Handle input change for OTP fields
   const handleOtpChange = (index, value) => {
@@ -114,7 +107,7 @@ function VerifyOtp() {
       })
       
       if (result.success) {
-        setCountdown(60) // 60 seconds countdown
+        startCountdown(60) // 60 seconds countdown
         setError('')
       }
     } catch (error) {

@@ -160,7 +160,7 @@ const Facilities = () => {
             fontWeight: 700,
           }}
         >
-          <Plus size={16} /> Thêm sân
+          <Plus size={16}/> Thêm sân
         </button>
       </div>
 

@@ -1,9 +1,21 @@
 import React from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import useClickOutside from '../../../../hook/use-click-outside'
+import useBodyScrollLock from '../../../../hook/use-body-scroll-lock'
+import useEscapeKey from '../../../../hook/use-escape-key'
 import { generateCalendarDays } from '../utils/dateHelpers'
 
 export default function CalendarModal({ selectedDate, onDateSelect, onClose }) {
   const [calendarDate, setCalendarDate] = React.useState(selectedDate)
+  
+  // Lock body scroll
+  useBodyScrollLock(true)
+  
+  // Handle escape key
+  useEscapeKey(onClose, true)
+  
+  // Handle click outside
+  const modalRef = useClickOutside(onClose, true)
 
   const handleMonthChange = (direction) => {
     const newDate = new Date(calendarDate)
@@ -46,6 +58,7 @@ export default function CalendarModal({ selectedDate, onDateSelect, onClose }) {
       onClick={onClose}
     >
       <div 
+        ref={modalRef}
         style={{
           background: '#fff',
           borderRadius: '12px',

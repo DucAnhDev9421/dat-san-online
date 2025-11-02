@@ -2,8 +2,19 @@ import React, { useState } from 'react'
 import { FiX, FiEye, FiEyeOff, FiLock, FiCheck } from 'react-icons/fi'
 import { toast } from 'react-toastify'
 import { userApi } from '../../../../api/userApi'
+import useClickOutside from '../../../../hook/use-click-outside'
+import useBodyScrollLock from '../../../../hook/use-body-scroll-lock'
+import useEscapeKey from '../../../../hook/use-escape-key'
 
 export default function ChangePasswordModal({ isOpen, onClose }) {
+  // Lock body scroll
+  useBodyScrollLock(isOpen)
+  
+  // Handle escape key
+  useEscapeKey(onClose, isOpen)
+  
+  // Handle click outside
+  const modalRef = useClickOutside(onClose, isOpen)
   const [formData, setFormData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -124,7 +135,7 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={modalRef} className="modal" onClick={(e) => e.stopPropagation()}>
         {/* Modal Header */}
         <div className="modal-header">
           <h3>Đổi mật khẩu</h3>

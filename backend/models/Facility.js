@@ -14,10 +14,31 @@ const facilitySchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    location: {
+    // Địa chỉ (text)
+    address: {
       type: String,
       required: [true, "Địa chỉ là bắt buộc"],
       trim: true,
+    },
+    // Tọa độ địa lý (GeoJSON Point format)
+    location: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        required: false, // Không set default để tránh tạo object khi không có coordinates
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        required: false,
+        validate: {
+          validator: function(coords) {
+            if (!coords || coords.length !== 2) return false;
+            const [lng, lat] = coords;
+            return lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90;
+          },
+          message: 'Coordinates phải là [longitude, latitude] và trong phạm vi hợp lệ'
+        }
+      }
     },
     // Ví dụ: 'Sân 5', 'Sân 7', 'Sân 11'
     type: {
@@ -105,9 +126,22 @@ const facilitySchema = new mongoose.Schema(
   }
 );
 
+// Pre-save hook: xóa location nếu không có coordinates hợp lệ
+facilitySchema.pre('save', function(next) {
+  if (this.location && (!this.location.coordinates || !Array.isArray(this.location.coordinates) || this.location.coordinates.length !== 2)) {
+    // Xóa location nếu không có coordinates hợp lệ
+    this.location = undefined;
+  } else if (this.location && this.location.coordinates) {
+    // Đảm bảo type luôn là 'Point' nếu có coordinates
+    this.location.type = 'Point';
+  }
+  next();
+});
+
 // Indexes để tối ưu hóa tìm kiếm
 facilitySchema.index({ owner: 1 });
-facilitySchema.index({ location: "text", name: "text" }); // Hỗ trợ tìm kiếm text
+facilitySchema.index({ address: "text", name: "text" }); // Hỗ trợ tìm kiếm text
 facilitySchema.index({ type: 1 });
+facilitySchema.index({ location: "2dsphere" }); // GeoSpatial index cho tìm kiếm theo khoảng cách
 
 export default mongoose.model("Facility", facilitySchema);

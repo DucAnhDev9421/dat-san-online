@@ -168,7 +168,7 @@ bookingSchema.methods.isEligibleForRefund = function () {
 bookingSchema.statics.findByUser = function (userId, filters = {}) {
   return this.find({ user: userId, ...filters })
     .populate("court", "name type price")
-    .populate("facility", "name location")
+    .populate("facility", "name address location")
     .sort({ createdAt: -1 });
 };
 

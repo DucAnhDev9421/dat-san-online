@@ -36,6 +36,11 @@ export const config = {
     apiSecret: process.env.CLOUDINARY_API_SECRET
   },
 
+  // Goong API Configuration
+  goong: {
+    apiKey: process.env.GOONG_API_KEY
+  },
+
   // Rate Limiting
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 minutes

@@ -1,5 +1,6 @@
 import React from 'react'
 import { User, LogOut, Settings, ChevronDown, Calendar } from 'lucide-react'
+import useClickOutside from '../../hook/use-click-outside'
 
 const UserMenu = ({ 
   user, 
@@ -10,8 +11,10 @@ const UserMenu = ({
   onSettingsClick,
   onBookingHistoryClick
 }) => {
+  const menuRef = useClickOutside(() => onToggle(), isOpen)
+
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={menuRef} style={{ position: 'relative' }}>
       <button
         onClick={onToggle}
         style={{
@@ -195,21 +198,6 @@ const UserMenu = ({
             </button>
           </div>
         </div>
-      )}
-
-      {/* Click outside to close menu */}
-      {isOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 999,
-          }}
-          onClick={onToggle}
-        />
       )}
     </div>
   )
