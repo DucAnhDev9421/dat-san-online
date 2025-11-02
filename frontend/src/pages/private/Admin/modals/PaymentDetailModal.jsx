@@ -68,20 +68,19 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }) => {
 
   // Định nghĩa màu sắc cho Phương thức
   const methodColors = {
-    bank_transfer: { bg: "#e6f3ff", color: "#1d4ed8", text: "Chuyển khoản" },
-    momo: { bg: "#f0e6ff", color: "#7c3aed", text: "MoMo" },
-    vnpay: { bg: "#e6f9f0", color: "#059669", text: "VNPay" },
+    VNPay: { bg: "#e6f0ff", color: "#0052d9", text: "VNPay" },
+    Momo: { bg: "#fce7f3", color: "#ea4c89", text: "Momo" },
+    "Tiền mặt": { bg: "#e6f9f0", color: "#059669", text: "Tiền mặt" },
   };
 
   // Định nghĩa màu sắc cho Trạng thái
   const statusColors = {
-    completed: { bg: "#e6f9f0", color: "#059669", text: "Hoàn thành" },
+    success: { bg: "#e6f9f0", color: "#059669", text: "Thành công" },
     pending: { bg: "#fef3c7", color: "#d97706", text: "Chờ xử lý" },
-    failed: { bg: "#fee2e2", color: "#ef4444", text: "Thất bại" },
-    refunded: { bg: "#e6f3ff", color: "#1d4ed8", text: "Hoàn tiền" },
+    failed: { bg: "#fee2e2", color: "#ef4444", text: "Lỗi" },
   };
 
-  const methodConfig = methodColors[payment.method] || { bg: "#e5e7eb", color: "#374151", text: payment.method };
+  const methodConfig = methodColors[payment.paymentMethod] || { bg: "#e5e7eb", color: "#374151", text: payment.paymentMethod || "N/A" };
   const statusConfig = statusColors[payment.status] || { bg: "#e5e7eb", color: "#374151", text: payment.status };
 
   return (
@@ -126,8 +125,8 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }) => {
           }}
         >
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#1f2937" }}>
-            Chi tiết thanh toán:{" "}
-            <span style={{ color: "#3b82f6" }}>{payment.id}</span>
+            Chi tiết giao dịch:{" "}
+            <span style={{ color: "#3b82f6" }}>{payment.transactionId || payment.id}</span>
           </h2>
           <button
             onClick={onClose}
@@ -156,12 +155,18 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }) => {
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 16, overflow: "hidden" }}>
             <CardHeader Icon={List} title="Thông tin giao dịch" />
             <div style={{ padding: 20 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
-                    <DetailRow label="Mã Giao dịch (Hệ thống)" value={payment.id} />
-                    <DetailRow label="Mã Đặt sân" value={payment.bookingId} />
-                </div>
-                <DetailRow label="Mã Giao dịch (Bên T3)" value={payment.transactionId} />
-                <DetailRow label="Thời gian" value={`${payment.date} lúc ${payment.time}`} />
+                <DetailRow label="Mã giao dịch" value={payment.transactionId || payment.id} />
+                {payment.bookingId && (
+                  <DetailRow label="Mã đặt sân" value={payment.bookingId} />
+                )}
+                <DetailRow 
+                  label="Ngày thanh toán" 
+                  value={payment.paymentDate && payment.paymentTime 
+                    ? `${payment.paymentDate} lúc ${payment.paymentTime}` 
+                    : payment.date && payment.time 
+                      ? `${payment.date} lúc ${payment.time}` 
+                      : payment.paymentDate || payment.date || "N/A"} 
+                />
             </div>
           </div>
 
@@ -171,7 +176,7 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }) => {
             <div style={{ padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
               <DetailRow label="Số tiền" value={`${payment.amount.toLocaleString()} VNĐ`} />
               <DetailRow
-                label="Phương thức"
+                label="Hình thức thanh toán"
                 value={methodConfig.text}
                 isBadge={true}
                 badgeData={{ bg: methodConfig.bg, color: methodConfig.color }}
@@ -182,6 +187,12 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }) => {
                 isBadge={true}
                 badgeData={{ bg: statusConfig.bg, color: statusConfig.color }}
               />
+              {payment.platformFee > 0 && (
+                <DetailRow 
+                  label="Phí nền tảng" 
+                  value={`${payment.platformFee.toLocaleString()} VNĐ (${payment.platformFeePercent || 10}%)`} 
+                />
+              )}
             </div>
           </div>
 
@@ -189,8 +200,15 @@ const PaymentDetailModal = ({ isOpen, onClose, payment }) => {
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 16, overflow: "hidden" }}>
             <CardHeader Icon={User} title="Thông tin bên liên quan" />
             <div style={{ padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
-              <DetailRow label="Khách hàng" value={payment.customer} />
-              <DetailRow label="Sân" value={payment.facility} />
+              <DetailRow 
+                label="Người thực hiện" 
+                value={payment.performer || payment.customer || "N/A"} 
+              />
+              <DetailRow 
+                label="Vai trò" 
+                value={payment.performerRole === "owner" ? "Chủ sân" : "Khách hàng"} 
+              />
+              <DetailRow label="Sân liên quan" value={payment.facility || "N/A"} />
             </div>
           </div>
         </div>

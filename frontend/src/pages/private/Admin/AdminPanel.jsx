@@ -10,6 +10,9 @@ import {
   Activity,
   BarChart3,
   Settings,
+  FolderTree,
+  Ticket,
+  MessageSquare,
 } from "lucide-react";
 import AdminHeader from "../../../components/admin/AdminHeader";
 
@@ -17,9 +20,11 @@ import AdminHeader from "../../../components/admin/AdminHeader";
 import Dashboard from "./components/Dashboard";
 import Facilities from "./components/Facilities";
 import Bookings from "./components/Bookings";
-import Customers from "./components/Customers";
+import Users from "./components/Users";
 import Payments from "./components/Payments";
-import Owners from "./components/Owners";
+import Categories from "./components/Categories";
+import Promotions from "./components/Promotions";
+import Feedbacks from "./components/Feedbacks";
 import Notifications from "./components/Notifications";
 import ActivityLog from "./components/ActivityLog";
 import Reports from "./components/Reports";
@@ -33,9 +38,11 @@ const AdminPanel = () => {
     { id: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
     { id: "facilities", label: "Quản lý cơ sở", icon: Building2 },
     { id: "bookings", label: "Quản lý lịch đặt sân", icon: Calendar },
-    { id: "customers", label: "Quản lý người dùng", icon: UserCheck },
-    { id: "payments", label: "Quản lý thanh toán & Hóa đơn", icon: CreditCard },
-    { id: "owners", label: "Quản lý chủ sân", icon: UserCog },
+    { id: "users", label: "Quản lý người dùng", icon: UserCheck },
+    { id: "payments", label: "Quản lý thanh toán & giao dịch", icon: CreditCard },
+    { id: "categories", label: "Quản lý danh mục", icon: FolderTree },
+    { id: "promotions", label: "Quản lý khuyến mãi", icon: Ticket },
+    { id: "feedbacks", label: "Quản lý phản hồi / khiếu nại", icon: MessageSquare },
     { id: "notifications", label: "Quản lý thông báo", icon: Bell },
     { id: "activity_log", label: "Nhật ký hoạt động", icon: Activity },
     { id: "reports", label: "Báo cáo & thống kê", icon: BarChart3 },
@@ -50,12 +57,16 @@ const AdminPanel = () => {
         return <Facilities />;
       case "bookings":
         return <Bookings />;
-      case "customers":
-        return <Customers />;
+      case "users":
+        return <Users />;
       case "payments":
         return <Payments />;
-      case "owners":
-        return <Owners />;
+      case "categories":
+        return <Categories />;
+      case "promotions":
+        return <Promotions />;
+      case "feedbacks":
+        return <Feedbacks />;
       case "notifications":
         return <Notifications />;
       case "activity_log":
@@ -67,6 +78,11 @@ const AdminPanel = () => {
       default:
         return <Dashboard />;
     }
+  };
+
+  const getCurrentTabTitle = () => {
+    const menu = menuItems.find((item) => item.id === activeTab);
+    return menu?.label || "";
   };
 
   const toggleSidebar = () => {
@@ -143,8 +159,8 @@ const AdminPanel = () => {
                         textAlign: "left",
                         transition: "all 0.2s",
                       }}
-                >
-                  <Icon size={20} />
+                    >
+                      <Icon size={20} />
                       {item.label}
                     </button>
                   );
@@ -174,7 +190,7 @@ const AdminPanel = () => {
             <AdminHeader 
               onToggleSidebar={toggleSidebar} 
               isSidebarOpen={isSidebarOpen}
-              currentTabTitle={menuItems.find(item => item.id === activeTab)?.label}
+              currentTabTitle={getCurrentTabTitle()}
             />
           </div>
 

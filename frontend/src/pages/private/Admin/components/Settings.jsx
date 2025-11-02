@@ -1,57 +1,291 @@
 import React, { useState } from "react";
-import { Save, RefreshCw } from "lucide-react";
+import {
+  Save,
+  RefreshCw,
+  Upload,
+  Image as ImageIcon,
+  Mail,
+  Key,
+  FileText,
+  Phone,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 const Settings = () => {
+  const [activeTab, setActiveTab] = useState("general");
   const [settings, setSettings] = useState({
+    // General
     siteName: "Dat San Online",
     siteDescription: "Hệ thống đặt sân bóng đá trực tuyến",
-    contactEmail: "admin@datsanonline.com",
-    contactPhone: "0901234567",
-    commissionRate: 10,
-    maxBookingDays: 30,
-    autoConfirm: false,
-    emailNotifications: true,
-    smsNotifications: false,
-    maintenanceMode: false,
+    logo: null,
+    favicon: null,
+    logoUrl: "https://via.placeholder.com/200x60",
+    faviconUrl: "https://via.placeholder.com/32x32",
+    
+    // SMTP
+    smtpHost: "smtp.gmail.com",
+    smtpPort: 587,
+    smtpSecure: false,
+    smtpUser: "noreply@datsanonline.com",
+    smtpPassword: "",
+    smtpFromName: "Dat San Online",
+    smtpFromEmail: "noreply@datsanonline.com",
+    
+    // Service Fee
+    serviceFeePercent: 10,
+    
+    // API Keys
+    vnpayTmnCode: "",
+    vnpayHashSecret: "",
+    momoPartnerCode: "",
+    momoAccessKey: "",
+    momoSecretKey: "",
+    vietmapApiKey: "",
+    
+    // Policy & Terms
+    termsOfService: "Điều khoản sử dụng...",
+    privacyPolicy: "Chính sách bảo mật...",
+    refundPolicy: "Chính sách hoàn tiền...",
+    
+    // Support Contact
+    supportEmail: "support@datsanonline.com",
+    supportPhone: "1900123456",
+    supportAddress: "123 Đường ABC, Quận 1, TP.HCM",
+    supportHours: "Thứ 2 - Chủ nhật: 8:00 - 22:00",
   });
 
-  const [activeTab, setActiveTab] = useState("general");
+  const [showPasswords, setShowPasswords] = useState({
+    smtpPassword: false,
+    vnpayHashSecret: false,
+    momoSecretKey: false,
+  });
 
   const handleInputChange = (field, value) => {
-    setSettings(prev => ({
+    setSettings((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
+    }));
+  };
+
+  const handleFileUpload = (field, file) => {
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSettings((prev) => ({
+          ...prev,
+          [field]: file,
+          [`${field}Url`]: reader.result,
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const togglePasswordVisibility = (field) => {
+    setShowPasswords((prev) => ({
+      ...prev,
+      [field]: !prev[field],
     }));
   };
 
   const handleSave = () => {
+    // TODO: Gửi API save settings
     alert("Đã lưu cài đặt thành công!");
   };
 
   const handleReset = () => {
-    if (confirm("Bạn có chắc chắn muốn reset về cài đặt mặc định?")) {
+    if (window.confirm("Bạn có chắc chắn muốn reset về cài đặt mặc định?")) {
       setSettings({
         siteName: "Dat San Online",
         siteDescription: "Hệ thống đặt sân bóng đá trực tuyến",
-        contactEmail: "admin@datsanonline.com",
-        contactPhone: "0901234567",
-        commissionRate: 10,
-        maxBookingDays: 30,
-        autoConfirm: false,
-        emailNotifications: true,
-        smsNotifications: false,
-        maintenanceMode: false,
+        logo: null,
+        favicon: null,
+        logoUrl: "https://via.placeholder.com/200x60",
+        faviconUrl: "https://via.placeholder.com/32x32",
+        smtpHost: "smtp.gmail.com",
+        smtpPort: 587,
+        smtpSecure: false,
+        smtpUser: "noreply@datsanonline.com",
+        smtpPassword: "",
+        smtpFromName: "Dat San Online",
+        smtpFromEmail: "noreply@datsanonline.com",
+        serviceFeePercent: 10,
+        vnpayTmnCode: "",
+        vnpayHashSecret: "",
+        momoPartnerCode: "",
+        momoAccessKey: "",
+        momoSecretKey: "",
+        vietmapApiKey: "",
+        termsOfService: "Điều khoản sử dụng...",
+        privacyPolicy: "Chính sách bảo mật...",
+        refundPolicy: "Chính sách hoàn tiền...",
+        supportEmail: "support@datsanonline.com",
+        supportPhone: "1900123456",
+        supportAddress: "123 Đường ABC, Quận 1, TP.HCM",
+        supportHours: "Thứ 2 - Chủ nhật: 8:00 - 22:00",
       });
     }
   };
 
   const renderGeneralSettings = () => (
     <div style={{ display: "grid", gap: 24 }}>
-      <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 6px 20px rgba(0,0,0,.06)" }}>
-        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Thông tin cơ bản</h3>
+      {/* Logo & Favicon */}
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: 24,
+          boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+        }}
+      >
+        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
+          Logo & Favicon
+        </h3>
         <div style={{ display: "grid", gap: 16 }}>
           <div>
-            <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Tên website</label>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Logo website
+            </label>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                marginBottom: 8,
+              }}
+            >
+              {settings.logoUrl && (
+                <img
+                  src={settings.logoUrl}
+                  alt="Logo"
+                  style={{
+                    maxWidth: 200,
+                    maxHeight: 60,
+                    objectFit: "contain",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 8,
+                    padding: 8,
+                  }}
+                />
+              )}
+              <div>
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "10px 16px",
+                    background: "#10b981",
+                    color: "#fff",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    fontSize: 14,
+                  }}
+                >
+                  <Upload size={16} />
+                  Tải lên Logo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) =>
+                      handleFileUpload("logo", e.target.files[0])
+                    }
+                    style={{ display: "none" }}
+                  />
+                </label>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>
+              Khuyến nghị: 200x60px, định dạng PNG/JPG
+            </div>
+          </div>
+
+          <div>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Favicon
+            </label>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                marginBottom: 8,
+              }}
+            >
+              {settings.faviconUrl && (
+                <img
+                  src={settings.faviconUrl}
+                  alt="Favicon"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    objectFit: "contain",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 4,
+                    padding: 4,
+                  }}
+                />
+              )}
+              <div>
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "10px 16px",
+                    background: "#10b981",
+                    color: "#fff",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    fontSize: 14,
+                  }}
+                >
+                  <Upload size={16} />
+                  Tải lên Favicon
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) =>
+                      handleFileUpload("favicon", e.target.files[0])
+                    }
+                    style={{ display: "none" }}
+                  />
+                </label>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>
+              Khuyến nghị: 32x32px, định dạng ICO/PNG
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Basic Info */}
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: 24,
+          boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+        }}
+      >
+        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
+          Thông tin cơ bản
+        </h3>
+        <div style={{ display: "grid", gap: 16 }}>
+          <div>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Tên website
+            </label>
             <input
               type="text"
               value={settings.siteName}
@@ -61,15 +295,21 @@ const Settings = () => {
                 padding: "12px",
                 borderRadius: 8,
                 border: "1px solid #e5e7eb",
-                fontSize: 14
+                fontSize: 14,
               }}
             />
           </div>
           <div>
-            <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Mô tả website</label>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Mô tả website
+            </label>
             <textarea
               value={settings.siteDescription}
-              onChange={(e) => handleInputChange("siteDescription", e.target.value)}
+              onChange={(e) =>
+                handleInputChange("siteDescription", e.target.value)
+              }
               rows={3}
               style={{
                 width: "100%",
@@ -77,262 +317,758 @@ const Settings = () => {
                 borderRadius: 8,
                 border: "1px solid #e5e7eb",
                 fontSize: 14,
-                resize: "vertical"
+                resize: "vertical",
               }}
             />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderSMTPSettings = () => (
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 12,
+        padding: 24,
+        boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+      }}
+    >
+      <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
+        Cấu hình Email (SMTP)
+      </h3>
+      <div style={{ display: "grid", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
             <div>
-              <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Email liên hệ</label>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              SMTP Host
+            </label>
               <input
-                type="email"
-                value={settings.contactEmail}
-                onChange={(e) => handleInputChange("contactEmail", e.target.value)}
+              type="text"
+              value={settings.smtpHost}
+              onChange={(e) => handleInputChange("smtpHost", e.target.value)}
+              placeholder="smtp.gmail.com"
                 style={{
                   width: "100%",
                   padding: "12px",
                   borderRadius: 8,
                   border: "1px solid #e5e7eb",
-                  fontSize: 14
+                fontSize: 14,
                 }}
               />
             </div>
             <div>
-              <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Số điện thoại</label>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              SMTP Port
+            </label>
               <input
-                type="tel"
-                value={settings.contactPhone}
-                onChange={(e) => handleInputChange("contactPhone", e.target.value)}
+              type="number"
+              value={settings.smtpPort}
+              onChange={(e) =>
+                handleInputChange("smtpPort", Number(e.target.value))
+              }
                 style={{
                   width: "100%",
                   padding: "12px",
                   borderRadius: 8,
                   border: "1px solid #e5e7eb",
-                  fontSize: 14
+                fontSize: 14,
                 }}
               />
             </div>
           </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={settings.smtpSecure}
+            onChange={(e) =>
+              handleInputChange("smtpSecure", e.target.checked)
+            }
+            style={{ width: 18, height: 18 }}
+          />
+          <label style={{ fontWeight: 600 }}>
+            Sử dụng SSL/TLS (thường dùng cho port 465)
+          </label>
+        </div>
+
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+          >
+            SMTP Username
+          </label>
+          <input
+            type="text"
+            value={settings.smtpUser}
+            onChange={(e) => handleInputChange("smtpUser", e.target.value)}
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+              fontSize: 14,
+            }}
+          />
+        </div>
+
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+          >
+            SMTP Password
+          </label>
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPasswords.smtpPassword ? "text" : "password"}
+              value={settings.smtpPassword}
+              onChange={(e) =>
+                handleInputChange("smtpPassword", e.target.value)
+              }
+              style={{
+                width: "100%",
+                padding: "12px 40px 12px 12px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            />
+            <button
+              onClick={() => togglePasswordVisibility("smtpPassword")}
+              style={{
+                position: "absolute",
+                right: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: 4,
+              }}
+            >
+              {showPasswords.smtpPassword ? (
+                <EyeOff size={20} color="#6b7280" />
+              ) : (
+                <Eye size={20} color="#6b7280" />
+              )}
+            </button>
         </div>
       </div>
 
-      <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 6px 20px rgba(0,0,0,.06)" }}>
-        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Cài đặt kinh doanh</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Tên người gửi
+            </label>
+              <input
+              type="text"
+              value={settings.smtpFromName}
+              onChange={(e) =>
+                handleInputChange("smtpFromName", e.target.value)
+              }
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                fontSize: 14,
+                }}
+              />
+            </div>
+            <div>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Email người gửi
+            </label>
+              <input
+              type="email"
+              value={settings.smtpFromEmail}
+              onChange={(e) =>
+                handleInputChange("smtpFromEmail", e.target.value)
+              }
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                fontSize: 14,
+                }}
+              />
+            </div>
+          </div>
+
+        <div
+          style={{
+            padding: 12,
+            background: "#fef3c7",
+            borderRadius: 8,
+            fontSize: 13,
+            color: "#92400e",
+          }}
+        >
+          <strong>Lưu ý:</strong> Sau khi cấu hình, hãy kiểm tra bằng cách gửi
+          email test để đảm bảo cấu hình đúng.
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderServiceFeeSettings = () => (
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 12,
+        padding: 24,
+        boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+      }}
+    >
+      <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
+        Tỷ lệ phí dịch vụ
+      </h3>
+      <div style={{ display: "grid", gap: 16 }}>
+          <div>
+          <label
+            style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+          >
+            Tỷ lệ phí nền tảng (%)
+          </label>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <input
+              type="number"
+              value={settings.serviceFeePercent}
+              onChange={(e) =>
+                handleInputChange(
+                  "serviceFeePercent",
+                  Number(e.target.value)
+                )
+              }
+              min="0"
+              max="100"
+              step="0.1"
+              style={{
+                width: 200,
+                padding: "12px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            />
+            <span style={{ fontSize: 18, fontWeight: 600, color: "#059669" }}>
+              %
+            </span>
+          </div>
+          <div style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>
+            Phí này sẽ được tính trên mỗi đơn đặt sân thành công
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: 16,
+            background: "#f9fafb",
+            borderRadius: 8,
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+            Ví dụ:
+          </div>
+          <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>
+            Nếu khách hàng đặt sân với giá <strong>500,000 VNĐ</strong>
+            <br />
+            Phí nền tảng: {settings.serviceFeePercent}% ={" "}
+            <strong>
+              {(
+                (500000 * settings.serviceFeePercent) /
+                100
+              ).toLocaleString("vi-VN")}{" "}
+              VNĐ
+            </strong>
+            <br />
+            Chủ sân nhận được:{" "}
+            <strong>
+              {(
+                500000 -
+                (500000 * settings.serviceFeePercent) / 100
+              ).toLocaleString("vi-VN")}{" "}
+              VNĐ
+            </strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderAPIKeysSettings = () => (
+    <div style={{ display: "grid", gap: 24 }}>
+      {/* VNPay */}
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: 24,
+          boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 16,
+          }}
+        >
+          <Key size={20} color="#059669" />
+          <h3 style={{ fontSize: 18, fontWeight: 700 }}>VNPay</h3>
+        </div>
         <div style={{ display: "grid", gap: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <div>
-              <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Tỷ lệ hoa hồng (%)</label>
+          <div>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              TMN Code
+            </label>
+            <input
+              type="text"
+              value={settings.vnpayTmnCode}
+              onChange={(e) =>
+                handleInputChange("vnpayTmnCode", e.target.value)
+              }
+              placeholder="Nhập TMN Code từ VNPay"
+              style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            />
+          </div>
+          <div>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Hash Secret
+            </label>
+            <div style={{ position: "relative" }}>
               <input
-                type="number"
-                value={settings.commissionRate}
-                onChange={(e) => handleInputChange("commissionRate", Number(e.target.value))}
-                min="0"
-                max="100"
+                type={showPasswords.vnpayHashSecret ? "text" : "password"}
+                value={settings.vnpayHashSecret}
+                onChange={(e) =>
+                  handleInputChange("vnpayHashSecret", e.target.value)
+                }
+                placeholder="Nhập Hash Secret từ VNPay"
                 style={{
                   width: "100%",
-                  padding: "12px",
+                  padding: "12px 40px 12px 12px",
                   borderRadius: 8,
                   border: "1px solid #e5e7eb",
-                  fontSize: 14
+                  fontSize: 14,
                 }}
               />
+              <button
+                onClick={() => togglePasswordVisibility("vnpayHashSecret")}
+                style={{
+              position: "absolute",
+                  right: 8,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+              cursor: "pointer",
+                  padding: 4,
+                }}
+              >
+                {showPasswords.vnpayHashSecret ? (
+                  <EyeOff size={20} color="#6b7280" />
+                ) : (
+                  <Eye size={20} color="#6b7280" />
+                )}
+              </button>
             </div>
-            <div>
-              <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Số ngày đặt trước tối đa</label>
+          </div>
+        </div>
+        </div>
+
+      {/* Momo */}
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: 24,
+          boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 16,
+          }}
+        >
+          <Key size={20} color="#c41e3a" />
+          <h3 style={{ fontSize: 18, fontWeight: 700 }}>MoMo</h3>
+        </div>
+        <div style={{ display: "grid", gap: 16 }}>
+          <div>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Partner Code
+            </label>
+            <input
+              type="text"
+              value={settings.momoPartnerCode}
+              onChange={(e) =>
+                handleInputChange("momoPartnerCode", e.target.value)
+              }
+              placeholder="Nhập Partner Code từ MoMo"
+              style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            />
+          </div>
+          <div>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Access Key
+            </label>
+            <input
+              type="text"
+              value={settings.momoAccessKey}
+              onChange={(e) =>
+                handleInputChange("momoAccessKey", e.target.value)
+              }
+              placeholder="Nhập Access Key từ MoMo"
+              style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            />
+          </div>
+          <div>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Secret Key
+            </label>
+            <div style={{ position: "relative" }}>
               <input
-                type="number"
-                value={settings.maxBookingDays}
-                onChange={(e) => handleInputChange("maxBookingDays", Number(e.target.value))}
-                min="1"
-                max="365"
+                type={showPasswords.momoSecretKey ? "text" : "password"}
+                value={settings.momoSecretKey}
+                onChange={(e) =>
+                  handleInputChange("momoSecretKey", e.target.value)
+                }
+                placeholder="Nhập Secret Key từ MoMo"
                 style={{
                   width: "100%",
-                  padding: "12px",
+                  padding: "12px 40px 12px 12px",
                   borderRadius: 8,
                   border: "1px solid #e5e7eb",
-                  fontSize: 14
+                  fontSize: 14,
                 }}
               />
+              <button
+                onClick={() => togglePasswordVisibility("momoSecretKey")}
+                style={{
+              position: "absolute",
+                  right: 8,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+              cursor: "pointer",
+                  padding: 4,
+                }}
+              >
+                {showPasswords.momoSecretKey ? (
+                  <EyeOff size={20} color="#6b7280" />
+                ) : (
+                  <Eye size={20} color="#6b7280" />
+                )}
+              </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
 
-  const renderNotificationSettings = () => (
-    <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 6px 20px rgba(0,0,0,.06)" }}>
-      <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Cài đặt thông báo</h3>
-      <div style={{ display: "grid", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Tự động xác nhận đặt sân</div>
-            <div style={{ fontSize: 14, color: "#6b7280" }}>Tự động xác nhận các đặt sân mà không cần phê duyệt thủ công</div>
-          </div>
-          <label style={{ position: "relative", display: "inline-block", width: 60, height: 34 }}>
-            <input
-              type="checkbox"
-              checked={settings.autoConfirm}
-              onChange={(e) => handleInputChange("autoConfirm", e.target.checked)}
-              style={{ opacity: 0, width: 0, height: 0 }}
-            />
-            <span style={{
-              position: "absolute",
-              cursor: "pointer",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: settings.autoConfirm ? "#10b981" : "#ccc",
-              transition: ".4s",
-              borderRadius: 34,
-            }}>
-              <span style={{
-                position: "absolute",
-                content: '""',
-                height: 26,
-                width: 26,
-                left: 4,
-                bottom: 4,
-                backgroundColor: "white",
-                transition: ".4s",
-                borderRadius: "50%",
-                transform: settings.autoConfirm ? "translateX(26px)" : "translateX(0px)"
-              }} />
-            </span>
-          </label>
+      {/* VietMap */}
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: 24,
+          boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 16,
+          }}
+        >
+          <Key size={20} color="#3b82f6" />
+          <h3 style={{ fontSize: 18, fontWeight: 700 }}>VietMap</h3>
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Thông báo email</div>
-            <div style={{ fontSize: 14, color: "#6b7280" }}>Gửi thông báo qua email cho người dùng</div>
-          </div>
-          <label style={{ position: "relative", display: "inline-block", width: 60, height: 34 }}>
-            <input
-              type="checkbox"
-              checked={settings.emailNotifications}
-              onChange={(e) => handleInputChange("emailNotifications", e.target.checked)}
-              style={{ opacity: 0, width: 0, height: 0 }}
-            />
-            <span style={{
-              position: "absolute",
-              cursor: "pointer",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: settings.emailNotifications ? "#10b981" : "#ccc",
-              transition: ".4s",
-              borderRadius: 34,
-            }}>
-              <span style={{
-                position: "absolute",
-                content: '""',
-                height: 26,
-                width: 26,
-                left: 4,
-                bottom: 4,
-                backgroundColor: "white",
-                transition: ".4s",
-                borderRadius: "50%",
-                transform: settings.emailNotifications ? "translateX(26px)" : "translateX(0px)"
-              }} />
-            </span>
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+          >
+            API Key
           </label>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Thông báo SMS</div>
-            <div style={{ fontSize: 14, color: "#6b7280" }}>Gửi thông báo qua SMS cho người dùng</div>
+          <input
+            type="text"
+            value={settings.vietmapApiKey}
+            onChange={(e) =>
+              handleInputChange("vietmapApiKey", e.target.value)
+            }
+            placeholder="Nhập API Key từ VietMap"
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+              fontSize: 14,
+            }}
+          />
+          <div style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>
+            Dùng để hiển thị bản đồ và tính toán khoảng cách
           </div>
-          <label style={{ position: "relative", display: "inline-block", width: 60, height: 34 }}>
-            <input
-              type="checkbox"
-              checked={settings.smsNotifications}
-              onChange={(e) => handleInputChange("smsNotifications", e.target.checked)}
-              style={{ opacity: 0, width: 0, height: 0 }}
-            />
-            <span style={{
-              position: "absolute",
-              cursor: "pointer",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: settings.smsNotifications ? "#10b981" : "#ccc",
-              transition: ".4s",
-              borderRadius: 34,
-            }}>
-              <span style={{
-                position: "absolute",
-                content: '""',
-                height: 26,
-                width: 26,
-                left: 4,
-                bottom: 4,
-                backgroundColor: "white",
-                transition: ".4s",
-                borderRadius: "50%",
-                transform: settings.smsNotifications ? "translateX(26px)" : "translateX(0px)"
-              }} />
-            </span>
-          </label>
         </div>
       </div>
     </div>
   );
 
-  const renderSystemSettings = () => (
-    <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 6px 20px rgba(0,0,0,.06)" }}>
-      <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Cài đặt hệ thống</h3>
+  const renderPolicySettings = () => (
+    <div style={{ display: "grid", gap: 24 }}>
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: 24,
+          boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+        }}
+      >
+        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
+          Điều khoản sử dụng
+        </h3>
+        <textarea
+          value={settings.termsOfService}
+          onChange={(e) =>
+            handleInputChange("termsOfService", e.target.value)
+          }
+          rows={12}
+          style={{
+            width: "100%",
+            padding: "12px",
+            borderRadius: 8,
+            border: "1px solid #e5e7eb",
+            fontSize: 14,
+            resize: "vertical",
+            fontFamily: "inherit",
+          }}
+        />
+      </div>
+
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: 24,
+          boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+        }}
+      >
+        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
+          Chính sách bảo mật
+        </h3>
+        <textarea
+          value={settings.privacyPolicy}
+          onChange={(e) => handleInputChange("privacyPolicy", e.target.value)}
+          rows={12}
+          style={{
+            width: "100%",
+            padding: "12px",
+            borderRadius: 8,
+            border: "1px solid #e5e7eb",
+            fontSize: 14,
+            resize: "vertical",
+            fontFamily: "inherit",
+          }}
+        />
+      </div>
+
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: 24,
+          boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+        }}
+      >
+        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
+          Chính sách hoàn tiền
+        </h3>
+        <textarea
+          value={settings.refundPolicy}
+          onChange={(e) => handleInputChange("refundPolicy", e.target.value)}
+          rows={12}
+          style={{
+            width: "100%",
+            padding: "12px",
+            borderRadius: 8,
+            border: "1px solid #e5e7eb",
+            fontSize: 14,
+            resize: "vertical",
+            fontFamily: "inherit",
+          }}
+        />
+      </div>
+    </div>
+  );
+
+  const renderSupportSettings = () => (
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 12,
+        padding: 24,
+        boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+      }}
+    >
+      <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
+        Thông tin liên hệ hỗ trợ
+      </h3>
       <div style={{ display: "grid", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Chế độ bảo trì</div>
-            <div style={{ fontSize: 14, color: "#6b7280" }}>Tạm thời đóng website để bảo trì</div>
-          </div>
-          <label style={{ position: "relative", display: "inline-block", width: 60, height: 34 }}>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Email hỗ trợ
+            </label>
             <input
-              type="checkbox"
-              checked={settings.maintenanceMode}
-              onChange={(e) => handleInputChange("maintenanceMode", e.target.checked)}
-              style={{ opacity: 0, width: 0, height: 0 }}
+              type="email"
+              value={settings.supportEmail}
+              onChange={(e) =>
+                handleInputChange("supportEmail", e.target.value)
+              }
+              style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
             />
-            <span style={{
-              position: "absolute",
-              cursor: "pointer",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: settings.maintenanceMode ? "#ef4444" : "#ccc",
-              transition: ".4s",
-              borderRadius: 34,
-            }}>
-              <span style={{
-                position: "absolute",
-                content: '""',
-                height: 26,
-                width: 26,
-                left: 4,
-                bottom: 4,
-                backgroundColor: "white",
-                transition: ".4s",
-                borderRadius: "50%",
-                transform: settings.maintenanceMode ? "translateX(26px)" : "translateX(0px)"
-              }} />
-            </span>
+          </div>
+          <div>
+            <label
+              style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+            >
+              Số điện thoại
+            </label>
+            <input
+              type="tel"
+              value={settings.supportPhone}
+              onChange={(e) =>
+                handleInputChange("supportPhone", e.target.value)
+              }
+              style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+          >
+            Địa chỉ
           </label>
+          <input
+            type="text"
+            value={settings.supportAddress}
+            onChange={(e) =>
+              handleInputChange("supportAddress", e.target.value)
+            }
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+              fontSize: 14,
+            }}
+          />
+        </div>
+
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
+          >
+            Giờ hỗ trợ
+          </label>
+          <input
+            type="text"
+            value={settings.supportHours}
+            onChange={(e) =>
+              handleInputChange("supportHours", e.target.value)
+            }
+            placeholder="VD: Thứ 2 - Chủ nhật: 8:00 - 22:00"
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+              fontSize: 14,
+            }}
+          />
         </div>
       </div>
     </div>
   );
+
+  const tabs = [
+    { id: "general", label: "Cài đặt chung", icon: ImageIcon },
+    { id: "smtp", label: "Email (SMTP)", icon: Mail },
+    { id: "serviceFee", label: "Phí dịch vụ", icon: FileText },
+    { id: "apiKeys", label: "API Keys", icon: Key },
+    { id: "policy", label: "Chính sách & Điều khoản", icon: FileText },
+    { id: "support", label: "Liên hệ hỗ trợ", icon: Phone },
+  ];
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 24,
+        }}
+      >
         <h1 style={{ fontSize: 24, fontWeight: 800 }}>Cấu hình hệ thống</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -347,10 +1083,10 @@ const Settings = () => {
               borderRadius: 10,
               padding: "10px 14px",
               cursor: "pointer",
-              fontWeight: 700
+              fontWeight: 700,
             }}
           >
-            <RefreshCw size={16}/> Reset
+            <RefreshCw size={16} /> Reset
           </button>
           <button
             onClick={handleSave}
@@ -364,24 +1100,23 @@ const Settings = () => {
               borderRadius: 10,
               padding: "10px 14px",
               cursor: "pointer",
-              fontWeight: 700
+              fontWeight: 700,
             }}
           >
-            <Save size={16}/> Lưu cài đặt
+            <Save size={16} /> Lưu cài đặt
           </button>
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-        {[
-          { id: "general", label: "Cài đặt chung" },
-          { id: "notifications", label: "Thông báo" },
-          { id: "system", label: "Hệ thống" },
-        ].map((tab) => (
+      <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
               padding: "12px 24px",
               borderRadius: 8,
               border: "1px solid #e5e7eb",
@@ -391,14 +1126,18 @@ const Settings = () => {
               fontWeight: 600,
             }}
           >
+            <tab.icon size={16} />
             {tab.label}
           </button>
         ))}
       </div>
 
       {activeTab === "general" && renderGeneralSettings()}
-      {activeTab === "notifications" && renderNotificationSettings()}
-      {activeTab === "system" && renderSystemSettings()}
+      {activeTab === "smtp" && renderSMTPSettings()}
+      {activeTab === "serviceFee" && renderServiceFeeSettings()}
+      {activeTab === "apiKeys" && renderAPIKeysSettings()}
+      {activeTab === "policy" && renderPolicySettings()}
+      {activeTab === "support" && renderSupportSettings()}
     </div>
   );
 };

@@ -1,112 +1,105 @@
 import React, { useState, useMemo } from "react";
-import { Calendar, Download, Eye, Pencil, CheckCircle2, XCircle, Clock5 } from "lucide-react";
+import { Download, Eye, Filter, FileSpreadsheet } from "lucide-react";
 import { bookingData } from "../data/mockData";
 import BookingDetailModal from "../modals/BookingDetailModal";
-import BookingEditModal from "../modals/BookingEditModal";
-import BookingScheduleModal from "../modals/BookingScheduleModal";
-const ActionButton = ({ bg, Icon, onClick, title }) => (
-  <button
-    onClick={onClick}
-    title={title}
-    style={{
-      background: bg,
-      color: "#fff",
-      border: 0,
-      borderRadius: 8,
-      padding: 8,
-      marginRight: 6,
-      cursor: "pointer",
-    }}
-  >
-    <Icon size={16} />
-  </button>
-);
-
-const Status = ({ value }) => {
-  const map = {
-    pending: {
-      bg: "#e6effe",
-      color: "#4338ca",
-      icon: <Clock5 size={14} />,
-      label: "Chờ xử lý",
-    },
-    confirmed: {
-      bg: "#e6f9f0",
-      color: "#059669",
-      icon: <CheckCircle2 size={14} />,
-      label: "Đã xác nhận",
-    },
-    cancelled: {
-      bg: "#fee2e2",
-      color: "#ef4444",
-      icon: <XCircle size={14} />,
-      label: "Đã hủy",
-    },
-    completed: {
-      bg: "#e6f9f0",
-      color: "#059669",
-      icon: <CheckCircle2 size={14} />,
-      label: "Hoàn thành",
-    },
-    "no-show": {
-      bg: "#fee2e2",
-      color: "#ef4444",
-      icon: <XCircle size={14} />,
-      label: "Không đến",
-    },
-  };
-
-  const config = map[value] || map.pending;
-
-  return (
-    <span
-      style={{
-        background: config.bg,
-        color: config.color,
-        padding: "6px 12px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 600,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-      }}
-    >
-      {config.icon}
-      {config.label}
-    </span>
-  );
-};
 
 const Bookings = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-
-  // -- LƯU DATA VÀO STATE ĐỂ CÓ THỂ CẬP NHẬT --
   const [bookings, setBookings] = useState(bookingData);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-  // -- THÊM STATE CHO MODAL --
+  // Bộ lọc
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [facilityFilter, setFacilityFilter] = useState("all");
+  const [customerFilter, setCustomerFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("");
+
+  // Modal
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
 
-  // -- THÊM STATE CHO MODAL CHỈNH SỬA --
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [bookingToEdit, setBookingToEdit] = useState(null);
+  // Lấy danh sách duy nhất
+  const uniqueFacilities = useMemo(() => {
+    return [...new Set(bookings.map((b) => b.facility))].sort();
+  }, [bookings]);
 
-  // -- THÊM STATE CHO MODAL LỊCH BIỂU --
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const uniqueCustomers = useMemo(() => {
+    return [...new Set(bookings.map((b) => b.customer))].sort();
+  }, [bookings]);
 
-  const filteredBookings = useMemo(
-    () =>
-      bookings.filter((r) =>
-        [r.id, r.customer, r.facility, r.court, r.phone, r.email, r.status]
+  // Status map
+  const statusMap = {
+    confirmed: { label: "Đã đặt", color: "#059669", bg: "#e6f9f0" },
+    pending: { label: "Đã đặt", color: "#d97706", bg: "#fef3c7" },
+    completed: { label: "Hoàn thành", color: "#059669", bg: "#e6f9f0" },
+    cancelled: { label: "Đã hủy", color: "#ef4444", bg: "#fee2e2" },
+  };
+
+  const paymentMethodMap = {
+    Momo: { label: "Momo", color: "#ea4c89", bg: "#fce7f3" },
+    VNPay: { label: "VNPay", color: "#0052d9", bg: "#e6f0ff" },
+    "Tiền mặt": { label: "Tiền mặt", color: "#059669", bg: "#e6f9f0" },
+  };
+
+  // Lọc dữ liệu
+  const filteredBookings = useMemo(() => {
+    return bookings.filter((booking) => {
+      const matchesSearch =
+        searchQuery === "" ||
+        [
+          booking.id,
+          booking.customer,
+          booking.facility,
+          booking.phone,
+          booking.email,
+        ]
           .join(" ")
           .toLowerCase()
-          .includes(searchQuery.toLowerCase())
-      ),
-    [bookings, searchQuery]
+          .includes(searchQuery.toLowerCase());
+
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "confirmed" && booking.status === "confirmed") ||
+        (statusFilter === "pending" && booking.status === "pending") ||
+        (statusFilter === "completed" && booking.status === "completed") ||
+        (statusFilter === "cancelled" && booking.status === "cancelled");
+
+      const matchesFacility =
+        facilityFilter === "all" || booking.facility === facilityFilter;
+
+      const matchesCustomer =
+        customerFilter === "all" || booking.customer === customerFilter;
+
+      const matchesDate = !dateFilter || booking.date === dateFilter;
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesFacility &&
+        matchesCustomer &&
+        matchesDate
+      );
+    });
+  }, [
+    bookings,
+    searchQuery,
+    statusFilter,
+    facilityFilter,
+    customerFilter,
+    dateFilter,
+  ]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredBookings.length / pageSize)
+  );
+  const bookingSlice = filteredBookings.slice(
+    (page - 1) * pageSize,
+    page * pageSize
   );
 
-  // -- THÊM HÀM ĐIỀU KHIỂN MODAL --
+  // Hàm xem chi tiết
   const handleViewDetails = (booking) => {
     setSelectedBooking(booking);
     setIsDetailModalOpen(true);
@@ -117,78 +110,325 @@ const Bookings = () => {
     setSelectedBooking(null);
   };
 
-  // -- THÊM HÀM CHO MODAL CHỈNH SỬA --
-  const handleOpenEditModal = (booking) => {
-    setBookingToEdit(booking);
-    setIsEditModalOpen(true);
-  };
+  // Hàm xuất Excel/CSV
+  const exportToCSV = () => {
+    const headers = [
+      "Mã đơn đặt sân",
+      "Tên sân",
+      "Người đặt",
+      "Thời gian bắt đầu",
+      "Thời gian kết thúc",
+      "Trạng thái",
+      "Phương thức thanh toán",
+      "Tổng tiền (VNĐ)",
+    ];
 
-  const handleCloseEditModal = () => {
-    setIsEditModalOpen(false);
-    setBookingToEdit(null);
-  };
+    const rows = filteredBookings.map((booking) => [
+      booking.id,
+      booking.facility,
+      booking.customer,
+      `${booking.date} ${booking.startTime}`,
+      `${booking.date} ${booking.endTime}`,
+      statusMap[booking.status]?.label || booking.status,
+      booking.paymentMethod || "N/A",
+      booking.price.toLocaleString("vi-VN"),
+    ]);
 
-  const handleSaveBooking = (updatedBooking) => {
-    // Cập nhật mảng 'bookings' trong state
-    setBookings(currentBookings =>
-      currentBookings.map(b =>
-        b.id === updatedBooking.id ? updatedBooking : b
-      )
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    ].join("\n");
+
+    const blob = new Blob(["\uFEFF" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `danh-sach-dat-san-${new Date().toISOString().split("T")[0]}.csv`
     );
-    handleCloseEditModal();
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  // -- THÊM HÀM CHO MODAL LỊCH BIỂU --
-  const handleOpenScheduleModal = () => {
-    setIsScheduleModalOpen(true);
+  const exportToExcel = () => {
+    // Gọi CSV vì Excel có thể mở CSV
+    exportToCSV();
   };
 
-  const handleCloseScheduleModal = () => {
-    setIsScheduleModalOpen(false);
+  const resetFilters = () => {
+    setStatusFilter("all");
+    setFacilityFilter("all");
+    setCustomerFilter("all");
+    setDateFilter("");
+    setSearchQuery("");
+    setPage(1);
+  };
+
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat("vi-VN").format(price);
   };
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800 }}>Quản lý lịch đặt sân</h1>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 20,
+        }}
+      >
+        <h1 style={{ fontSize: 22, fontWeight: 800 }}>Quản lý đặt sân</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={handleOpenScheduleModal}
-            style={{ 
-              display: "inline-flex", 
-              alignItems: "center", 
-              gap: 8, 
-              background: "#3b82f6", 
-              color: "#fff", 
-              border: 0, 
-              borderRadius: 10, 
-              padding: "10px 14px", 
-              cursor: "pointer", 
-              fontWeight: 700 
+            onClick={exportToCSV}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              background: "#10b981",
+              color: "#fff",
+              border: 0,
+              borderRadius: 10,
+              padding: "10px 14px",
+              cursor: "pointer",
+              fontWeight: 700,
+              fontSize: 14,
             }}
           >
-            <Calendar size={16}/> Xem lịch biểu
+            <Download size={16} /> Xuất CSV
           </button>
           <button
-            onClick={() => alert("TODO: Xuất báo cáo")}
-            style={{ 
-              display: "inline-flex", 
-              alignItems: "center", 
-              gap: 8, 
-              background: "#10b981", 
-              color: "#fff", 
-              border: 0, 
-              borderRadius: 10, 
-              padding: "10px 14px", 
-              cursor: "pointer", 
-              fontWeight: 700 
+            onClick={exportToExcel}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              background: "#059669",
+              color: "#fff",
+              border: 0,
+              borderRadius: 10,
+              padding: "10px 14px",
+              cursor: "pointer",
+              fontWeight: 700,
+              fontSize: 14,
             }}
           >
-            <Download size={16}/> Xuất báo cáo
+            <FileSpreadsheet size={16} /> Xuất Excel
           </button>
         </div>
       </div>
 
+      {/* Bộ lọc */}
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: 16,
+          boxShadow: "0 2px 8px rgba(0,0,0,.08)",
+          marginBottom: 20,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <Filter size={18} color="#6b7280" />
+          <span style={{ fontWeight: 600, color: "#374151" }}>Bộ lọc</span>
+          {(statusFilter !== "all" ||
+            facilityFilter !== "all" ||
+            customerFilter !== "all" ||
+            dateFilter ||
+            searchQuery) && (
+            <button
+              onClick={resetFilters}
+              style={{
+                marginLeft: "auto",
+                padding: "6px 12px",
+                background: "#f3f4f6",
+                border: "none",
+                borderRadius: 6,
+                cursor: "pointer",
+                fontSize: 12,
+                color: "#6b7280",
+              }}
+            >
+              Xóa bộ lọc
+            </button>
+          )}
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: 12,
+          }}
+        >
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: 6,
+                fontSize: 13,
+                color: "#6b7280",
+              }}
+            >
+              Tìm kiếm
+            </label>
+            <input
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Mã đơn, tên sân, người đặt..."
+              style={{
+                width: "100%",
+                padding: 8,
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            />
+          </div>
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: 6,
+                fontSize: 13,
+                color: "#6b7280",
+              }}
+            >
+              Trạng thái
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                width: "100%",
+                padding: 8,
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            >
+              <option value="all">Tất cả</option>
+              <option value="confirmed">Đã đặt</option>
+              <option value="pending">Đã đặt (Chờ xử lý)</option>
+              <option value="completed">Hoàn thành</option>
+              <option value="cancelled">Đã hủy</option>
+            </select>
+          </div>
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: 6,
+                fontSize: 13,
+                color: "#6b7280",
+              }}
+            >
+              Tên sân
+            </label>
+            <select
+              value={facilityFilter}
+              onChange={(e) => {
+                setFacilityFilter(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                width: "100%",
+                padding: 8,
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            >
+              <option value="all">Tất cả sân</option>
+              {uniqueFacilities.map((facility) => (
+                <option key={facility} value={facility}>
+                  {facility}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: 6,
+                fontSize: 13,
+                color: "#6b7280",
+              }}
+            >
+              Người đặt
+            </label>
+            <select
+              value={customerFilter}
+              onChange={(e) => {
+                setCustomerFilter(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                width: "100%",
+                padding: 8,
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            >
+              <option value="all">Tất cả người đặt</option>
+              {uniqueCustomers.map((customer) => (
+                <option key={customer} value={customer}>
+                  {customer}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: 6,
+                fontSize: 13,
+                color: "#6b7280",
+              }}
+            >
+              Ngày đặt
+            </label>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                width: "100%",
+                padding: 8,
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Bảng dữ liệu */}
       <div
         style={{
           background: "#fff",
@@ -200,47 +440,35 @@ const Bookings = () => {
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center",
-            padding: 16,
+            padding: 12,
             borderBottom: "1px solid #e5e7eb",
           }}
         >
-          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-            <div>
-              <strong>Tổng:</strong> {filteredBookings.length} đơn đặt sân
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <select 
-                style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 14 }}
-                onChange={(e) => {
-                  if (e.target.value === "all") {
-                    setSearchQuery("");
-                  } else {
-                    setSearchQuery(e.target.value);
-                  }
-                }}
-              >
-                <option value="all">Tất cả trạng thái</option>
-                <option value="pending">Chờ xử lý</option>
-                <option value="confirmed">Đã xác nhận</option>
-                <option value="completed">Hoàn thành</option>
-                <option value="cancelled">Đã hủy</option>
-                <option value="no-show">Không đến</option>
-              </select>
-            </div>
+          <div>
+            <label style={{ marginRight: 8 }}>Show</label>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+              style={{
+                padding: 6,
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              {[5, 10, 20, 50].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <span style={{ marginLeft: 8 }}>entries</span>
           </div>
-          <input
-            placeholder="Tìm theo mã, khách hàng, sân, email, trạng thái…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ 
-              padding: "8px 12px", 
-              borderRadius: 8, 
-              border: "1px solid #e5e7eb",
-              minWidth: "300px",
-              fontSize: 14
-            }}
-          />
+          <div style={{ color: "#6b7280", fontSize: 14 }}>
+            Hiển thị {filteredBookings.length} kết quả
+          </div>
         </div>
 
         <div style={{ overflowX: "auto" }}>
@@ -248,16 +476,13 @@ const Bookings = () => {
             <thead>
               <tr style={{ background: "#f9fafb", textAlign: "left" }}>
                 {[
-                  "Mã đặt",
-                  "Khách hàng",
-                  "Liên hệ",
-                  "Sân",
-                  "Ngày đặt",
-                  "Khung giờ",
-                  "Giá (VNĐ)",
-                  "Thanh toán",
+                  "Mã đơn đặt sân",
+                  "Tên sân",
+                  "Người đặt",
+                  "Thời gian bắt đầu / kết thúc",
                   "Trạng thái",
-                  "Ghi chú",
+                  "Phương thức thanh toán",
+                  "Tổng tiền",
                   "Hành động",
                 ].map((h) => (
                   <th
@@ -276,131 +501,187 @@ const Bookings = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredBookings.map((r) => (
-                <tr key={r.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                  <td style={{ padding: 12, fontWeight: 700, color: "#1f2937" }}>{r.id}</td>
-                  <td style={{ padding: 12 }}>
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{r.customer}</div>
-                      <div style={{ fontSize: 12, color: "#6b7280" }}>{r.email}</div>
-                    </div>
-                  </td>
-                  <td style={{ padding: 12 }}>
-                    <div style={{ fontSize: 14 }}>{r.phone}</div>
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>Đặt: {r.bookingDate}</div>
-                  </td>
-                  <td style={{ padding: 12 }}>
-                    <div style={{ fontWeight: 600 }}>{r.facility}</div>
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>{r.court}</div>
-                  </td>
-                  <td style={{ padding: 12, fontWeight: 600 }}>{r.date}</td>
-                  <td style={{ padding: 12, color: "#059669", fontWeight: 600 }}>{r.time}</td>
-                  <td style={{ padding: 12, fontWeight: 600, color: "#059669" }}>
-                    {r.price.toLocaleString()}
-                  </td>
-                  <td style={{ padding: 12 }}>
-                    <span style={{
-                      background: r.pay === "paid" ? "#e6f9f0" : 
-                                 r.pay === "pending" ? "#fef3c7" : "#fee2e2",
-                      color: r.pay === "paid" ? "#059669" : 
-                            r.pay === "pending" ? "#d97706" : "#ef4444",
-                      padding: "4px 8px",
-                      borderRadius: 999,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      textTransform: "capitalize"
-                    }}>
-                      {r.pay === "paid" ? "Đã thanh toán" : 
-                       r.pay === "pending" ? "Chờ thanh toán" : "Hoàn tiền"}
-                    </span>
-                  </td>
-                  <td style={{ padding: 12 }}>
-                    <Status value={r.status} />
-                  </td>
-                  <td style={{ padding: 12, maxWidth: "150px" }}>
-                    {r.notes ? (
-                      <div style={{ 
-                        fontSize: 12, 
-                        color: "#6b7280",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap"
-                      }} title={r.notes}>
-                        {r.notes}
+              {bookingSlice.map((booking, idx) => {
+                const status = statusMap[booking.status] || {
+                  label: booking.status,
+                  color: "#6b7280",
+                  bg: "#f3f4f6",
+                };
+                const paymentMethod = paymentMethodMap[booking.paymentMethod] || {
+                  label: booking.paymentMethod || "N/A",
+                  color: "#6b7280",
+                  bg: "#f3f4f6",
+                };
+
+                return (
+                  <tr
+                    key={booking.id}
+                    style={{ borderBottom: "1px solid #f3f4f6" }}
+                  >
+                    <td style={{ padding: 12, fontWeight: 700, color: "#1f2937" }}>
+                      {booking.id}
+                    </td>
+                    <td style={{ padding: 12, fontWeight: 600 }}>
+                      {booking.facility}
+                    </td>
+                    <td style={{ padding: 12 }}>
+                      <div>
+                        <div style={{ fontWeight: 500 }}>{booking.customer}</div>
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>
+                          {booking.phone}
+                        </div>
                       </div>
-                    ) : (
-                      <span style={{ color: "#9ca3af", fontSize: 12 }}>-</span>
-                    )}
-                  </td>
-                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>
-                    <ActionButton
-                      bg="#06b6d4"
-                      Icon={Eye}
-                      onClick={() => handleViewDetails(r)}
-                      title="Xem chi tiết"
-                    />
-                    {r.status === "pending" && (
-                      <>
-                        <ActionButton
-                          bg="#10b981"
-                          Icon={CheckCircle2}
-                          onClick={() => alert("Xác nhận " + r.id)}
-                          title="Xác nhận"
-                        />
-                        <ActionButton
-                          bg="#ef4444"
-                          Icon={XCircle}
-                          onClick={() => alert("Hủy " + r.id)}
-                          title="Hủy"
-                        />
-                      </>
-                    )}
-                    <ActionButton
-                      bg="#6b7280"
-                      Icon={Pencil}
-                      onClick={() => handleOpenEditModal(r)}
-                      title="Sửa"
-                    />
-                  </td>
-                </tr>
-              ))}
-              {!filteredBookings.length && (
+                    </td>
+                    <td style={{ padding: 12 }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>
+                          {booking.date}
+                        </div>
+                        <div style={{ fontSize: 13, color: "#6b7280" }}>
+                          {booking.startTime} - {booking.endTime}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: 12 }}>
+                      <span
+                        style={{
+                          background: status.bg,
+                          color: status.color,
+                          padding: "4px 8px",
+                          borderRadius: 999,
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {status.label}
+                      </span>
+                    </td>
+                    <td style={{ padding: 12 }}>
+                      <span
+                        style={{
+                          background: paymentMethod.bg,
+                          color: paymentMethod.color,
+                          padding: "4px 8px",
+                          borderRadius: 999,
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {paymentMethod.label}
+                      </span>
+                    </td>
+                    <td
+                      style={{
+                        padding: 12,
+                        fontWeight: 700,
+                        color: "#059669",
+                      }}
+                    >
+                      {formatPrice(booking.price)} VNĐ
+                    </td>
+                    <td style={{ padding: 12, whiteSpace: "nowrap" }}>
+                      <button
+                        onClick={() => handleViewDetails(booking)}
+                        style={{
+                          background: "#06b6d4",
+                          color: "#fff",
+                          border: 0,
+                          borderRadius: 8,
+                          padding: "8px 12px",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontSize: 13,
+                          fontWeight: 600,
+                        }}
+                        title="Xem chi tiết"
+                      >
+                        <Eye size={14} />
+                        Xem chi tiết
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!bookingSlice.length && (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={8}
                     style={{
-                      padding: 32,
+                      padding: 40,
                       textAlign: "center",
                       color: "#6b7280",
                     }}
                   >
-                    <div style={{ fontSize: 16, marginBottom: 8 }}>📅</div>
-                    Không có dữ liệu đặt sân
+                    Không tìm thấy đơn đặt sân nào
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: 12,
+          }}
+        >
+          <div>
+            Showing {(page - 1) * pageSize + 1} to{" "}
+            {Math.min(page * pageSize, filteredBookings.length)} of{" "}
+            {filteredBookings.length} entries
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === 1 ? "not-allowed" : "pointer",
+                opacity: page === 1 ? 0.5 : 1,
+              }}
+            >
+              Previous
+            </button>
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: "#10b981",
+                color: "#fff",
+              }}
+            >
+              {page}
+            </div>
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === totalPages ? "not-allowed" : "pointer",
+                opacity: page === totalPages ? 0.5 : 1,
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* -- RENDER MODAL TẠI ĐÂY -- */}
+      {/* Modal chi tiết */}
       <BookingDetailModal
         isOpen={isDetailModalOpen}
         onClose={handleCloseDetailModal}
         booking={selectedBooking}
-      />
-
-      <BookingEditModal
-        isOpen={isEditModalOpen}
-        onClose={handleCloseEditModal}
-        onSave={handleSaveBooking}
-        booking={bookingToEdit}
-      />
-
-      <BookingScheduleModal
-        isOpen={isScheduleModalOpen}
-        onClose={handleCloseScheduleModal}
       />
     </div>
   );

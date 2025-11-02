@@ -199,7 +199,14 @@ const BookingDetailModal = ({ isOpen, onClose, booking }) => {
               <DetailRow label="Sân" value={booking.facility} />
               <DetailRow label="Sân con" value={booking.court} />
               <DetailRow label="Ngày chơi" value={booking.date} />
-              <DetailRow label="Khung giờ" value={booking.time} />
+              <DetailRow 
+                label="Thời gian" 
+                value={booking.startTime && booking.endTime 
+                  ? `${booking.startTime} - ${booking.endTime}` 
+                  : booking.time 
+                    ? booking.time 
+                    : "N/A"} 
+              />
             </div>
           </div>
 
@@ -214,13 +221,24 @@ const BookingDetailModal = ({ isOpen, onClose, booking }) => {
                 badgeData={{ bg: statusConfig.bg, color: statusConfig.color, icon: statusConfig.icon }}
               />
               <DetailRow
-                label="Thanh toán"
+                label="Trạng thái thanh toán"
                 value={paymentConfig.label}
                 isBadge={true}
                 badgeData={{ bg: paymentConfig.bg, color: paymentConfig.color }}
               />
-              <DetailRow label="Giá" value={`${booking.price.toLocaleString()} VNĐ`} />
-              <DetailRow label="Ngày đặt" value={booking.bookingDate} />
+              <DetailRow 
+                label="Phương thức thanh toán" 
+                value={booking.paymentMethod || "N/A"} 
+              />
+              <DetailRow label="Tổng tiền" value={`${booking.price.toLocaleString()} VNĐ`} />
+              <DetailRow 
+                label="Ngày đặt" 
+                value={booking.bookingDate && booking.bookingTime 
+                  ? `${booking.bookingDate} ${booking.bookingTime}` 
+                  : booking.bookingDate 
+                    ? booking.bookingDate 
+                    : "N/A"} 
+              />
             </div>
           </div>
           
