@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from "react";
 import { Send, Eye, Trash2 } from "lucide-react";
 import { notificationData } from "../data/mockData";
+import NotificationDetailModal from "../modals/NotificationDetailModal";
+import NotificationDeleteModal from "../modals/NotificationDeleteModal";
+import NotificationSendModal from "../modals/NotificationSendModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -21,18 +24,88 @@ const ActionButton = ({ bg, Icon, onClick, title }) => (
 );
 
 const Notifications = () => {
+
+  // -- LƯU DATA VÀO STATE ĐỂ CÓ THỂ CẬP NHẬT (ĐÃ ĐỌC/CHƯA ĐỌC) --
+  const [notifications, setNotifications] = useState(notificationData);
+
   const [searchQuery, setSearchQuery] = useState("");
+
+  // -- THÊM STATE CHO MODAL --
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+
+  // -- THÊM STATE CHO MODAL XÓA --
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [notificationToDelete, setNotificationToDelete] = useState(null);
+
+  // -- THÊM STATE CHO MODAL GỬI --
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
 
   const filteredNotifications = useMemo(
     () =>
-      notificationData.filter((r) =>
+      notifications.filter((r) =>
         [r.title, r.message, r.type, r.status]
           .join(" ")
           .toLowerCase()
           .includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [notifications, searchQuery]
   );
+
+  // -- THÊM HÀM ĐIỀU KHIỂN MODAL (VÀ CẬP NHẬT TRẠNG THÁI "ĐÃ ĐỌC") --
+  const handleViewDetails = (notification) => {
+    setSelectedNotification(notification);
+    setIsDetailModalOpen(true);
+
+    // Đánh dấu là đã đọc khi mở
+    if (notification.status === 'unread') {
+      setNotifications(currentNotifications =>
+        currentNotifications.map(n =>
+          n.id === notification.id ? { ...n, status: 'read' } : n
+        )
+      );
+    }
+  };
+
+  const handleCloseDetailModal = () => {
+    setIsDetailModalOpen(false);
+    setSelectedNotification(null);
+  };
+
+  // -- THÊM CÁC HÀM XỬ LÝ XÓA --
+  const handleOpenDeleteModal = (notification) => {
+    setNotificationToDelete(notification);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setNotificationToDelete(null);
+    setIsDeleteModalOpen(false);
+  };
+
+  const handleConfirmDelete = () => {
+    if (notificationToDelete) {
+      setNotifications((currentNotifications) =>
+        currentNotifications.filter((n) => n.id !== notificationToDelete.id)
+      );
+      handleCloseDeleteModal();
+    }
+  };
+
+  // -- THÊM HÀM CHO MODAL GỬI --
+  const handleOpenSendModal = () => {
+    setIsSendModalOpen(true);
+  };
+
+  const handleCloseSendModal = () => {
+    setIsSendModalOpen(false);
+  };
+
+  const handleSendNotification = (newNotification) => {
+    // Thêm thông báo mới vào đầu danh sách
+    setNotifications((currentNotifications) => [newNotification, ...currentNotifications]);
+    handleCloseSendModal();
+  };
 
   return (
     <div>
@@ -40,7 +113,7 @@ const Notifications = () => {
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Quản lý thông báo</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={() => alert("TODO: Gửi thông báo mới")}
+            onClick={handleOpenSendModal}
             style={{ 
               display: "inline-flex", 
               alignItems: "center", 
@@ -214,13 +287,13 @@ const Notifications = () => {
                     <ActionButton
                       bg="#06b6d4"
                       Icon={Eye}
-                      onClick={() => alert("Xem chi tiết " + r.id)}
+                      onClick={() => handleViewDetails(r)}
                       title="Xem chi tiết"
                     />
                     <ActionButton
                       bg="#ef4444"
                       Icon={Trash2}
-                      onClick={() => alert("Xóa " + r.id)}
+                      onClick={() => handleOpenDeleteModal(r)}
                       title="Xóa"
                     />
                   </td>
@@ -245,6 +318,26 @@ const Notifications = () => {
           </table>
         </div>
       </div>
+
+      {/* -- RENDER MODAL TẠI ĐÂY -- */}
+      <NotificationDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={handleCloseDetailModal}
+        notification={selectedNotification}
+      />
+
+      <NotificationDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDelete}
+        notification={notificationToDelete}
+      />
+
+      <NotificationSendModal
+        isOpen={isSendModalOpen}
+        onClose={handleCloseSendModal}
+        onSend={handleSendNotification}
+      />
     </div>
   );
 };

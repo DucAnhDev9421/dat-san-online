@@ -1,6 +1,10 @@
 import React, { useState, useMemo } from "react";
 import { Plus, Eye, Pencil, Trash2 } from "lucide-react";
 import { ownerData } from "../data/mockData";
+import OwnerDetailModal from "../modals/OwnerDetailModal";
+import OwnerEditModal from "../modals/OwnerEditModal";
+import OwnerDeleteModal from "../modals/OwnerDeleteModal";
+import OwnerAddModal from "../modals/OwnerAddModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -23,16 +27,101 @@ const ActionButton = ({ bg, Icon, onClick, title }) => (
 const Owners = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
+  // -- LƯU DATA VÀO STATE ĐỂ CÓ THỂ CẬP NHẬT --
+  const [owners, setOwners] = useState(ownerData);
+
+  // -- THÊM STATE CHO MODAL --
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedOwner, setSelectedOwner] = useState(null);
+
+  // -- THÊM STATE CHO MODAL CHỈNH SỬA --
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [ownerToEdit, setOwnerToEdit] = useState(null);
+
+  // -- THÊM STATE CHO MODAL XÓA --
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [ownerToDelete, setOwnerToDelete] = useState(null);
+
+  // -- THÊM STATE CHO MODAL THÊM MỚI --
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
   const filteredOwners = useMemo(
     () =>
-      ownerData.filter((r) =>
+      owners.filter((r) =>
         [r.name, r.email, r.phone, r.facility, r.status]
           .join(" ")
           .toLowerCase()
           .includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [owners, searchQuery]
   );
+
+  // -- THÊM HÀM ĐIỀU KHIỂN MODAL --
+  const handleViewDetails = (owner) => {
+    setSelectedOwner(owner);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleCloseDetailModal = () => {
+    setIsDetailModalOpen(false);
+    setSelectedOwner(null);
+  };
+
+  // -- THÊM HÀM CHO MODAL CHỈNH SỬA --
+  const handleOpenEditModal = (owner) => {
+    setOwnerToEdit(owner);
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setOwnerToEdit(null);
+  };
+
+  const handleSaveOwner = (updatedOwner) => {
+    // Cập nhật mảng 'owners' trong state
+    setOwners(currentOwners =>
+      currentOwners.map(o =>
+        o.id === updatedOwner.id ? updatedOwner : o
+      )
+    );
+    handleCloseEditModal();
+  };
+
+  // -- THÊM CÁC HÀM XỬ LÝ XÓA --
+  const handleOpenDeleteModal = (owner) => {
+    setOwnerToDelete(owner);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setOwnerToDelete(null);
+    setIsDeleteModalOpen(false);
+  };
+
+  const handleConfirmDelete = () => {
+    if (ownerToDelete) {
+      setOwners((currentOwners) =>
+        currentOwners.filter((o) => o.id !== ownerToDelete.id)
+      );
+      handleCloseDeleteModal();
+    }
+  };
+
+  // -- THÊM HÀM CHO MODAL THÊM MỚI --
+  const handleOpenAddModal = () => {
+    setIsAddModalOpen(true);
+  };
+
+  const handleCloseAddModal = () => {
+    setIsAddModalOpen(false);
+  };
+
+  const handleAddNewOwner = (newOwner) => {
+    // Thêm chủ sân mới vào đầu danh sách
+    setOwners((currentOwners) => [newOwner, ...currentOwners]);
+    handleCloseAddModal();
+  };
 
   return (
     <div>
@@ -40,7 +129,7 @@ const Owners = () => {
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Quản lý chủ sân</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={() => alert("TODO: Thêm chủ sân")}
+            onClick={handleOpenAddModal}
             style={{ 
               display: "inline-flex", 
               alignItems: "center", 
@@ -181,19 +270,19 @@ const Owners = () => {
                     <ActionButton
                       bg="#06b6d4"
                       Icon={Eye}
-                      onClick={() => alert("Xem chi tiết " + r.id)}
+                      onClick={() => handleViewDetails(r)}
                       title="Xem chi tiết"
                     />
                     <ActionButton
                       bg="#22c55e"
                       Icon={Pencil}
-                      onClick={() => alert("Sửa " + r.name)}
+                      onClick={() => handleOpenEditModal(r)}
                       title="Sửa"
                     />
                     <ActionButton
                       bg="#ef4444"
                       Icon={Trash2}
-                      onClick={() => alert("Xóa " + r.name)}
+                      onClick={() => handleOpenDeleteModal(r)}
                       title="Xóa"
                     />
                   </td>
@@ -218,6 +307,33 @@ const Owners = () => {
           </table>
         </div>
       </div>
+
+      {/* -- RENDER MODAL TẠI ĐÂY -- */}
+      <OwnerDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={handleCloseDetailModal}
+        owner={selectedOwner}
+      />
+
+      <OwnerEditModal
+        isOpen={isEditModalOpen}
+        onClose={handleCloseEditModal}
+        onSave={handleSaveOwner}
+        owner={ownerToEdit}
+      />
+
+      <OwnerDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDelete}
+        owner={ownerToDelete}
+      />
+
+      <OwnerAddModal
+        isOpen={isAddModalOpen}
+        onClose={handleCloseAddModal}
+        onSave={handleAddNewOwner}
+      />
     </div>
   );
 };
