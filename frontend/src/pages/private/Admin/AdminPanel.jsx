@@ -31,7 +31,7 @@ const AdminPanel = () => {
 
   const menuItems = [
     { id: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
-    { id: "facilities", label: "Quản lý sân", icon: Building2 },
+    { id: "facilities", label: "Quản lý cơ sở", icon: Building2 },
     { id: "bookings", label: "Quản lý lịch đặt sân", icon: Calendar },
     { id: "customers", label: "Quản lý người dùng", icon: UserCheck },
     { id: "payments", label: "Quản lý thanh toán & Hóa đơn", icon: CreditCard },

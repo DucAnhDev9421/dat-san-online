@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import HeroSection from './HomePage/components/HeroSection'
 import SearchBar from './HomePage/components/SearchBar'
+import FeaturesSection from './HomePage/components/FeaturesSection'
+import PopularLocationsSection from './HomePage/components/PopularLocationsSection'
 import VenuesSection from './HomePage/components/VenuesSection'
 import { venues, getVenueImage } from './HomePage/mockData'
 import { scrollToElement, buildSearchParams } from './HomePage/utils/helpers'
@@ -110,6 +112,10 @@ function HomePage() {
         loading={isPageLoading}
         onBookVenue={handleBookVenue}
       />
+
+      <PopularLocationsSection />
+
+      <FeaturesSection />
     </main>
   )
 }

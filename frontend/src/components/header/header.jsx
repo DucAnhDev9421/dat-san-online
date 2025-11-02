@@ -77,16 +77,16 @@ function Header() {
       default:
         navigate('/notifications')
     }
-    setShowNotificationDropdown(false)
+    closeNotificationDropdown()
   }
 
   const handleSettingsClick = () => {
-    setShowUserMenu(false)
+    closeUserMenu()
     navigate('/profile?tab=settings')
   }
 
   const handleBookingHistoryClick = () => {
-    setShowUserMenu(false)
+    closeUserMenu()
     navigate('/profile?tab=bookings')
   }
 
