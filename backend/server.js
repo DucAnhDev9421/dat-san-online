@@ -22,6 +22,7 @@ import facilityRoutes from "./routes/facility.js";
 import courtRoutes from "./routes/court.js";
 import bookingRoutes from "./routes/booking.js";
 import checkinRoutes from "./routes/checkin.js";
+import paymentRoutes from "./routes/payment.js";
 import User from "./models/User.js";
 
 const app = express();
@@ -101,6 +102,7 @@ app.use("/api/facilities", facilityRoutes);
 app.use("/api/courts", courtRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/checkin", checkinRoutes);
+app.use("/api/payments", paymentRoutes);
 // 404 handler
 app.use(notFound);
 
