@@ -68,12 +68,10 @@ router.post("/register", authLimiter, async (req, res, next) => {
     const otp = generateOtp();
     const otpExpires = Date.now() + 10 * 60 * 1000; // 10 phút
 
-    // Hash password before saving
-    const hashedPassword = await bcrypt.hash(password, 12);
-
+    // Password will be hashed automatically by User model's pre-save middleware
     user = new User({
       email,
-      password: hashedPassword,
+      password: password, // Plain password - will be hashed by pre-save middleware
       name,
       otpCode: otp,
       otpExpires: otpExpires,
