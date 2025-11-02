@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-// 1. Thêm các icon cho CardHeader và nút
 import { X, Save, Info, Settings, MessageSquare } from "lucide-react";
+import { courtApi } from "../../../../api/courtApi";
 
 // 2. Component con cho Tiêu đề Card
 const CardHeader = ({ Icon, title }) => (
@@ -133,18 +133,21 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
     description: "",
     maintenance: "",
   });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setForm({
-      id: initialData?.id ?? "",
-      name: initialData?.name ?? "",
-      type: initialData?.type ?? "",
-      capacity: initialData?.capacity ?? "",
-      price: initialData?.price ?? 0,
-      status: initialData?.status ?? "inactive",
-      description: initialData?.description ?? "",
-      maintenance: initialData?.maintenance ?? "",
-    });
+    if (initialData) {
+      setForm({
+        id: initialData._id || initialData.id || "",
+        name: initialData.name || "",
+        type: initialData.type || "",
+        capacity: initialData.capacity || "",
+        price: initialData.price || 0,
+        status: initialData.status || "inactive",
+        description: initialData.description || "",
+        maintenance: initialData.maintenance || "",
+      });
+    }
   }, [initialData]);
 
   if (!isOpen) return null;
@@ -154,15 +157,30 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
     setForm((s) => ({ ...s, [key]: value }));
   };
 
-  const handleSave = () => {
-    if (!form.name) return alert("Vui lòng nhập tên sân");
-    const payload = {
-      ...form,
-      capacity: Number(form.capacity) || form.capacity,
-      price: Number(form.price) || 0,
-    };
-    onSave?.(payload);
-    onClose?.();
+  const handleSave = async () => {
+    if (!form.name) {
+      alert("Vui lòng nhập tên sân");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        ...form,
+        capacity: Number(form.capacity) || form.capacity,
+        price: Number(form.price) || 0,
+        _id: form.id, // Preserve ID for API call
+      };
+      
+      // Call onSave which will handle API call
+      await onSave?.(payload);
+      onClose?.();
+    } catch (err) {
+      console.error("Error saving court:", err);
+      alert(err.message || "Có lỗi xảy ra khi lưu sân");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // 7. Xây dựng lại toàn bộ JSX
@@ -304,22 +322,24 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
           </button>
           <button
             onClick={handleSave}
+            disabled={loading}
             style={{
-              background: "rgb(59, 130, 246)", // Giữ màu xanh lá của bạn
+              background: loading ? "#9ca3af" : "rgb(59, 130, 246)",
               color: "#fff",
               border: 0,
               borderRadius: 8,
               padding: "8px 14px",
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
               fontWeight: 600,
               fontSize: 14,
               display: "flex",
               alignItems: "center",
-              gap: 6
+              gap: 6,
+              opacity: loading ? 0.7 : 1,
             }}
           >
             <Save size={16} />
-            Lưu
+            {loading ? "Đang lưu..." : "Lưu"}
           </button>
         </div>
       </div>
