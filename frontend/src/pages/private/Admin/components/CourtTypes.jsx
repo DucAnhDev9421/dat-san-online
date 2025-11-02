@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { categoryApi } from "../../../../api/categoryApi";
-import SportCategoryModal from "../modals/SportCategoryModal";
+import CourtTypeModal from "../modals/CourtTypeModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -21,22 +21,22 @@ const ActionButton = ({ bg, Icon, onClick, title }) => (
   </button>
 );
 
-const SportsCategories = () => {
-  const [categories, setCategories] = useState([]);
+const CourtTypes = () => {
+  const [courtTypes, setCourtTypes] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedCourtType, setSelectedCourtType] = useState(null);
   const [error, setError] = useState("");
 
-  // Fetch categories
+  // Fetch court types
   useEffect(() => {
-    fetchCategories();
+    fetchCourtTypes();
   }, [searchQuery]);
 
-  const fetchCategories = async () => {
+  const fetchCourtTypes = async () => {
     setLoading(true);
     setError("");
     try {
@@ -44,18 +44,18 @@ const SportsCategories = () => {
       if (searchQuery) {
         params.search = searchQuery;
       }
-      const result = await categoryApi.getSportCategories(params);
-      setCategories(result.data || []);
+      const result = await categoryApi.getCourtTypes(params);
+      setCourtTypes(result.data || []);
     } catch (err) {
-      setError(err.message || "Không thể tải danh sách danh mục");
-      console.error("Error fetching categories:", err);
+      setError(err.message || "Không thể tải danh sách loại sân");
+      console.error("Error fetching court types:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredCategories = categories.filter((r) =>
-    [r.name, r.description, r.status]
+  const filteredCourtTypes = courtTypes.filter((r) =>
+    [r.name, r.description, r.sportCategory?.name, r.status]
       .join(" ")
       .toLowerCase()
       .includes(searchQuery.toLowerCase())
@@ -63,45 +63,45 @@ const SportsCategories = () => {
 
   const totalPages = Math.max(
     1,
-    Math.ceil(filteredCategories.length / pageSize)
+    Math.ceil(filteredCourtTypes.length / pageSize)
   );
-  const categorySlice = filteredCategories.slice(
+  const courtTypeSlice = filteredCourtTypes.slice(
     (page - 1) * pageSize,
     page * pageSize
   );
 
   const handleAdd = () => {
-    setSelectedCategory(null);
+    setSelectedCourtType(null);
     setIsModalOpen(true);
   };
 
-  const handleEdit = (category) => {
-    setSelectedCategory(category);
+  const handleEdit = (courtType) => {
+    setSelectedCourtType(courtType);
     setIsModalOpen(true);
   };
 
   const handleSave = async (formData) => {
     try {
-      if (selectedCategory) {
+      if (selectedCourtType) {
         // Update
-        await categoryApi.updateSportCategory(selectedCategory._id, formData);
+        await categoryApi.updateCourtType(selectedCourtType._id, formData);
       } else {
         // Create
-        await categoryApi.createSportCategory(formData);
+        await categoryApi.createCourtType(formData);
       }
-      await fetchCategories();
+      await fetchCourtTypes();
     } catch (err) {
       throw err;
     }
   };
 
-  const handleDelete = async (category) => {
-    if (window.confirm(`Bạn có chắc muốn xóa danh mục "${category.name}"?`)) {
+  const handleDelete = async (courtType) => {
+    if (window.confirm(`Bạn có chắc muốn xóa loại sân "${courtType.name}"?`)) {
       try {
-        await categoryApi.deleteSportCategory(category._id);
-        await fetchCategories();
+        await categoryApi.deleteCourtType(courtType._id);
+        await fetchCourtTypes();
       } catch (err) {
-        alert(err.message || "Không thể xóa danh mục");
+        alert(err.message || "Không thể xóa loại sân");
       }
     }
   };
@@ -115,7 +115,7 @@ const SportsCategories = () => {
           marginBottom: 12,
         }}
       >
-        <h1 style={{ fontSize: 22, fontWeight: 800 }}>Danh mục môn thể thao</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 800 }}>Loại sân thể thao</h1>
         <button
           onClick={handleAdd}
           style={{
@@ -131,7 +131,7 @@ const SportsCategories = () => {
             fontWeight: 700,
           }}
         >
-          <Plus size={16} /> Thêm danh mục
+          <Plus size={16} /> Thêm loại sân
         </button>
       </div>
 
@@ -180,7 +180,7 @@ const SportsCategories = () => {
                 setSearchQuery(e.target.value);
                 setPage(1);
               }}
-              placeholder="Tìm kiếm danh mục..."
+              placeholder="Tìm kiếm loại sân..."
               style={{
                 padding: 8,
                 borderRadius: 8,
@@ -196,10 +196,11 @@ const SportsCategories = () => {
               <tr style={{ background: "#f9fafb", textAlign: "left" }}>
                 {[
                   "Mã",
-                  "Icon",
-                  "Tên danh mục",
+                  "Tên loại sân",
+                  "Danh mục thể thao",
                   "Mô tả",
-                  "Số cơ sở",
+                  "Đặc điểm",
+                  "Số sân",
                   "Trạng thái",
                   "Hành động",
                 ].map((h) => (
@@ -212,7 +213,7 @@ const SportsCategories = () => {
                       borderBottom: "1px solid #e5e7eb",
                     }}
                   >
-                    {h === "Icon" ? "" : h}
+                    {h}
                   </th>
                 ))}
               </tr>
@@ -221,7 +222,7 @@ const SportsCategories = () => {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     style={{
                       padding: 16,
                       textAlign: "center",
@@ -231,10 +232,10 @@ const SportsCategories = () => {
                     Đang tải...
                   </td>
                 </tr>
-              ) : categorySlice.length === 0 ? (
+              ) : courtTypeSlice.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     style={{
                       padding: 16,
                       textAlign: "center",
@@ -245,17 +246,24 @@ const SportsCategories = () => {
                   </td>
                 </tr>
               ) : (
-                categorySlice.map((r, idx) => (
+                courtTypeSlice.map((r, idx) => (
                   <tr key={r._id || r.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                     <td style={{ padding: 12 }}>
                       {(page - 1) * pageSize + idx + 1}
                     </td>
-                    <td style={{ padding: 12 }}></td>
                     <td style={{ padding: 12, fontWeight: 600 }}>{r.name}</td>
-                  <td style={{ padding: 12, color: "#6b7280" }}>
-                    {r.description}
-                  </td>
-                    <td style={{ padding: 12 }}>{r.facilities || 0}</td>
+                    <td style={{ padding: 12 }}>
+                      {r.sportCategory?.name || "N/A"}
+                    </td>
+                    <td style={{ padding: 12, color: "#6b7280" }}>
+                      {r.description || "-"}
+                    </td>
+                    <td style={{ padding: 12, color: "#6b7280" }}>
+                      {Array.isArray(r.features) && r.features.length > 0
+                        ? r.features.join(", ")
+                        : "-"}
+                    </td>
+                    <td style={{ padding: 12 }}>{r.courts || 0}</td>
                     <td style={{ padding: 12 }}>
                       <span
                         style={{
@@ -301,8 +309,8 @@ const SportsCategories = () => {
         >
           <div>
             Showing {(page - 1) * pageSize + 1} to{" "}
-            {Math.min(page * pageSize, filteredCategories.length)} of{" "}
-            {filteredCategories.length} entries
+            {Math.min(page * pageSize, filteredCourtTypes.length)} of{" "}
+            {filteredCourtTypes.length} entries
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button
@@ -346,18 +354,18 @@ const SportsCategories = () => {
       </div>
 
       {/* Modal */}
-      <SportCategoryModal
+      <CourtTypeModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          setSelectedCategory(null);
+          setSelectedCourtType(null);
         }}
         onSave={handleSave}
-        category={selectedCategory}
+        courtType={selectedCourtType}
       />
     </div>
   );
 };
 
-export default SportsCategories;
+export default CourtTypes;
 

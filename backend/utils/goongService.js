@@ -3,9 +3,11 @@ import axios from 'axios';
 
 const GOONG_API_KEY = process.env.GOONG_API_KEY;
 const GOONG_GEOCODING_URL = 'https://rsapi.goong.io/Geocode';
+const GOONG_PLACE_AUTOCOMPLETE_URL = 'https://rsapi.goong.io/Place/AutoComplete';
+const GOONG_PLACE_DETAIL_URL = 'https://rsapi.goong.io/Place/Detail';
 
 /**
- * Chuyển đổi địa chỉ thành tọa độ sử dụng Goong Geocoding API
+ * Chuyển đổi địa chỉ thành tọa độ sử dụng Goong Place API
  * @param {string} address - Địa chỉ cần geocode
  * @returns {Promise<{lat: number, lng: number, formatted_address: string}>}
  */
@@ -15,24 +17,43 @@ export const geocodeAddress = async (address) => {
   }
 
   try {
-    const response = await axios.get(GOONG_GEOCODING_URL, {
+    // Bước 1: Tìm kiếm địa chỉ bằng AutoComplete API
+    const autocompleteResponse = await axios.get(GOONG_PLACE_AUTOCOMPLETE_URL, {
       params: {
-        address: address,
-        api_key: GOONG_API_KEY
+        input: address,
+        api_key: GOONG_API_KEY,
+        limit: 1 // Chỉ cần kết quả đầu tiên
       }
     });
 
-    if (response.data && response.data.results && response.data.results.length > 0) {
-      const result = response.data.results[0];
-      const location = result.geometry?.location;
+    if (autocompleteResponse.data && 
+        autocompleteResponse.data.predictions && 
+        autocompleteResponse.data.predictions.length > 0) {
       
-      if (location && location.lat && location.lng) {
-        return {
-          lat: location.lat,
-          lng: location.lng,
-          formatted_address: result.formatted_address || address,
-          place_id: result.place_id
-        };
+      const prediction = autocompleteResponse.data.predictions[0];
+      
+      // Bước 2: Lấy chi tiết place bằng Place Detail API
+      if (prediction.place_id) {
+        const detailResponse = await axios.get(GOONG_PLACE_DETAIL_URL, {
+          params: {
+            place_id: prediction.place_id,
+            api_key: GOONG_API_KEY
+          }
+        });
+
+        if (detailResponse.data && detailResponse.data.result) {
+          const result = detailResponse.data.result;
+          const location = result.geometry?.location;
+          
+          if (location && location.lat && location.lng) {
+            return {
+              lat: location.lat,
+              lng: location.lng,
+              formatted_address: result.formatted_address || prediction.description || address,
+              place_id: result.place_id
+            };
+          }
+        }
       }
     }
 

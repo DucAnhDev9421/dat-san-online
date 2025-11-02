@@ -26,6 +26,12 @@ const auditLogSchema = new mongoose.Schema(
         "UPDATE_AVATAR",
         "DELETE_AVATAR",
         "CHANGE_ROLE",
+        "CREATE_SPORT_CATEGORY",
+        "UPDATE_SPORT_CATEGORY",
+        "DELETE_SPORT_CATEGORY",
+        "CREATE_COURT_TYPE",
+        "UPDATE_COURT_TYPE",
+        "DELETE_COURT_TYPE",
       ],
     },
     ipAddress: {

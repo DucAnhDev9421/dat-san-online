@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { api } from "../api/axiosClient";
+import { facilityApi } from "../api/facilityApi";
 import OwnerPanel from "../pages/private/Owner/OwnerPanel";
 
 export default function OwnerLayout() {
@@ -19,16 +19,8 @@ export default function OwnerLayout() {
 
       try {
         const ownerId = user._id || user.id;
-        const response = await api.get(`/facilities?ownerId=${ownerId}&limit=1`);
-        
-        if (response.data?.success) {
-          // Kiểm tra xem có ít nhất 1 facility không
-          const facilities = response.data.data?.facilities || [];
-          const hasAnyFacility = facilities.length > 0;
-          setHasFacility(hasAnyFacility);
-        } else {
-          setHasFacility(false);
-        }
+        const hasAnyFacility = await facilityApi.checkOwnerHasFacility(ownerId);
+        setHasFacility(hasAnyFacility);
       } catch (error) {
         console.error("Error checking facilities:", error);
         // Nếu lỗi, mặc định là chưa có facility để redirect về setup

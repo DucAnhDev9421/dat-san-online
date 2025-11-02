@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Plus,
   Eye,
@@ -8,7 +8,9 @@ import {
   PowerOff,
   Wrench,
 } from "lucide-react";
-import { courtData } from "../data/mockData";
+import { courtApi } from "../../../../api/courtApi";
+import { facilityApi } from "../../../../api/facilityApi";
+import { useAuth } from "../../../../contexts/AuthContext";
 import AddCourtModal from "../modals/AddCourtModal";
 import DetailCourtModal from "../modals/DetailCourtModal";
 import ActivateCourtModal from "../modals/ActivateCourtModal";
@@ -37,11 +39,17 @@ const ActionButton = ({ bg, Icon, onClick, title }) => (
 );
 
 const Courts = () => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  // local courts state so we can edit/add in UI
-  const [courts, setCourts] = useState(courtData);
+  // local courts state
+  const [courts, setCourts] = useState([]);
+  const [facilities, setFacilities] = useState([]);
+  const [selectedFacilityFilter, setSelectedFacilityFilter] = useState("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState("all");
 
   // added state for detail modal
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -51,38 +59,118 @@ const Courts = () => {
   const [isSetMaintenanceOpen, setIsSetMaintenanceOpen] = useState(false);
   const [isScheduleMaintenanceOpen, setIsScheduleMaintenanceOpen] = useState(false);
 
+  // Fetch facilities and courts
+  useEffect(() => {
+    if (user) {
+      fetchFacilities();
+      fetchCourts();
+    }
+  }, [user]);
+
+  const fetchFacilities = async () => {
+    try {
+      if (!user) return;
+      const ownerId = user._id || user.id;
+      const result = await facilityApi.getFacilities({ ownerId });
+      if (result.success && result.data?.facilities) {
+        setFacilities(result.data.facilities);
+      }
+    } catch (err) {
+      console.error("Error fetching facilities:", err);
+    }
+  };
+
+  const fetchCourts = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      if (!user) return;
+      const ownerId = user._id || user.id;
+      
+      // Get facilities of owner first
+      const facilitiesResult = await facilityApi.getFacilities({ ownerId, limit: 100 });
+      if (!facilitiesResult.success || !facilitiesResult.data?.facilities?.length) {
+        setCourts([]);
+        setLoading(false);
+        return;
+      }
+
+      const facilities = facilitiesResult.data.facilities;
+      const facilityIds = facilities.map(f => f._id || f.id);
+      
+      // Fetch courts for all facilities - try to fetch all at once if possible
+      const allCourts = [];
+      for (const facilityId of facilityIds) {
+        try {
+          const result = await courtApi.getCourts({ facility: facilityId, limit: 100 });
+          if (result.success && result.data?.courts) {
+            allCourts.push(...result.data.courts);
+          }
+        } catch (err) {
+          console.error(`Error fetching courts for facility ${facilityId}:`, err);
+        }
+      }
+      
+      setCourts(allCourts);
+    } catch (err) {
+      setError(err.message || "Không thể tải danh sách sân");
+      console.error("Error fetching courts:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredCourts = useMemo(
     () =>
-      courts.filter((c) =>
-        [c.name, c.type, c.description, c.status]
-          .join(" ")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase())
-      ),
-    [searchQuery, courts]
+      courts.filter((c) => {
+        const matchesSearch =
+          !searchQuery ||
+          [c.name, c.type, c.description, c.status]
+            .join(" ")
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase());
+
+        const matchesFacility =
+          selectedFacilityFilter === "all" ||
+          c.facility?._id === selectedFacilityFilter ||
+          c.facility === selectedFacilityFilter;
+
+        const matchesStatus =
+          selectedStatusFilter === "all" || c.status === selectedStatusFilter;
+
+        return matchesSearch && matchesFacility && matchesStatus;
+      }),
+    [searchQuery, courts, selectedFacilityFilter, selectedStatusFilter]
   );
 
-  const handleSaveCourt = (updated) => {
-    // convert capacity/price to numbers where possible
-    const payload = {
-      ...updated,
-      capacity: Number(updated.capacity) || updated.capacity,
-      price: Number(updated.price) || updated.price,
-    };
+  const handleSaveCourt = async (updated) => {
+    try {
+      if (updated._id || updated.id) {
+        // Update existing court
+        const courtId = updated._id || updated.id;
+        const payload = {
+          name: updated.name,
+          type: updated.type,
+          capacity: Number(updated.capacity),
+          price: Number(updated.price),
+          description: updated.description,
+          status: updated.status,
+          maintenance: updated.maintenance || "Không có lịch bảo trì",
+          services: updated.services || [],
+        };
 
-    if (payload.id) {
-      setCourts((prev) => prev.map((c) => (c.id === payload.id ? { ...c, ...payload } : c)));
-    } else {
-      const maxId = courts.reduce((m, it) => (it.id > m ? it.id : m), 0);
-      payload.id = maxId + 1;
-      // set some defaults for new court
-      payload.images = payload.images || [];
-      payload.amenities = payload.amenities || [];
-      payload.maintenance = payload.maintenance || "Không có lịch bảo trì";
-      setCourts((prev) => [payload, ...prev]);
+        await courtApi.updateCourt(courtId, payload);
+        await fetchCourts();
+      } else {
+        // New court created via AddCourtModal (already saved via API)
+        await fetchCourts();
+      }
+      setIsModalOpen(false);
+      setSelectedCourt(null);
+    } catch (err) {
+      console.error("Error saving court:", err);
+      alert(err.message || "Có lỗi xảy ra khi lưu sân");
     }
-    setIsModalOpen(false);
-    setSelectedCourt(null);
   };
 
   return (
@@ -212,39 +300,31 @@ const Courts = () => {
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <select
+                value={selectedFacilityFilter}
                 style={{
                   padding: "6px 12px",
                   borderRadius: 8,
                   border: "1px solid #e5e7eb",
                   fontSize: 14,
                 }}
-                onChange={(e) => {
-                  if (e.target.value === "all") {
-                    setSearchQuery("");
-                  } else {
-                    setSearchQuery(e.target.value);
-                  }
-                }}
+                onChange={(e) => setSelectedFacilityFilter(e.target.value)}
               >
-                <option value="all">Tất cả loại sân</option>
-                <option value="5 người">5 người</option>
-                <option value="7 người">7 người</option>
-                <option value="Tennis">Tennis</option>
+                <option value="all">Tất cả cơ sở</option>
+                {facilities.map((facility) => (
+                  <option key={facility._id || facility.id} value={facility._id || facility.id}>
+                    {facility.name}
+                  </option>
+                ))}
               </select>
               <select
+                value={selectedStatusFilter}
                 style={{
                   padding: "6px 12px",
                   borderRadius: 8,
                   border: "1px solid #e5e7eb",
                   fontSize: 14,
                 }}
-                onChange={(e) => {
-                  if (e.target.value === "all") {
-                    setSearchQuery("");
-                  } else {
-                    setSearchQuery(e.target.value);
-                  }
-                }}
+                onChange={(e) => setSelectedStatusFilter(e.target.value)}
               >
                 <option value="all">Tất cả trạng thái</option>
                 <option value="active">Hoạt động</option>
@@ -297,19 +377,38 @@ const Courts = () => {
             </thead>
             
             <tbody>
-              {filteredCourts.map((court) => (
-                <tr
-                  key={court.id}
-                  style={{ borderBottom: "1px solid #f3f4f6" }}
-                >
-                  <td style={{ padding: 12, fontWeight: 600 }}>{court.name}</td>
-                  <td style={{ padding: 12 }}>{court.type}</td>
-                  <td style={{ padding: 12 }}>{court.capacity} người</td>
-                  <td
-                    style={{ padding: 12, fontWeight: 600, color: "#059669" }}
-                  >
-                    {court.price.toLocaleString()} VNĐ
+              {loading ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "#6b7280" }}>
+                    Đang tải...
                   </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "#ef4444" }}>
+                    {error}
+                  </td>
+                </tr>
+              ) : filteredCourts.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "#6b7280" }}>
+                    Không có sân nào
+                  </td>
+                </tr>
+              ) : (
+                filteredCourts.map((court) => (
+                  <tr
+                    key={court._id || court.id}
+                    style={{ borderBottom: "1px solid #f3f4f6" }}
+                  >
+                    <td style={{ padding: 12, fontWeight: 600 }}>{court.name}</td>
+                    <td style={{ padding: 12 }}>{court.type}</td>
+                    <td style={{ padding: 12 }}>{court.capacity} người</td>
+                    <td
+                      style={{ padding: 12, fontWeight: 600, color: "#059669" }}
+                    >
+                      {(court.price || 0).toLocaleString()} VNĐ
+                    </td>
                   <td style={{ padding: 12 }}>
                     <span
                       style={{
@@ -404,7 +503,8 @@ const Courts = () => {
                     />
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -439,9 +539,14 @@ const Courts = () => {
           setSelectedCourt(null);
         }}
         court={selectedCourt}
-        onConfirm={(c) => {
-          // set status active
-          setCourts((prev) => prev.map((it) => (it.id === c.id ? { ...it, status: "active", maintenance: "Không có lịch bảo trì" } : it)));
+        onConfirm={async (c) => {
+          try {
+            const courtId = c._id || c.id;
+            await courtApi.updateStatus(courtId, "active");
+            await fetchCourts();
+          } catch (err) {
+            alert(err.message || "Không thể kích hoạt sân");
+          }
         }}
       />
 
@@ -453,8 +558,14 @@ const Courts = () => {
           setSelectedCourt(null);
         }}
         court={selectedCourt}
-        onConfirm={(c) => {
-          setCourts((prev) => prev.filter((it) => it.id !== c.id));
+        onConfirm={async (c) => {
+          try {
+            const courtId = c._id || c.id;
+            await courtApi.deleteCourt(courtId);
+            await fetchCourts();
+          } catch (err) {
+            alert(err.message || "Không thể xóa sân");
+          }
         }}
       />
 
@@ -476,8 +587,18 @@ const Courts = () => {
           setSelectedCourt(null);
         }}
         court={selectedCourt}
-        onConfirm={(c) => {
-          setCourts((prev) => prev.map((it) => (it.id === c.id ? { ...it, ...c } : it)));
+        onConfirm={async (c) => {
+          try {
+            const courtId = c._id || c.id;
+            await courtApi.updateStatus(courtId, "maintenance");
+            // Update maintenance info if provided
+            if (c.maintenance) {
+              await courtApi.updateCourt(courtId, { maintenance: c.maintenance });
+            }
+            await fetchCourts();
+          } catch (err) {
+            alert(err.message || "Không thể đặt bảo trì");
+          }
         }}
       />
 
@@ -489,8 +610,17 @@ const Courts = () => {
           setSelectedCourt(null);
         }}
         court={selectedCourt}
-        onConfirm={(c) => {
-          setCourts((prev) => prev.map((it) => (it.id === c.id ? { ...it, ...c } : it)));
+        onConfirm={async (c) => {
+          try {
+            const courtId = c._id || c.id;
+            const updateData = {};
+            if (c.maintenance) updateData.maintenance = c.maintenance;
+            if (c.status) updateData.status = c.status;
+            await courtApi.updateCourt(courtId, updateData);
+            await fetchCourts();
+          } catch (err) {
+            alert(err.message || "Không thể lên lịch bảo trì");
+          }
         }}
       />
     </div>

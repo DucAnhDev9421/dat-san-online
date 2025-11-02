@@ -17,7 +17,7 @@ import {
   DollarSign,
   Loader,
 } from "lucide-react";
-import { api } from "../../../api/axiosClient";
+import { facilityApi } from "../../../api/facilityApi";
 
 const SetupVenue = () => {
   const navigate = useNavigate();
@@ -31,6 +31,15 @@ const SetupVenue = () => {
     pricePerHour: "", // Giá mỗi giờ (required)
     description: "", // Mô tả
     services: [], // Tiện ích
+    operatingHours: {
+      monday: { isOpen: true, open: "06:00", close: "22:00" },
+      tuesday: { isOpen: true, open: "06:00", close: "22:00" },
+      wednesday: { isOpen: true, open: "06:00", close: "22:00" },
+      thursday: { isOpen: true, open: "06:00", close: "22:00" },
+      friday: { isOpen: true, open: "06:00", close: "22:00" },
+      saturday: { isOpen: true, open: "06:00", close: "22:00" },
+      sunday: { isOpen: true, open: "06:00", close: "22:00" },
+    },
   });
 
   const [images, setImages] = useState([]);
@@ -39,6 +48,8 @@ const SetupVenue = () => {
   const [districts, setDistricts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
+  const [customService, setCustomService] = useState(""); // Input cho tiện ích tùy chỉnh
+  const [customServices, setCustomServices] = useState([]); // Danh sách tiện ích custom đã thêm
 
   const sportTypes = [
     "Bóng đá",
@@ -119,6 +130,63 @@ const SetupVenue = () => {
     });
   };
 
+  const handleAddCustomService = () => {
+    if (customService.trim()) {
+      const trimmedService = customService.trim();
+      // Kiểm tra xem đã có trong danh sách chưa (cả preset và custom)
+      if (
+        !formData.services.includes(trimmedService) &&
+        !customServices.includes(trimmedService)
+      ) {
+        setCustomServices((prev) => [...prev, trimmedService]);
+        setFormData((prev) => ({
+          ...prev,
+          services: [...prev.services, trimmedService],
+        }));
+        setCustomService("");
+      } else {
+        toast.warning("Tiện ích này đã được thêm");
+      }
+    }
+  };
+
+  const handleRemoveCustomService = (service) => {
+    setCustomServices((prev) => prev.filter((s) => s !== service));
+    setFormData((prev) => ({
+      ...prev,
+      services: prev.services.filter((s) => s !== service),
+    }));
+  };
+
+  const handleOperatingHoursChange = (day, field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      operatingHours: {
+        ...prev.operatingHours,
+        [day]: {
+          ...prev.operatingHours[day],
+          [field]: field === "isOpen" ? value : value,
+        },
+      },
+    }));
+  };
+
+  const applyToAllDays = (field, value) => {
+    setFormData((prev) => {
+      const updatedHours = { ...prev.operatingHours };
+      Object.keys(updatedHours).forEach((day) => {
+        updatedHours[day] = {
+          ...updatedHours[day],
+          [field]: field === "isOpen" ? value : value,
+        };
+      });
+      return {
+        ...prev,
+        operatingHours: updatedHours,
+      };
+    });
+  };
+
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
     const remainingSlots = 5 - images.length;
@@ -161,26 +229,15 @@ const SetupVenue = () => {
     if (images.length === 0) return [];
 
     setUploadingImages(true);
-    const uploadedImages = [];
 
     try {
-      // Upload từng ảnh lên endpoint
-      const formData = new FormData();
-      images.forEach((image) => {
-        formData.append("images", image);
-      });
-
-      const response = await api.upload(`/facilities/${facilityId}/upload`, formData);
-      
-      if (response.data?.success) {
-        // API trả về facility với images đã upload
-        return response.data.data.images || [];
-      }
-      return [];
+      const result = await facilityApi.uploadImages(facilityId, images);
+      return result.data?.images || [];
     } catch (error) {
       console.error("Error uploading images:", error);
-      toast.error("Có lỗi khi upload ảnh. Bạn có thể upload sau.");
-      return [];
+      const errorMessage = error.message || "Có lỗi khi upload ảnh. Bạn có thể upload ảnh sau trong trang quản lý cơ sở.";
+      toast.error(errorMessage);
+      throw error; // Re-throw để caller biết có lỗi
     } finally {
       setUploadingImages(false);
     }
@@ -208,35 +265,63 @@ const SetupVenue = () => {
         pricePerHour: Number(formData.pricePerHour),
         phoneNumber: formData.phoneNumber.trim(),
         description: formData.description.trim(),
-        services: formData.services,
-        // operatingHours sẽ dùng default từ model
+        services: formData.services.length > 0 ? formData.services : undefined,
+        operatingHours: formData.operatingHours,
         // images sẽ upload sau khi tạo facility
       };
 
-      // Gọi API tạo facility
-      const response = await api.post("/facilities", facilityData);
+      console.log("Creating facility with data:", facilityData);
 
-      if (response.data?.success) {
-        const facility = response.data.data;
-        toast.success("Tạo cơ sở thành công!");
+      // Gọi API tạo facility
+      const result = await facilityApi.createFacility(facilityData);
+
+      console.log("Facility creation response:", result);
+
+      if (result.success && result.data) {
+        const facility = result.data;
+        const facilityId = facility._id || facility.id;
+        
+        console.log("Facility created successfully:", facilityId);
+        toast.success(result.message || "Tạo cơ sở thành công!");
 
         // Upload ảnh nếu có
-        if (images.length > 0) {
-          await uploadImagesToCloudinary(facility._id || facility.id);
-          toast.success("Upload ảnh thành công!");
+        if (images.length > 0 && facilityId) {
+          try {
+            await uploadImagesToCloudinary(facilityId);
+            toast.success("Upload ảnh thành công!");
+          } catch (uploadError) {
+            // Lỗi upload ảnh không ngăn chặn việc redirect
+            // Owner có thể upload ảnh sau
+            console.error("Failed to upload images:", uploadError);
+          }
         }
 
         // Redirect về owner panel
-        navigate("/owner");
+        setTimeout(() => {
+          navigate("/owner");
+        }, 1000);
       } else {
-        toast.error(response.data?.message || "Có lỗi xảy ra khi tạo cơ sở");
+        throw new Error(result.message || "Có lỗi xảy ra khi tạo cơ sở");
       }
     } catch (error) {
       console.error("Error creating facility:", error);
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "Có lỗi xảy ra khi tạo cơ sở";
+      
+      // Xử lý lỗi từ handleApiError
+      let errorMessage = "Có lỗi xảy ra khi tạo cơ sở";
+      
+      if (error.status === 0) {
+        // Network error
+        errorMessage = "Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.";
+      } else {
+        errorMessage = error.message || errorMessage;
+        
+        // Hiển thị lỗi validation nếu có
+        if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+          const validationErrors = error.errors.map(err => err.msg || err.message || err).join(", ");
+          errorMessage = validationErrors || errorMessage;
+        }
+      }
+      
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -718,40 +803,368 @@ const SetupVenue = () => {
             <Target size={20} color="#10b981" /> Tiện ích
           </h2>
 
-          <div
+          {/* Tiện ích có sẵn */}
+          <div style={{ marginBottom: 24 }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: 12,
+                fontSize: 14,
+                fontWeight: 600,
+                color: "#6b7280",
+              }}
+            >
+              Tiện ích có sẵn
+            </label>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                gap: 12,
+              }}
+            >
+              {facilities.map((facility) => (
+                <label
+                  key={facility}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "12px",
+                    border: `2px solid ${
+                      formData.services.includes(facility) ? "#10b981" : "#e5e7eb"
+                    }`,
+                    borderRadius: 10,
+                    cursor: "pointer",
+                    background: formData.services.includes(facility)
+                      ? "#f0fdf4"
+                      : "#fff",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData.services.includes(facility)}
+                    onChange={() => handleCheckbox("services", facility)}
+                    style={{ margin: 0 }}
+                  />
+                  <span>{facility}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Thêm tiện ích tùy chỉnh */}
+          <div style={{ marginBottom: 16 }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: 12,
+                fontSize: 14,
+                fontWeight: 600,
+                color: "#6b7280",
+              }}
+            >
+              Thêm tiện ích khác
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                value={customService}
+                onChange={(e) => setCustomService(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddCustomService();
+                  }
+                }}
+                placeholder="Nhập tên tiện ích và nhấn Enter hoặc nút Thêm"
+                style={{
+                  flex: 1,
+                  padding: "12px 16px",
+                  borderRadius: 10,
+                  border: "2px solid #e5e7eb",
+                  fontSize: 15,
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomService}
+                disabled={!customService.trim()}
+                style={{
+                  padding: "12px 24px",
+                  background: customService.trim()
+                    ? "linear-gradient(135deg, #10b981, #059669)"
+                    : "#e5e7eb",
+                  color: customService.trim() ? "#fff" : "#9ca3af",
+                  border: "none",
+                  borderRadius: 10,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  cursor: customService.trim() ? "pointer" : "not-allowed",
+                  transition: "all 0.2s",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Thêm
+              </button>
+            </div>
+          </div>
+
+          {/* Hiển thị tiện ích custom đã thêm */}
+          {customServices.length > 0 && (
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 12,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#6b7280",
+                }}
+              >
+                Tiện ích tùy chỉnh đã thêm
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                }}
+              >
+                {customServices.map((service) => (
+                  <div
+                    key={service}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 12px",
+                      background: "#f0fdf4",
+                      border: "2px solid #10b981",
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 500,
+                      color: "#059669",
+                    }}
+                  >
+                    <span>{service}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCustomService(service)}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 2,
+                        display: "flex",
+                        alignItems: "center",
+                        color: "#059669",
+                      }}
+                      title="Xóa"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Giờ hoạt động */}
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 16,
+            padding: 24,
+            boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+            marginBottom: 24,
+          }}
+        >
+          <h2
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-              gap: 12,
+              fontSize: 18,
+              fontWeight: 700,
+              marginBottom: 20,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
             }}
           >
-            {facilities.map((facility) => (
-              <label
-                key={facility}
+            <Clock size={20} color="#f59e0b" /> Giờ hoạt động
+          </h2>
+
+          {/* Áp dụng cho tất cả các ngày */}
+          <div
+            style={{
+              marginBottom: 20,
+              padding: 16,
+              background: "#fef3c7",
+              borderRadius: 10,
+              border: "1px solid #fde68a",
+            }}
+          >
+            <div style={{ marginBottom: 12, fontSize: 14, fontWeight: 600, color: "#92400e" }}>
+              Áp dụng cho tất cả các ngày
+            </div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => applyToAllDays("isOpen", true)}
+                style={{
+                  padding: "8px 16px",
+                  background: "#fbbf24",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Mở cửa tất cả
+              </button>
+              <button
+                type="button"
+                onClick={() => applyToAllDays("isOpen", false)}
+                style={{
+                  padding: "8px 16px",
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Đóng cửa tất cả
+              </button>
+              <input
+                type="time"
+                onChange={(e) => applyToAllDays("open", e.target.value)}
+                defaultValue="06:00"
+                style={{
+                  padding: "8px 12px",
+                  border: "2px solid #e5e7eb",
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+              />
+              <span style={{ display: "flex", alignItems: "center", fontSize: 13, color: "#6b7280" }}>
+                đến
+              </span>
+              <input
+                type="time"
+                onChange={(e) => applyToAllDays("close", e.target.value)}
+                defaultValue="22:00"
+                style={{
+                  padding: "8px 12px",
+                  border: "2px solid #e5e7eb",
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Danh sách các ngày */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {[
+              { key: "monday", label: "Thứ Hai" },
+              { key: "tuesday", label: "Thứ Ba" },
+              { key: "wednesday", label: "Thứ Tư" },
+              { key: "thursday", label: "Thứ Năm" },
+              { key: "friday", label: "Thứ Sáu" },
+              { key: "saturday", label: "Thứ Bảy" },
+              { key: "sunday", label: "Chủ Nhật" },
+            ].map((day) => (
+              <div
+                key={day.key}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
-                  padding: "12px",
-                  border: `2px solid ${
-                    formData.services.includes(facility) ? "#10b981" : "#e5e7eb"
-                  }`,
-                  borderRadius: 10,
-                  cursor: "pointer",
-                  background: formData.services.includes(facility)
+                  gap: 16,
+                  padding: 16,
+                  background: formData.operatingHours[day.key].isOpen
                     ? "#f0fdf4"
-                    : "#fff",
-                  transition: "all 0.2s",
+                    : "#f9fafb",
+                  borderRadius: 10,
+                  border: `2px solid ${
+                    formData.operatingHours[day.key].isOpen ? "#10b981" : "#e5e7eb"
+                  }`,
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={formData.services.includes(facility)}
-                  onChange={() => handleCheckbox("services", facility)}
-                  style={{ margin: 0 }}
-                />
-                <span>{facility}</span>
-              </label>
+                <div style={{ minWidth: 100, fontWeight: 600, color: "#374151" }}>
+                  {day.label}
+                </div>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData.operatingHours[day.key].isOpen}
+                    onChange={(e) =>
+                      handleOperatingHoursChange(day.key, "isOpen", e.target.checked)
+                    }
+                    style={{
+                      width: 18,
+                      height: 18,
+                      cursor: "pointer",
+                    }}
+                  />
+                  <span style={{ fontSize: 14, color: "#6b7280" }}>
+                    {formData.operatingHours[day.key].isOpen ? "Mở cửa" : "Đóng cửa"}
+                  </span>
+                </label>
+                {formData.operatingHours[day.key].isOpen && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginLeft: "auto",
+                    }}
+                  >
+                    <input
+                      type="time"
+                      value={formData.operatingHours[day.key].open}
+                      onChange={(e) =>
+                        handleOperatingHoursChange(day.key, "open", e.target.value)
+                      }
+                      style={{
+                        padding: "8px 12px",
+                        border: "2px solid #e5e7eb",
+                        borderRadius: 8,
+                        fontSize: 14,
+                        background: "#fff",
+                      }}
+                    />
+                    <span style={{ fontSize: 14, color: "#6b7280" }}>đến</span>
+                    <input
+                      type="time"
+                      value={formData.operatingHours[day.key].close}
+                      onChange={(e) =>
+                        handleOperatingHoursChange(day.key, "close", e.target.value)
+                      }
+                      style={{
+                        padding: "8px 12px",
+                        border: "2px solid #e5e7eb",
+                        borderRadius: 8,
+                        fontSize: 14,
+                        background: "#fff",
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
