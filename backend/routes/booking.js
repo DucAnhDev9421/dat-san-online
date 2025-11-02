@@ -148,6 +148,7 @@ router.get("/availability", async (req, res, next) => {
         },
         facility: {
           name: court.facility.name,
+          address: court.facility.address,
           location: court.facility.location,
         },
       },
@@ -249,7 +250,7 @@ router.post("/", authenticateToken, async (req, res, next) => {
 
     // Populate for response
     await booking.populate("court", "name type price");
-    await booking.populate("facility", "name location");
+    await booking.populate("facility", "name address location");
 
     res.status(201).json({
       success: true,
@@ -292,7 +293,7 @@ router.get("/my-bookings", authenticateToken, async (req, res, next) => {
     // Get bookings
     const bookings = await Booking.find(filter)
       .populate("court", "name type price")
-      .populate("facility", "name location")
+      .populate("facility", "name address location")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);

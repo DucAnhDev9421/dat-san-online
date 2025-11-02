@@ -9,6 +9,7 @@ import {
 } from "../middleware/Auth.js";
 import { logAudit } from "../utils/auditLogger.js";
 import { uploadFacilityImage, cloudinaryUtils } from "../config/cloudinary.js";
+import { geocodeAddress } from "../utils/goongService.js";
 
 const router = express.Router();
 
@@ -82,6 +83,60 @@ const checkOwnershipOrAdmin = async (req, res, next) => {
   }
 };
 
+// Middleware để tự động lấy tọa độ từ địa chỉ
+const autoGeocode = async (req, res, next) => {
+  try {
+    // Nếu có address và chưa có location, hoặc address thay đổi
+    if (req.body.address && (!req.body.location?.coordinates || req.body.addressChanged)) {
+      try {
+        const geocodeResult = await geocodeAddress(req.body.address);
+        
+        // Format theo GeoJSON: [longitude, latitude]
+        if (geocodeResult.lng && geocodeResult.lat) {
+          req.body.location = {
+            type: 'Point',
+            coordinates: [geocodeResult.lng, geocodeResult.lat]
+          };
+        } else {
+          // Xóa location nếu không có tọa độ hợp lệ
+          delete req.body.location;
+        }
+
+        // Có thể cập nhật lại address với formatted_address từ Goong (tùy chọn)
+        // req.body.address = geocodeResult.formatted_address;
+      } catch (error) {
+        // Nếu không lấy được tọa độ, xóa location để tránh lỗi
+        console.warn('Không thể lấy tọa độ từ Goong API:', error.message);
+        delete req.body.location;
+      }
+    }
+    
+    // Validate location từ client: chỉ set nếu có coordinates hợp lệ
+    if (req.body.location) {
+      if (req.body.location.coordinates && Array.isArray(req.body.location.coordinates) && req.body.location.coordinates.length === 2) {
+        const [lng, lat] = req.body.location.coordinates;
+        // Validate range
+        if (lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90) {
+          req.body.location = {
+            type: 'Point',
+            coordinates: [lng, lat]
+          };
+        } else {
+          // Tọa độ không hợp lệ, xóa location
+          delete req.body.location;
+        }
+      } else {
+        // Location không có coordinates hợp lệ, xóa để tránh lỗi
+        delete req.body.location;
+      }
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 // === CÁC API ENDPOINTS ===
 
 /**
@@ -92,10 +147,9 @@ router.post(
   "/",
   authenticateToken,
   authorize("owner"), // Chỉ 'owner' mới được tạo
+  autoGeocode, // Middleware tự động lấy tọa độ từ địa chỉ
   async (req, res, next) => {
     try {
-      const { name, location, type, pricePerHour, description } = req.body;
-
       const facility = new Facility({
         ...req.body,
         owner: req.user._id, // Gán chủ sở hữu là user đang đăng nhập
@@ -128,9 +182,9 @@ router.get("/", async (req, res, next) => {
     if (req.query.type) {
       query.type = req.query.type;
     }
-    if (req.query.location) {
-      // Tìm kiếm location gần đúng
-      query.location = { $regex: req.query.location, $options: "i" };
+    if (req.query.address) {
+      // Tìm kiếm address gần đúng
+      query.address = { $regex: req.query.address, $options: "i" };
     }
     if (req.query.ownerId) {
       query.owner = req.query.ownerId;
@@ -138,9 +192,32 @@ router.get("/", async (req, res, next) => {
 
     query.status = "opening"; // Mặc định chỉ lấy sân đang mở
 
-    const facilities = await Facility.find(query)
-      .populate("owner", "name email avatar") // Lấy thông tin chủ sân
-      .sort({ createdAt: -1 })
+    // Tìm kiếm theo khoảng cách nếu có tọa độ
+    if (req.query.lat && req.query.lng) {
+      const lat = parseFloat(req.query.lat);
+      const lng = parseFloat(req.query.lng);
+      const maxDistance = parseFloat(req.query.maxDistance) || 10000; // mặc định 10km (met)
+
+      query.location = {
+        $near: {
+          $geometry: {
+            type: "Point",
+            coordinates: [lng, lat]
+          },
+          $maxDistance: maxDistance
+        }
+      };
+    }
+
+    let queryBuilder = Facility.find(query)
+      .populate("owner", "name email avatar");
+
+    // Sort theo khoảng cách nếu tìm theo vị trí, không thì sort theo createdAt
+    if (!(req.query.lat && req.query.lng)) {
+      queryBuilder.sort({ createdAt: -1 });
+    }
+
+    const facilities = await queryBuilder
       .skip(skip)
       .limit(limit);
 
@@ -200,6 +277,7 @@ router.put(
   "/:id",
   authenticateToken,
   checkOwnership, // Middleware kiểm tra đúng chủ sở hữu
+  autoGeocode, // Middleware tự động lấy tọa độ từ địa chỉ
   async (req, res, next) => {
     try {
       // Không cho phép cập nhật owner

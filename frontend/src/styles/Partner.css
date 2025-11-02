@@ -34,14 +34,14 @@
 }
 
 .hero-badge {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 2px;
   margin-bottom: 16px;
   opacity: 0.9;
 }
 
-.hero-title {
+.partner-hero .hero-title {
   font-size: 52px;
   font-weight: 800;
   margin-bottom: 24px;
@@ -49,8 +49,8 @@
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.hero-subtitle {
-  font-size: 20px;
+.partner-hero .hero-subtitle {
+  font-size: 18px;
   margin-bottom: 40px;
   opacity: 0.95;
   line-height: 1.6;
@@ -359,11 +359,11 @@
 }
 
 @media (max-width: 768px) {
-  .hero-title {
+  .partner-hero .hero-title {
     font-size: 36px;
   }
 
-  .hero-subtitle {
+  .partner-hero .hero-subtitle {
     font-size: 18px;
   }
 
@@ -399,11 +399,11 @@
     padding: 60px 16px;
   }
 
-  .hero-title {
+  .partner-hero .hero-title {
     font-size: 28px;
   }
 
-  .hero-subtitle {
+  .partner-hero .hero-subtitle {
     font-size: 16px;
   }
 
