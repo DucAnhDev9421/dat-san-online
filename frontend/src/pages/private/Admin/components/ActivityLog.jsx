@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { Eye, Trash2 } from "lucide-react";
 import { activityLogData } from "../data/mockData";
+import ActivityLogDetailModal from "../modals/ActivityLogDetailModal";
+import ActivityLogDeleteModal from "../modals/ActivityLogDeleteModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -21,18 +23,61 @@ const ActionButton = ({ bg, Icon, onClick, title }) => (
 );
 
 const ActivityLog = () => {
+
+  // -- LƯU DATA VÀO STATE ĐỂ CÓ THỂ CẬP NHẬT --
+  const [logs, setLogs] = useState(activityLogData);
+
   const [searchQuery, setSearchQuery] = useState("");
+
+  // -- THÊM STATE CHO MODAL --
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedLog, setSelectedLog] = useState(null);
+
+  // -- THÊM STATE CHO MODAL XÓA --
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [logToDelete, setLogToDelete] = useState(null);
 
   const filteredActivityLog = useMemo(
     () =>
-      activityLogData.filter((r) =>
+      logs.filter((r) =>
         [r.user, r.action, r.target, r.details, r.ip]
           .join(" ")
           .toLowerCase()
           .includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [logs, searchQuery]
   );
+
+  // -- THÊM HÀM ĐIỀU KHIỂN MODAL --
+  const handleViewDetails = (log) => {
+    setSelectedLog(log);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleCloseDetailModal = () => {
+    setIsDetailModalOpen(false);
+    setSelectedLog(null);
+  };
+
+  // -- THÊM CÁC HÀM XỬ LÝ XÓA --
+  const handleOpenDeleteModal = (log) => {
+    setLogToDelete(log);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setLogToDelete(null);
+    setIsDeleteModalOpen(false);
+  };
+
+  const handleConfirmDelete = () => {
+    if (logToDelete) {
+      setLogs((currentLogs) =>
+        currentLogs.filter((log) => log.id !== logToDelete.id)
+      );
+      handleCloseDeleteModal();
+    }
+  };
 
   return (
     <div>
@@ -181,13 +226,13 @@ const ActivityLog = () => {
                     <ActionButton
                       bg="#06b6d4"
                       Icon={Eye}
-                      onClick={() => alert("Xem chi tiết " + r.id)}
+                      onClick={() => handleViewDetails(r)}
                       title="Xem chi tiết"
                     />
                     <ActionButton
                       bg="#ef4444"
                       Icon={Trash2}
-                      onClick={() => alert("Xóa " + r.id)}
+                      onClick={() => handleOpenDeleteModal(r)}
                       title="Xóa"
                     />
                   </td>
@@ -212,6 +257,20 @@ const ActivityLog = () => {
           </table>
         </div>
       </div>
+
+      {/* -- RENDER MODAL TẠI ĐÂY -- */}
+      <ActivityLogDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={handleCloseDetailModal}
+        log={selectedLog}
+      />
+
+      <ActivityLogDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDelete}
+        log={logToDelete}
+      />
     </div>
   );
 };

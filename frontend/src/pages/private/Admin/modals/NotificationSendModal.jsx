@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-// 1. Thêm các icon cho CardHeader và nút
-import { X, Save, Info, Settings, MessageSquare } from "lucide-react";
+import { X, Send, MessageSquare, Tag } from "lucide-react";
 
-// 2. Component con cho Tiêu đề Card
+const BG_HEADER = "#eef2ff"; 
+// Component con cho Tiêu đề Card
 const CardHeader = ({ Icon, title }) => (
   <div
     style={{
@@ -19,8 +19,8 @@ const CardHeader = ({ Icon, title }) => (
   </div>
 );
 
-// 3. Component con cho Input
-const FormInput = ({ label, value, name, onChange, type = "text" }) => (
+// Component con cho Input
+const FormInput = ({ label, value, name, onChange }) => (
   <div style={{ marginBottom: 16 }}>
     <label
       style={{
@@ -34,7 +34,7 @@ const FormInput = ({ label, value, name, onChange, type = "text" }) => (
       {label}
     </label>
     <input
-      type={type}
+      type="text"
       name={name}
       value={value}
       onChange={onChange}
@@ -51,7 +51,7 @@ const FormInput = ({ label, value, name, onChange, type = "text" }) => (
   </div>
 );
 
-// 4. Component con cho Select
+// Component con cho Select
 const FormSelect = ({ label, value, name, onChange, options }) => (
     <div style={{ marginBottom: 16 }}>
       <label
@@ -85,8 +85,8 @@ const FormSelect = ({ label, value, name, onChange, options }) => (
       </select>
     </div>
   );
-
-// 5. Component con cho Textarea
+  
+// Component con cho Textarea
 const FormTextarea = ({ label, value, name, onChange, rows = 4 }) => (
     <div style={{ marginBottom: 16 }}>
       <label
@@ -119,82 +119,79 @@ const FormTextarea = ({ label, value, name, onChange, rows = 4 }) => (
     </div>
 )
 
+// Dữ liệu ban đầu cho thông báo mới
+const getInitialData = () => {
+    const now = new Date();
+    return {
+        id: `N${Math.floor(100 + Math.random() * 900)}`, // Tạo ID ngẫu nhiên
+        title: "",
+        message: "",
+        type: "report", // Mặc định là 'Báo cáo' hoặc 'Chung'
+        status: "unread",
+        date: now.toISOString().split('T')[0],
+        time: now.toTimeString().split(' ')[0].substring(0, 5) // HH:MM
+    };
+};
 
 // Component Modal chính
-const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
-  // 6. Giữ nguyên logic state và các hàm xử lý
-  const [form, setForm] = useState({
-    id: "",
-    name: "",
-    type: "",
-    capacity: "",
-    price: 0,
-    status: "inactive",
-    description: "",
-    maintenance: "",
-  });
+const NotificationSendModal = ({ isOpen, onClose, onSend }) => {
+  const [formData, setFormData] = useState(getInitialData());
 
+  // Reset form mỗi khi modal được mở
   useEffect(() => {
-    setForm({
-      id: initialData?.id ?? "",
-      name: initialData?.name ?? "",
-      type: initialData?.type ?? "",
-      capacity: initialData?.capacity ?? "",
-      price: initialData?.price ?? 0,
-      status: initialData?.status ?? "inactive",
-      description: initialData?.description ?? "",
-      maintenance: initialData?.maintenance ?? "",
-    });
-  }, [initialData]);
+    if (isOpen) {
+      setFormData(getInitialData());
+    }
+  }, [isOpen]);
+
+  // Xử lý thay đổi input
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Xử lý gửi
+  const handleSend = () => {
+    onSend(formData);
+  };
 
   if (!isOpen) return null;
 
-  const handleChange = (key) => (e) => {
-    const value = e.target.value;
-    setForm((s) => ({ ...s, [key]: value }));
-  };
-
-  const handleSave = () => {
-    if (!form.name) return alert("Vui lòng nhập tên sân");
-    const payload = {
-      ...form,
-      capacity: Number(form.capacity) || form.capacity,
-      price: Number(form.price) || 0,
-    };
-    onSave?.(payload);
-    onClose?.();
-  };
-
-  // 7. Xây dựng lại toàn bộ JSX
   return (
     // Backdrop
     <div
-      onClick={onClose}
       style={{
         position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(0, 0, 0, 0.5)",
         display: "flex",
-        alignItems: "center",
         justifyContent: "center",
-        padding: 20,
-        zIndex: 1000,
+        alignItems: "center",
+        zIndex: 1010,
       }}
+      onClick={onClose}
     >
-      {/* Modal Container */}
+      {/* Nội dung Modal */}
       <div
-        onClick={(e) => e.stopPropagation()}
         style={{
-          width: "100%",
-          maxWidth: 600, // Thu hẹp lại một chút cho đẹp
-          maxHeight: "90vh",
           background: "#fff",
           borderRadius: 12,
+          boxShadow: "0 10px 30px rgba(0,0,0,.1)",
+          width: "90%",
+          maxWidth: "550px",
+          maxHeight: "90vh",
           display: "flex",
           flexDirection: "column",
         }}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header (Nền trắng) */}
+        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -202,22 +199,22 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
             alignItems: "center",
             padding: "16px 24px",
             borderBottom: "1px solid #e5e7eb",
+            background: BG_HEADER,
           }}
         >
           <h2
-            style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#1f2937" }}
+            style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#1f2937", display: "flex", alignItems: "center", gap: 8 }}
           >
-            {form.id ? `Chỉnh sửa sân: ` : "Thêm sân mới"}
-            {form.id && <span style={{ color: "#3b82f6" }}>{form.name}</span>}
+            <Send size={18} /> Gửi thông báo mới
           </h2>
           <button
             onClick={onClose}
             style={{
               background: "none",
-              border: "none",
+              border: 0,
               cursor: "pointer",
-              padding: 4,
               color: "#6b7280",
+              padding: 4,
             }}
           >
             <X size={20} />
@@ -233,50 +230,37 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
             flex: 1,
           }}
         >
-          {/* Card 1: Thông tin cơ bản */}
+          {/* Card: Nội dung */}
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 16, overflow: "hidden" }}>
-            <CardHeader Icon={Info} title="Thông tin cơ bản" />
+            <CardHeader Icon={MessageSquare} title="Nội dung" />
             <div style={{ padding: 20 }}>
-                <FormInput label="Tên sân" name="name" value={form.name} onChange={handleChange("name")} />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
-                    <FormInput label="Loại (ví dụ: Sân 5, Sân 7)" name="type" value={form.type} onChange={handleChange("type")} />
-                    <FormInput label="Sức chứa (người)" name="capacity" value={form.capacity} onChange={handleChange("capacity")} type="number" />
-                </div>
+                <FormInput label="Tiêu đề" name="title" value={formData.title} onChange={handleChange} />
+                <FormTextarea label="Nội dung" name="message" value={formData.message} onChange={handleChange} />
             </div>
           </div>
 
-          {/* Card 2: Vận hành & Giá cả */}
+          {/* Card: Cấu hình */}
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 16, overflow: "hidden" }}>
-            <CardHeader Icon={Settings} title="Vận hành & Giá cả" />
+            <CardHeader Icon={Tag} title="Cấu hình" />
             <div style={{ padding: 20 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
-                    <FormInput label="Giá/giờ (VNĐ)" name="price" value={form.price} onChange={handleChange("price")} type="number" />
-                    <FormSelect
-                        label="Trạng thái"
-                        name="status"
-                        value={form.status}
-                        onChange={handleChange("status")}
-                        options={[
-                            { value: "active", label: "Hoạt động" },
-                            { value: "maintenance", label: "Bảo trì" },
-                            { value: "inactive", label: "Tạm ngưng" },
-                        ]}
-                    />
-                </div>
-                <FormInput label="Lịch bảo trì (miêu tả)" name="maintenance" value={form.maintenance} onChange={handleChange("maintenance")} />
-            </div>
-          </div>
-          
-          {/* Card 3: Mô tả */}
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 16, overflow: "hidden" }}>
-            <CardHeader Icon={MessageSquare} title="Mô tả" />
-            <div style={{ padding: 20 }}>
-                <FormTextarea label="Mô tả chi tiết" name="description" value={form.description} onChange={handleChange("description")} />
+                <FormSelect
+                    label="Loại thông báo"
+                    name="type"
+                    value={formData.type}
+                    onChange={handleChange}
+                    options={[
+                        { value: "report", label: "Báo cáo / Chung" },
+                        { value: "booking", label: "Đặt sân" },
+                        { value: "payment", label: "Thanh toán" },
+                        { value: "cancellation", label: "Hủy đặt sân" },
+                        { value: "registration", label: "Đăng ký" },
+                    ]}
+                />
             </div>
           </div>
         </div>
 
-        {/* Footer (Nền trắng) */}
+        {/* Footer */}
         <div
           style={{
             display: "flex",
@@ -300,12 +284,12 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
               fontSize: 14,
             }}
           >
-            Hủy
+            Hủy bỏ
           </button>
           <button
-            onClick={handleSave}
+            onClick={handleSend}
             style={{
-              background: "rgb(59, 130, 246)", // Giữ màu xanh lá của bạn
+              background: "#10b981", // Màu xanh lá
               color: "#fff",
               border: 0,
               borderRadius: 8,
@@ -318,8 +302,8 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
               gap: 6
             }}
           >
-            <Save size={16} />
-            Lưu
+            <Send size={16} />
+            Gửi
           </button>
         </div>
       </div>
@@ -327,4 +311,4 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
   );
 };
 
-export default EditCourtModal;
+export default NotificationSendModal;

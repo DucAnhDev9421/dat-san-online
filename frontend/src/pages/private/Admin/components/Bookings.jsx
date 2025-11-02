@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from "react";
 import { Calendar, Download, Eye, Pencil, CheckCircle2, XCircle, Clock5 } from "lucide-react";
 import { bookingData } from "../data/mockData";
-
+import BookingDetailModal from "../modals/BookingDetailModal";
+import BookingEditModal from "../modals/BookingEditModal";
+import BookingScheduleModal from "../modals/BookingScheduleModal";
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
     onClick={onClick}
@@ -79,16 +81,71 @@ const Status = ({ value }) => {
 const Bookings = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
+  // -- LƯU DATA VÀO STATE ĐỂ CÓ THỂ CẬP NHẬT --
+  const [bookings, setBookings] = useState(bookingData);
+
+  // -- THÊM STATE CHO MODAL --
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+
+  // -- THÊM STATE CHO MODAL CHỈNH SỬA --
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [bookingToEdit, setBookingToEdit] = useState(null);
+
+  // -- THÊM STATE CHO MODAL LỊCH BIỂU --
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+
   const filteredBookings = useMemo(
     () =>
-      bookingData.filter((r) =>
+      bookings.filter((r) =>
         [r.id, r.customer, r.facility, r.court, r.phone, r.email, r.status]
           .join(" ")
           .toLowerCase()
           .includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [bookings, searchQuery]
   );
+
+  // -- THÊM HÀM ĐIỀU KHIỂN MODAL --
+  const handleViewDetails = (booking) => {
+    setSelectedBooking(booking);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleCloseDetailModal = () => {
+    setIsDetailModalOpen(false);
+    setSelectedBooking(null);
+  };
+
+  // -- THÊM HÀM CHO MODAL CHỈNH SỬA --
+  const handleOpenEditModal = (booking) => {
+    setBookingToEdit(booking);
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setBookingToEdit(null);
+  };
+
+  const handleSaveBooking = (updatedBooking) => {
+    // Cập nhật mảng 'bookings' trong state
+    setBookings(currentBookings =>
+      currentBookings.map(b =>
+        b.id === updatedBooking.id ? updatedBooking : b
+      )
+    );
+    handleCloseEditModal();
+  };
+
+  // -- THÊM HÀM CHO MODAL LỊCH BIỂU --
+  const handleOpenScheduleModal = () => {
+    setIsScheduleModalOpen(true);
+  };
+
+  const handleCloseScheduleModal = () => {
+    setIsScheduleModalOpen(false);
+  };
 
   return (
     <div>
@@ -96,7 +153,7 @@ const Bookings = () => {
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Quản lý lịch đặt sân</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={() => alert("TODO: Xem lịch biểu")}
+            onClick={handleOpenScheduleModal}
             style={{ 
               display: "inline-flex", 
               alignItems: "center", 
@@ -279,7 +336,7 @@ const Bookings = () => {
                     <ActionButton
                       bg="#06b6d4"
                       Icon={Eye}
-                      onClick={() => alert("Xem chi tiết " + r.id)}
+                      onClick={() => handleViewDetails(r)}
                       title="Xem chi tiết"
                     />
                     {r.status === "pending" && (
@@ -301,7 +358,7 @@ const Bookings = () => {
                     <ActionButton
                       bg="#6b7280"
                       Icon={Pencil}
-                      onClick={() => alert("Sửa " + r.id)}
+                      onClick={() => handleOpenEditModal(r)}
                       title="Sửa"
                     />
                   </td>
@@ -326,6 +383,25 @@ const Bookings = () => {
           </table>
         </div>
       </div>
+
+      {/* -- RENDER MODAL TẠI ĐÂY -- */}
+      <BookingDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={handleCloseDetailModal}
+        booking={selectedBooking}
+      />
+
+      <BookingEditModal
+        isOpen={isEditModalOpen}
+        onClose={handleCloseEditModal}
+        onSave={handleSaveBooking}
+        booking={bookingToEdit}
+      />
+
+      <BookingScheduleModal
+        isOpen={isScheduleModalOpen}
+        onClose={handleCloseScheduleModal}
+      />
     </div>
   );
 };

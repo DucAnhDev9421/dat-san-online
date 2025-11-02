@@ -39,7 +39,7 @@ const SetMaintenanceModal = ({ isOpen, onClose, court, onConfirm }) => {
   return (
     <div style={overlayStyle}>
       <div style={boxStyle}>
-        <h3 style={{ margin: 0, marginBottom: 8 }}>Đặt trạng thái bảo trì</h3>
+        <h3 style={{ margin: 0, marginBottom: 8 }}>Tạm ngưng</h3>
         <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 12 }}>Sân: {court?.name || "-"}</div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>

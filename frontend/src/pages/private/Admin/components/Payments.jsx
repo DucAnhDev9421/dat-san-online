@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from "react";
 import { Download, Eye, Pencil, Trash2 } from "lucide-react";
 import { paymentData } from "../data/mockData";
+import PaymentDetailModal from "../modals/PaymentDetailModal";
+import PaymentEditModal from "../modals/PaymentEditModal";
+import PaymentDeleteModal from "../modals/PaymentDeleteModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -21,18 +24,86 @@ const ActionButton = ({ bg, Icon, onClick, title }) => (
 );
 
 const Payments = () => {
+
+  // -- LƯU DATA VÀO STATE ĐỂ CÓ THỂ CẬP NHẬT --
+  const [payments, setPayments] = useState(paymentData);
+
   const [searchQuery, setSearchQuery] = useState("");
+
+  // -- THÊM STATE CHO MODAL --
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState(null);
+
+  // -- THÊM STATE CHO MODAL CHỈNH SỬA --
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [paymentToEdit, setPaymentToEdit] = useState(null);
+
+  // -- THÊM STATE CHO MODAL XÓA --
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState(null);
 
   const filteredPayments = useMemo(
     () =>
-      paymentData.filter((r) =>
+      payments.filter((r) =>
         [r.id, r.bookingId, r.customer, r.facility, r.method, r.status, r.transactionId]
           .join(" ")
           .toLowerCase()
           .includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [payments, searchQuery]
   );
+
+  // -- THÊM HÀM ĐIỀU KHIỂN MODAL --
+  const handleViewDetails = (payment) => {
+    setSelectedPayment(payment);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleCloseDetailModal = () => {
+    setIsDetailModalOpen(false);
+    setSelectedPayment(null);
+  };
+
+  // -- THÊM HÀM CHO MODAL CHỈNH SỬA --
+  const handleOpenEditModal = (payment) => {
+    setPaymentToEdit(payment);
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setPaymentToEdit(null);
+  };
+
+  const handleSavePayment = (updatedPayment) => {
+    // Cập nhật mảng 'payments' trong state
+    setPayments(currentPayments =>
+      currentPayments.map(p =>
+        p.id === updatedPayment.id ? updatedPayment : p
+      )
+    );
+    handleCloseEditModal(); 
+  };
+
+  // --   THÊM CÁC HÀM XỬ LÝ XÓA --
+  const handleOpenDeleteModal = (payment) => {
+    setPaymentToDelete(payment);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setPaymentToDelete(null);
+    setIsDeleteModalOpen(false);
+  };
+
+  const handleConfirmDelete = () => {
+    if (paymentToDelete) {
+      setPayments((currentPayments) =>
+        currentPayments.filter((p) => p.id !== paymentToDelete.id)
+      );
+      handleCloseDeleteModal();
+    }
+  };
 
   return (
     <div>
@@ -200,19 +271,19 @@ const Payments = () => {
                     <ActionButton
                       bg="#06b6d4"
                       Icon={Eye}
-                      onClick={() => alert("Xem chi tiết " + r.id)}
+                      onClick={() => handleViewDetails(r)}
                       title="Xem chi tiết"
                     />
                     <ActionButton
                       bg="#22c55e"
                       Icon={Pencil}
-                      onClick={() => alert("Sửa " + r.id)}
+                      onClick={() => handleOpenEditModal(r)}
                       title="Sửa"
                     />
                     <ActionButton
                       bg="#ef4444"
                       Icon={Trash2}
-                      onClick={() => alert("Xóa " + r.id)}
+                      onClick={() => handleOpenDeleteModal(r)}
                       title="Xóa"
                     />
                   </td>
@@ -237,6 +308,27 @@ const Payments = () => {
           </table>
         </div>
       </div>
+
+      {/* -- RENDER MODAL TẠI ĐÂY -- */}
+      <PaymentDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={handleCloseDetailModal}
+        payment={selectedPayment}
+      />
+
+      <PaymentEditModal
+        isOpen={isEditModalOpen}
+        onClose={handleCloseEditModal}
+        onSave={handleSavePayment}
+        payment={paymentToEdit}
+      />
+
+      <PaymentDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDelete}
+        payment={paymentToDelete}
+      />
     </div>
   );
 };
