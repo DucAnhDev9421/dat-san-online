@@ -23,6 +23,8 @@ import courtRoutes from "./routes/court.js";
 import bookingRoutes from "./routes/booking.js";
 import checkinRoutes from "./routes/checkin.js";
 import paymentRoutes from "./routes/payment.js";
+import sportCategoryRoutes from "./routes/sportCategory.js";
+import courtTypeRoutes from "./routes/courtType.js";
 import User from "./models/User.js";
 
 const app = express();
@@ -53,7 +55,7 @@ app.use(
   cors({
     origin: config.frontendUrl,
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
@@ -103,6 +105,8 @@ app.use("/api/courts", courtRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/checkin", checkinRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/sport-categories", sportCategoryRoutes);
+app.use("/api/court-types", courtTypeRoutes);
 // 404 handler
 app.use(notFound);
 
