@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { feedbacksData } from "../data/mockData";
+import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 
 const Feedbacks = () => {
   const [feedbacks, setFeedbacks] = useState(feedbacksData);
@@ -21,6 +22,7 @@ const Feedbacks = () => {
   const [selectedFeedback, setSelectedFeedback] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isResponseModalOpen, setIsResponseModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [responseText, setResponseText] = useState("");
 
   // Filter data
@@ -94,15 +96,18 @@ const Feedbacks = () => {
   };
 
   const handleDelete = (feedback) => {
-    if (
-      window.confirm(
-        `Bạn có chắc muốn xóa phản hồi "${feedback.subject}"?`
-      )
-    ) {
+    setSelectedFeedback(feedback);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (selectedFeedback) {
       setFeedbacks((current) =>
-        current.filter((f) => f.id !== feedback.id)
+        current.filter((f) => f.id !== selectedFeedback.id)
       );
     }
+    setIsDeleteModalOpen(false);
+    setSelectedFeedback(null);
   };
 
   const resetFilters = () => {
@@ -1083,6 +1088,20 @@ const Feedbacks = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Modal */}
+      <DeleteConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedFeedback(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Xóa phản hồi"
+        message="Bạn có chắc muốn xóa phản hồi"
+        itemName={selectedFeedback?.subject}
+        warningMessage="Hành động này không thể hoàn tác."
+      />
     </div>
   );
 };

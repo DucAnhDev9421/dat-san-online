@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { categoryApi } from "../../../../api/categoryApi";
 import SportCategoryModal from "../modals/SportCategoryModal";
+import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -28,6 +29,7 @@ const SportsCategories = () => {
   const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [error, setError] = useState("");
 
@@ -95,13 +97,22 @@ const SportsCategories = () => {
     }
   };
 
-  const handleDelete = async (category) => {
-    if (window.confirm(`Bạn có chắc muốn xóa danh mục "${category.name}"?`)) {
+  const handleDelete = (category) => {
+    setSelectedCategory(category);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (selectedCategory) {
       try {
-        await categoryApi.deleteSportCategory(category._id);
+        await categoryApi.deleteSportCategory(selectedCategory._id);
         await fetchCategories();
+        setIsDeleteModalOpen(false);
+        setSelectedCategory(null);
       } catch (err) {
         alert(err.message || "Không thể xóa danh mục");
+        setIsDeleteModalOpen(false);
+        setSelectedCategory(null);
       }
     }
   };
@@ -354,6 +365,20 @@ const SportsCategories = () => {
         }}
         onSave={handleSave}
         category={selectedCategory}
+      />
+
+      {/* Delete Modal */}
+      <DeleteConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedCategory(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Xóa danh mục"
+        message="Bạn có chắc muốn xóa danh mục"
+        itemName={selectedCategory?.name}
+        warningMessage="Hành động này không thể hoàn tác."
       />
     </div>
   );

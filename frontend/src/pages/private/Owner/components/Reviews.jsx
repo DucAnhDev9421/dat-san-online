@@ -11,6 +11,10 @@ const Reviews = () => {
   const [isReplyOpen, setIsReplyOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [replyingReview, setReplyingReview] = useState(null);
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const filteredReviews = useMemo(
     () =>
@@ -21,6 +25,15 @@ const Reviews = () => {
           .includes(searchQuery.toLowerCase())
       ),
     [searchQuery, reviews]
+  );
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredReviews.length / pageSize)
+  );
+  const reviewSlice = filteredReviews.slice(
+    (page - 1) * pageSize,
+    page * pageSize
   );
 
   const averageRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
@@ -87,6 +100,28 @@ const Reviews = () => {
             <div>
               <strong>Tổng:</strong> {filteredReviews.length} đánh giá
             </div>
+            <div>
+              <label style={{ marginRight: 8 }}>Hiển thị</label>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                style={{
+                  padding: 6,
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                }}
+              >
+                {[5, 10, 20, 50].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              <span style={{ marginLeft: 8 }}>bản ghi</span>
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <select 
                 style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 14 }}
@@ -96,6 +131,7 @@ const Reviews = () => {
                   } else {
                     setSearchQuery(e.target.value);
                   }
+                  setPage(1);
                 }}
               >
                 <option value="all">Tất cả trạng thái</option>
@@ -107,7 +143,10 @@ const Reviews = () => {
           <input
             placeholder="Tìm theo khách hàng, sân, nội dung…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             style={{ 
               padding: "8px 12px", 
               borderRadius: 8, 
@@ -119,7 +158,7 @@ const Reviews = () => {
         </div>
 
         <div style={{ padding: 16 }}>
-          {filteredReviews.map((review) => (
+          {reviewSlice.map((review) => (
             <div
               key={review.id}
               style={{
@@ -238,6 +277,61 @@ const Reviews = () => {
               Không có dữ liệu đánh giá
             </div>
           )}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: 12,
+            borderTop: "1px solid #e5e7eb",
+          }}
+        >
+          <div>
+            Hiển thị {(page - 1) * pageSize + 1} đến{" "}
+            {Math.min(page * pageSize, filteredReviews.length)} trong tổng số{" "}
+            {filteredReviews.length} bản ghi
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === 1 ? "not-allowed" : "pointer",
+                opacity: page === 1 ? 0.5 : 1,
+              }}
+            >
+              Trước
+            </button>
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: "#10b981",
+                color: "#fff",
+              }}
+            >
+              {page}
+            </div>
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === totalPages ? "not-allowed" : "pointer",
+                opacity: page === totalPages ? 0.5 : 1,
+              }}
+            >
+              Sau
+            </button>
+          </div>
         </div>
       </div>
 

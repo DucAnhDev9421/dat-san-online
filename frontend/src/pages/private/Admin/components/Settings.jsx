@@ -11,6 +11,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import ResetSettingsModal from "../modals/ResetSettingsModal";
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState("general");
@@ -61,6 +62,8 @@ const Settings = () => {
     momoSecretKey: false,
   });
 
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+
   const handleInputChange = (field, value) => {
     setSettings((prev) => ({
       ...prev,
@@ -95,37 +98,40 @@ const Settings = () => {
   };
 
   const handleReset = () => {
-    if (window.confirm("Bạn có chắc chắn muốn reset về cài đặt mặc định?")) {
-      setSettings({
-        siteName: "Dat San Online",
-        siteDescription: "Hệ thống đặt sân bóng đá trực tuyến",
-        logo: null,
-        favicon: null,
-        logoUrl: "https://via.placeholder.com/200x60",
-        faviconUrl: "https://via.placeholder.com/32x32",
-        smtpHost: "smtp.gmail.com",
-        smtpPort: 587,
-        smtpSecure: false,
-        smtpUser: "noreply@datsanonline.com",
-        smtpPassword: "",
-        smtpFromName: "Dat San Online",
-        smtpFromEmail: "noreply@datsanonline.com",
-        serviceFeePercent: 10,
-        vnpayTmnCode: "",
-        vnpayHashSecret: "",
-        momoPartnerCode: "",
-        momoAccessKey: "",
-        momoSecretKey: "",
-        vietmapApiKey: "",
-        termsOfService: "Điều khoản sử dụng...",
-        privacyPolicy: "Chính sách bảo mật...",
-        refundPolicy: "Chính sách hoàn tiền...",
-        supportEmail: "support@datsanonline.com",
-        supportPhone: "1900123456",
-        supportAddress: "123 Đường ABC, Quận 1, TP.HCM",
-        supportHours: "Thứ 2 - Chủ nhật: 8:00 - 22:00",
-      });
-    }
+    setIsResetModalOpen(true);
+  };
+
+  const handleConfirmReset = () => {
+    setSettings({
+      siteName: "Dat San Online",
+      siteDescription: "Hệ thống đặt sân bóng đá trực tuyến",
+      logo: null,
+      favicon: null,
+      logoUrl: "https://via.placeholder.com/200x60",
+      faviconUrl: "https://via.placeholder.com/32x32",
+      smtpHost: "smtp.gmail.com",
+      smtpPort: 587,
+      smtpSecure: false,
+      smtpUser: "noreply@datsanonline.com",
+      smtpPassword: "",
+      smtpFromName: "Dat San Online",
+      smtpFromEmail: "noreply@datsanonline.com",
+      serviceFeePercent: 10,
+      vnpayTmnCode: "",
+      vnpayHashSecret: "",
+      momoPartnerCode: "",
+      momoAccessKey: "",
+      momoSecretKey: "",
+      vietmapApiKey: "",
+      termsOfService: "Điều khoản sử dụng...",
+      privacyPolicy: "Chính sách bảo mật...",
+      refundPolicy: "Chính sách hoàn tiền...",
+      supportEmail: "support@datsanonline.com",
+      supportPhone: "1900123456",
+      supportAddress: "123 Đường ABC, Quận 1, TP.HCM",
+      supportHours: "Thứ 2 - Chủ nhật: 8:00 - 22:00",
+    });
+    setIsResetModalOpen(false);
   };
 
   const renderGeneralSettings = () => (
@@ -1138,6 +1144,13 @@ const Settings = () => {
       {activeTab === "apiKeys" && renderAPIKeysSettings()}
       {activeTab === "policy" && renderPolicySettings()}
       {activeTab === "support" && renderSupportSettings()}
+
+      {/* Reset Modal */}
+      <ResetSettingsModal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        onConfirm={handleConfirmReset}
+      />
     </div>
   );
 };

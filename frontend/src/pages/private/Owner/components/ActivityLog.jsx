@@ -24,6 +24,10 @@ const ActivityLog = () => {
 
   // -- LƯU LOGS VÀO STATE ĐỂ CÓ THỂ XÓA --
   const [logs, setLogs] = useState(activityLogData);
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const filteredActivityLogs = useMemo(
     () =>
@@ -34,6 +38,15 @@ const ActivityLog = () => {
           .includes(searchQuery.toLowerCase())
       ),
     [logs, searchQuery]
+  );
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredActivityLogs.length / pageSize)
+  );
+  const logSlice = filteredActivityLogs.slice(
+    (page - 1) * pageSize,
+    page * pageSize
   );
 
   const totalLogs = filteredActivityLogs.length;
@@ -172,6 +185,28 @@ const ActivityLog = () => {
             <div>
               <strong>Tổng:</strong> {filteredActivityLogs.length} hoạt động
             </div>
+            <div>
+              <label style={{ marginRight: 8 }}>Hiển thị</label>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                style={{
+                  padding: 6,
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                }}
+              >
+                {[5, 10, 20, 50].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              <span style={{ marginLeft: 8 }}>bản ghi</span>
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <select
                 style={{
@@ -186,6 +221,7 @@ const ActivityLog = () => {
                   } else {
                     setSearchQuery(e.target.value);
                   }
+                  setPage(1);
                 }}
               >
                 <option value="all">Tất cả người dùng</option>
@@ -198,7 +234,10 @@ const ActivityLog = () => {
           <input
             placeholder="Tìm theo người dùng, hành động, mục tiêu…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             style={{
               padding: "8px 12px",
               borderRadius: 8,
@@ -240,7 +279,7 @@ const ActivityLog = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredActivityLogs.map((log) => (
+              {logSlice.map((log) => (
                 <tr key={log.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                   <td
                     style={{ padding: 12, fontWeight: 700, color: "#1f2937" }}
@@ -346,6 +385,60 @@ const ActivityLog = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: 12,
+          }}
+        >
+          <div>
+            Hiển thị {(page - 1) * pageSize + 1} đến{" "}
+            {Math.min(page * pageSize, filteredActivityLogs.length)} trong tổng số{" "}
+            {filteredActivityLogs.length} bản ghi
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === 1 ? "not-allowed" : "pointer",
+                opacity: page === 1 ? 0.5 : 1,
+              }}
+            >
+              Trước
+            </button>
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: "#10b981",
+                color: "#fff",
+              }}
+            >
+              {page}
+            </div>
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === totalPages ? "not-allowed" : "pointer",
+                opacity: page === totalPages ? 0.5 : 1,
+              }}
+            >
+              Sau
+            </button>
+          </div>
         </div>
       </div>
 

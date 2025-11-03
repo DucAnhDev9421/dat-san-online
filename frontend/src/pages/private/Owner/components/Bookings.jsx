@@ -78,6 +78,10 @@ const Bookings = () => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   // local editable bookings state
   const [bookings, setBookings] = useState(bookingData);
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
 
   const filteredBookings = useMemo(
@@ -89,6 +93,15 @@ const Bookings = () => {
           .includes(searchQuery.toLowerCase())
       ),
     [searchQuery, bookings]
+  );
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredBookings.length / pageSize)
+  );
+  const bookingSlice = filteredBookings.slice(
+    (page - 1) * pageSize,
+    page * pageSize
   );
 
   // when a booking is selected, find the court info (images, etc.) from mock data
@@ -141,6 +154,28 @@ const Bookings = () => {
             <div>
               <strong>Tổng:</strong> {filteredBookings.length} đơn đặt sân
             </div>
+            <div>
+              <label style={{ marginRight: 8 }}>Hiển thị</label>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                style={{
+                  padding: 6,
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                }}
+              >
+                {[5, 10, 20, 50].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              <span style={{ marginLeft: 8 }}>bản ghi</span>
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <select 
                 style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 14 }}
@@ -150,6 +185,7 @@ const Bookings = () => {
                   } else {
                     setSearchQuery(e.target.value);
                   }
+                  setPage(1);
                 }}
               >
                 <option value="all">Tất cả trạng thái</option>
@@ -162,7 +198,10 @@ const Bookings = () => {
           <input
             placeholder="Tìm theo mã, khách hàng, sân, email…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             style={{ 
               padding: "8px 12px", 
               borderRadius: 8, 
@@ -206,7 +245,7 @@ const Bookings = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredBookings.map((r) => (
+              {bookingSlice.map((r) => (
                 <tr key={r.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                   <td style={{ padding: 12, fontWeight: 700, color: "#1f2937" }}>{r.id}</td>
                   <td style={{ padding: 12 }}>
@@ -326,6 +365,60 @@ const Bookings = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: 12,
+          }}
+        >
+          <div>
+            Hiển thị {(page - 1) * pageSize + 1} đến{" "}
+            {Math.min(page * pageSize, filteredBookings.length)} trong tổng số{" "}
+            {filteredBookings.length} bản ghi
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === 1 ? "not-allowed" : "pointer",
+                opacity: page === 1 ? 0.5 : 1,
+              }}
+            >
+              Trước
+            </button>
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: "#10b981",
+                color: "#fff",
+              }}
+            >
+              {page}
+            </div>
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === totalPages ? "not-allowed" : "pointer",
+                opacity: page === totalPages ? 0.5 : 1,
+              }}
+            >
+              Sau
+            </button>
+          </div>
         </div>
       </div>
 

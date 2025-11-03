@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { Eye, Check, X, ExternalLink } from "lucide-react";
 import { facilityData } from "../data/mockData";
+import ApproveFacilityModal from "../modals/ApproveFacilityModal";
+import RejectFacilityModal from "../modals/RejectFacilityModal";
 
 const Facilities = () => {
   const [facilities, setFacilities] = useState(facilityData);
@@ -11,6 +13,8 @@ const Facilities = () => {
 
   // Modal
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [selectedFacility, setSelectedFacility] = useState(null);
 
   // Status map
@@ -65,14 +69,15 @@ const Facilities = () => {
   };
 
   const handleApprove = (facility) => {
-    if (
-      window.confirm(
-        `Bạn có chắc muốn duyệt cơ sở "${facility.name}"?`
-      )
-    ) {
+    setSelectedFacility(facility);
+    setIsApproveModalOpen(true);
+  };
+
+  const handleConfirmApprove = () => {
+    if (selectedFacility) {
       setFacilities((current) =>
         current.map((f) =>
-          f.id === facility.id
+          f.id === selectedFacility.id
             ? {
                 ...f,
                 approvalStatus: "approved",
@@ -82,18 +87,23 @@ const Facilities = () => {
         )
       );
     }
+    setIsApproveModalOpen(false);
+    setSelectedFacility(null);
   };
 
   const handleReject = (facility) => {
-    if (
-      window.confirm(
-        `Bạn có chắc muốn từ chối cơ sở "${facility.name}"? Cơ sở sẽ bị xóa khỏi hệ thống.`
-      )
-    ) {
+    setSelectedFacility(facility);
+    setIsRejectModalOpen(true);
+  };
+
+  const handleConfirmReject = () => {
+    if (selectedFacility) {
       setFacilities((current) =>
-        current.filter((f) => f.id !== facility.id)
+        current.filter((f) => f.id !== selectedFacility.id)
       );
     }
+    setIsRejectModalOpen(false);
+    setSelectedFacility(null);
   };
 
   const handleNavigateToOwner = (ownerId) => {
@@ -587,6 +597,28 @@ const Facilities = () => {
           </div>
         </div>
       )}
+
+      {/* Approve Modal */}
+      <ApproveFacilityModal
+        isOpen={isApproveModalOpen}
+        onClose={() => {
+          setIsApproveModalOpen(false);
+          setSelectedFacility(null);
+        }}
+        onConfirm={handleConfirmApprove}
+        facility={selectedFacility}
+      />
+
+      {/* Reject Modal */}
+      <RejectFacilityModal
+        isOpen={isRejectModalOpen}
+        onClose={() => {
+          setIsRejectModalOpen(false);
+          setSelectedFacility(null);
+        }}
+        onConfirm={handleConfirmReject}
+        facility={selectedFacility}
+      />
     </div>
   );
 };

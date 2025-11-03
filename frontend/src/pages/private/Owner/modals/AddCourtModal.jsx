@@ -6,6 +6,7 @@ import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
 import useEscapeKey from "../../../../hook/use-escape-key";
 import { courtApi } from "../../../../api/courtApi";
 import { facilityApi } from "../../../../api/facilityApi";
+import { categoryApi } from "../../../../api/categoryApi";
 import { useAuth } from "../../../../contexts/AuthContext";
 
 const AddCourtModal = ({ isOpen, onClose, onSave }) => {
@@ -28,8 +29,11 @@ const AddCourtModal = ({ isOpen, onClose, onSave }) => {
   });
 
   const [facilityId, setFacilityId] = useState(null);
+  const [facilityType, setFacilityType] = useState(null);
+  const [courtTypes, setCourtTypes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingFacility, setLoadingFacility] = useState(true);
+  const [loadingCourtTypes, setLoadingCourtTypes] = useState(false);
   const [errors, setErrors] = useState({});
 
   // Lấy facility đầu tiên của owner khi modal mở
@@ -45,6 +49,7 @@ const AddCourtModal = ({ isOpen, onClose, onSave }) => {
         if (result.success && result.data?.facilities?.length > 0) {
           const facility = result.data.facilities[0];
           setFacilityId(facility._id || facility.id);
+          setFacilityType(facility.type);
         } else {
           toast.error("Bạn chưa có cơ sở. Vui lòng tạo cơ sở trước.");
           onClose();
@@ -60,6 +65,44 @@ const AddCourtModal = ({ isOpen, onClose, onSave }) => {
 
     fetchFacility();
   }, [isOpen, user, onClose]);
+
+  // Lấy danh sách court types theo sport category
+  useEffect(() => {
+    const fetchCourtTypes = async () => {
+      if (!facilityType) return;
+      
+      setLoadingCourtTypes(true);
+      try {
+        // Lấy tất cả sport categories
+        const categoriesResult = await categoryApi.getSportCategories();
+        
+        // Tìm sport category khớp với facility.type
+        const sportCategory = categoriesResult.data?.find(
+          cat => cat.name === facilityType
+        );
+        
+        if (sportCategory) {
+          // Lấy court types theo sport category
+          const result = await categoryApi.getCourtTypes({
+            sportCategory: sportCategory._id,
+            status: 'active'
+          });
+          
+          setCourtTypes(result.data || []);
+        } else {
+          setCourtTypes([]);
+        }
+      } catch (error) {
+        console.error("Error fetching court types:", error);
+        toast.error("Không thể lấy danh sách loại sân");
+        setCourtTypes([]);
+      } finally {
+        setLoadingCourtTypes(false);
+      }
+    };
+
+    fetchCourtTypes();
+  }, [facilityType]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -278,22 +321,23 @@ const AddCourtModal = ({ isOpen, onClose, onSave }) => {
                 value={formData.type}
                 onChange={handleChange}
                 required
+                disabled={loadingCourtTypes}
                 style={{
                   width: "100%",
                   padding: "12px 16px",
                   borderRadius: 10,
                   border: errors.type ? "2px solid #ef4444" : "2px solid #e5e7eb",
                   fontSize: 15,
+                  opacity: loadingCourtTypes ? 0.6 : 1,
+                  cursor: loadingCourtTypes ? "not-allowed" : "pointer",
                 }}
               >
-                <option value="">Chọn loại</option>
-                <option value="5 người">5 người</option>
-                <option value="7 người">7 người</option>
-                <option value="11 người">11 người</option>
-                <option value="Tennis">Tennis</option>
-                <option value="Bóng rổ">Bóng rổ</option>
-                <option value="Cầu lông">Cầu lông</option>
-                <option value="Bóng chuyền">Bóng chuyền</option>
+                <option value="">{loadingCourtTypes ? "Đang tải..." : "Chọn loại"}</option>
+                {courtTypes.map((courtType) => (
+                  <option key={courtType._id} value={courtType.name}>
+                    {courtType.name}
+                  </option>
+                ))}
               </select>
               {errors.type && (
                 <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.type}</p>
