@@ -18,6 +18,7 @@ import {
   Loader,
 } from "lucide-react";
 import { facilityApi } from "../../../api/facilityApi";
+import { getProvinces } from "../../../api/provinceApi";
 
 const SetupVenue = () => {
   const navigate = useNavigate();
@@ -76,13 +77,21 @@ const SetupVenue = () => {
   useEffect(() => {
     const fetchProvinces = async () => {
       try {
-        const response = await fetch(
-          "https://provinces.open-api.vn/api/v1/?depth=2"
-        );
-        const data = await response.json();
-        setProvinces(data);
+        const result = await getProvinces();
+        
+        if (result.success && result.data && result.data.length > 0) {
+          setProvinces(result.data);
+        } else {
+          console.warn('No provinces data received');
+          setProvinces([]);
+          if (result.error) {
+            toast.error(result.error);
+          }
+        }
       } catch (error) {
         console.error("Error fetching provinces:", error);
+        setProvinces([]);
+        toast.error('Không thể tải danh sách tỉnh thành. Vui lòng thử lại sau.');
       }
     };
     fetchProvinces();
