@@ -106,172 +106,45 @@ export default function AdminHeader({ onToggleSidebar, isSidebarOpen, currentTab
   };
 
   return (
-    <header
-      style={{
-        background: "#fff",
-        borderBottom: "1px solid #e5e7eb",
-        padding: "0 24px",
-        height: 64,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        boxShadow: "0 1px 3px rgba(0,0,0,.1)",
-        position: "sticky",
-        top: 0,
-        zIndex: 1000,
-      }}
-    >
+    <div className="flex items-center justify-between w-full">
       {/* Left side - Logo and Menu */}
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <div className="flex items-center justify-start rtl:justify-end">
         <button
           onClick={onToggleSidebar}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 8,
-            borderRadius: 8,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#6b7280",
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.background = "#f3f4f6";
-            e.target.style.color = "#374151";
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.background = "none";
-            e.target.style.color = "#6b7280";
-          }}
+          type="button"
+          className="inline-flex items-center p-2 text-sm text-gray-500 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200"
+          aria-controls="logo-sidebar"
         >
+          <span className="sr-only">Open sidebar</span>
           <Menu size={20} />
         </button>
-
-        <button
-          onClick={handleLogoClick}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "4px 8px",
-            borderRadius: 8,
-            transition: "background-color 0.2s",
+        <a
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            handleLogoClick();
           }}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = "#f3f4f6";
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = "transparent";
-          }}
-          title="Quay về trang chủ"
+          className="flex ms-2 md:me-24"
         >
-          <img 
-            src="/Logo.png" 
-            alt="Dat San Online Logo" 
-            style={{ 
-              height: "32px", 
-              width: "auto",
-              objectFit: "contain"
-            }}
-          />
-          <div style={{ textAlign: "left" }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>
-              Đặt Sân Online
-            </div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>
-              Admin Panel
-            </div>
-          </div>
-        </button>
-      </div>
-
-      {/* Center - Search */}
-      <div style={{ flex: 1, maxWidth: 400, margin: "0 24px" }}>
-        <div style={{ position: "relative" }}>
-          <Search
-            size={18}
-            style={{
-              position: "absolute",
-              left: 12,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "#9ca3af",
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Tìm kiếm đơn đặt, khách hàng, sân bóng..."
-            style={{
-              width: "100%",
-              padding: "10px 12px 10px 40px",
-              border: "1px solid #e5e7eb",
-              borderRadius: 8,
-              fontSize: 14,
-              background: "#f9fafb",
-              outline: "none",
-            }}
-            onFocus={(e) => {
-              e.target.style.background = "#fff";
-              e.target.style.borderColor = "#10b981";
-            }}
-            onBlur={(e) => {
-              e.target.style.background = "#f9fafb";
-              e.target.style.borderColor = "#e5e7eb";
-            }}
-          />
-        </div>
+          <img src="/Logo.png" className="h-8 me-3" alt="Dat San Online Logo" />
+          <span className="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap">
+            Booking sport
+          </span>
+        </a>
       </div>
 
       {/* Right side - Actions */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div className="flex items-center">
         {/* Notifications */}
-        <div style={{ position: "relative" }}>
+        <div className="flex items-center ms-3 relative">
           <button
             onClick={handleNotificationClick}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 8,
-              borderRadius: 8,
-              cursor: "pointer",
-              color: "#6b7280",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = "#f3f4f6";
-              e.target.style.color = "#374151";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = "none";
-              e.target.style.color = "#6b7280";
-            }}
+            type="button"
+            className="inline-flex items-center p-2 text-sm text-gray-500 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 relative"
           >
             <Bell size={18} />
             {unreadCount > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: 4,
-                  right: 4,
-                  background: "#ef4444",
-                  color: "#fff",
-                  borderRadius: "50%",
-                  width: 16,
-                  height: 16,
-                  fontSize: 10,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 700,
-                }}
-              >
+              <span className="absolute top-0 right-0 inline-flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-red-500 rounded-full">
                 {unreadCount}
               </span>
             )}
@@ -288,16 +161,18 @@ export default function AdminHeader({ onToggleSidebar, isSidebarOpen, currentTab
         </div>
 
         {/* Profile dropdown - Using UserMenu component */}
-        <UserMenu
-          user={user}
-          isOpen={isProfileOpen}
-          onToggle={() => setIsProfileOpen(!isProfileOpen)}
-          onProfileClick={handleProfileClick}
-          onLogout={handleLogout}
-          onSettingsClick={handleSettingsClick}
-          onBookingHistoryClick={handleBookingHistoryClick}
-        />
+        <div className="flex items-center ms-3">
+          <UserMenu
+            user={user}
+            isOpen={isProfileOpen}
+            onToggle={() => setIsProfileOpen(!isProfileOpen)}
+            onProfileClick={handleProfileClick}
+            onLogout={handleLogout}
+            onSettingsClick={handleSettingsClick}
+            onBookingHistoryClick={handleBookingHistoryClick}
+          />
+        </div>
       </div>
-    </header>
+    </div>
   );
 }

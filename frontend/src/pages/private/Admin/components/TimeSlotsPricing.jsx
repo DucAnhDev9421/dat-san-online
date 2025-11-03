@@ -1,24 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { timeSlotsPricingData } from "../data/mockData";
-
-const ActionButton = ({ bg, Icon, onClick, title }) => (
-  <button
-    onClick={onClick}
-    title={title}
-    style={{
-      background: bg,
-      color: "#fff",
-      border: 0,
-      borderRadius: 8,
-      padding: 8,
-      marginRight: 6,
-      cursor: "pointer",
-    }}
-  >
-    <Icon size={16} />
-  </button>
-);
+import { ActionButton } from "./shared";
 
 const TimeSlotsPricing = () => {
   const [pricing, setPricing] = useState(timeSlotsPricingData);
@@ -48,7 +31,6 @@ const TimeSlotsPricing = () => {
   };
 
   const handleEdit = (item) => {
-    // TODO: Implement edit functionality
     console.log("Edit pricing:", item);
   };
 

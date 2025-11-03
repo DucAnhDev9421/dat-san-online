@@ -5,44 +5,17 @@ import OwnerDetailModal from "../modals/OwnerDetailModal";
 import OwnerEditModal from "../modals/OwnerEditModal";
 import OwnerDeleteModal from "../modals/OwnerDeleteModal";
 import OwnerAddModal from "../modals/OwnerAddModal";
-
-const ActionButton = ({ bg, Icon, onClick, title }) => (
-  <button
-    onClick={onClick}
-    title={title}
-    style={{
-      background: bg,
-      color: "#fff",
-      border: 0,
-      borderRadius: 8,
-      padding: 8,
-      marginRight: 6,
-      cursor: "pointer",
-    }}
-  >
-    <Icon size={16} />
-  </button>
-);
+import { ActionButton } from "./shared";
 
 const Owners = () => {
   const [searchQuery, setSearchQuery] = useState("");
-
-  // -- LƯU DATA VÀO STATE ĐỂ CÓ THỂ CẬP NHẬT --
   const [owners, setOwners] = useState(ownerData);
-
-  // -- THÊM STATE CHO MODAL --
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedOwner, setSelectedOwner] = useState(null);
-
-  // -- THÊM STATE CHO MODAL CHỈNH SỬA --
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [ownerToEdit, setOwnerToEdit] = useState(null);
-
-  // -- THÊM STATE CHO MODAL XÓA --
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [ownerToDelete, setOwnerToDelete] = useState(null);
-
-  // -- THÊM STATE CHO MODAL THÊM MỚI --
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const filteredOwners = useMemo(
@@ -56,7 +29,6 @@ const Owners = () => {
     [owners, searchQuery]
   );
 
-  // -- THÊM HÀM ĐIỀU KHIỂN MODAL --
   const handleViewDetails = (owner) => {
     setSelectedOwner(owner);
     setIsDetailModalOpen(true);
@@ -67,7 +39,6 @@ const Owners = () => {
     setSelectedOwner(null);
   };
 
-  // -- THÊM HÀM CHO MODAL CHỈNH SỬA --
   const handleOpenEditModal = (owner) => {
     setOwnerToEdit(owner);
     setIsEditModalOpen(true);
@@ -79,7 +50,6 @@ const Owners = () => {
   };
 
   const handleSaveOwner = (updatedOwner) => {
-    // Cập nhật mảng 'owners' trong state
     setOwners(currentOwners =>
       currentOwners.map(o =>
         o.id === updatedOwner.id ? updatedOwner : o
@@ -88,7 +58,6 @@ const Owners = () => {
     handleCloseEditModal();
   };
 
-  // -- THÊM CÁC HÀM XỬ LÝ XÓA --
   const handleOpenDeleteModal = (owner) => {
     setOwnerToDelete(owner);
     setIsDeleteModalOpen(true);
@@ -108,7 +77,6 @@ const Owners = () => {
     }
   };
 
-  // -- THÊM HÀM CHO MODAL THÊM MỚI --
   const handleOpenAddModal = () => {
     setIsAddModalOpen(true);
   };
@@ -118,7 +86,6 @@ const Owners = () => {
   };
 
   const handleAddNewOwner = (newOwner) => {
-    // Thêm chủ sân mới vào đầu danh sách
     setOwners((currentOwners) => [newOwner, ...currentOwners]);
     handleCloseAddModal();
   };
@@ -308,7 +275,6 @@ const Owners = () => {
         </div>
       </div>
 
-      {/* -- RENDER MODAL TẠI ĐÂY -- */}
       <OwnerDetailModal
         isOpen={isDetailModalOpen}
         onClose={handleCloseDetailModal}
@@ -339,3 +305,4 @@ const Owners = () => {
 };
 
 export default Owners;
+

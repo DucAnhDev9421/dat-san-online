@@ -8,13 +8,20 @@ import { AuthProvider } from "./contexts/AuthContext";
 // Layouts
 import Header from "./components/header/header.jsx";
 import Footer from "./components/footer/footer.jsx";
-import AdminLayout from "./layouts/AdminLayout.jsx";
-import OwnerLayout from "./layouts/OwnerLayout.jsx";
 
 // Components
 import ProtectedRoute, { AdminRoute, OwnerRoute } from "./components/ProtectedRoute.jsx";
 import ChatButton from "./components/chat/ChatButton.jsx";
 import ScrollToTop from "./components/ScrollToTop.jsx";
+
+// Admin Layout & Routes
+import AdminLayout from "./layouts/AdminLayout";
+import AdminRoutes from "./pages/private/Admin/AdminRoutes";
+
+// Owner Layout & Routes
+import OwnerLayout from "./layouts/OwnerLayout";
+import OwnerRoutes from "./pages/private/Owner/OwnerRoutes";
+import OwnerSetup from "./pages/private/Owner/OwnerSetup.jsx";
 
 // Public pages
 import HomePage from "./pages/public/HomePage.jsx";
@@ -33,9 +40,6 @@ import ResetPassword from "./pages/auth/ResetPassword.jsx";
 import AuthCallback from "./pages/auth/AuthCallback.jsx";
 import AuthError from "./pages/auth/AuthError.jsx";
 import NotFound from "./pages/public/NotFoud.jsx";
-
-// Owner pages
-import OwnerSetup from "./pages/private/Owner/OwnerSetup.jsx";
 
 
 
@@ -65,12 +69,16 @@ function App() {
           {/* Admin Routes - Protected */}
           <Route path="/admin" element={
             <AdminRoute>
-              <AdminLayout />
+              <AdminLayout>
+                <AdminRoutes />
+              </AdminLayout>
             </AdminRoute>
           } />
           <Route path="/admin/*" element={
             <AdminRoute>
-              <AdminLayout />
+              <AdminLayout>
+                <AdminRoutes />
+              </AdminLayout>
             </AdminRoute>
           } />
 
@@ -84,12 +92,16 @@ function App() {
           {/* Owner Routes - Protected */}
           <Route path="/owner" element={
             <OwnerRoute>
-              <OwnerLayout />
+              <OwnerLayout>
+                <OwnerRoutes />
+              </OwnerLayout>
             </OwnerRoute>
           } />
           <Route path="/owner/*" element={
             <OwnerRoute>
-              <OwnerLayout />
+              <OwnerLayout>
+                <OwnerRoutes />
+              </OwnerLayout>
             </OwnerRoute>
           } />
 
