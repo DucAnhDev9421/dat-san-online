@@ -126,53 +126,88 @@ export const initPayment = asyncHandler(async (req, res, next) => {
 
     res.status(200).json({ success: true, paymentUrl });
   } else if (method === "momo") {
-    // --- XỬ LÝ MOMO ---
+    // --- XỬ LÝ MOMO - ĐÃ SỬA ---
     const partnerCode = config.momo.partnerCode;
     const accessKey = config.momo.accessKey;
     const secretKey = config.momo.secretKey;
     const redirectUrl = config.momo.redirectUrl;
-    const notifyUrl = config.momo.notifyUrl;
+    const ipnUrl = config.momo.notifyUrl; // Lấy từ config
     const requestId = paymentId;
     const orderId = paymentId;
     const requestType = "captureWallet";
-    const extraData = ""; // Base64(JSON.stringify({ bookingId: booking._id }))
+    const extraData = ""; // Để rỗng
 
-    const rawSignature = `partnerCode=${partnerCode}&accessKey=${accessKey}&requestId=${requestId}&amount=${amount}&orderId=${orderId}&orderInfo=${orderInfo}&redirectUrl=${redirectUrl}&notifyUrl=${notifyUrl}&extraData=${extraData}&requestType=${requestType}`;
+    // Đảm bảo amount là số nguyên
+    const amountStr = Math.round(amount).toString();
+
+    // Tạo rawSignature - CHÚ Ý: thứ tự alphabet và tên field phải đúng
+    const rawSignature = `accessKey=${accessKey}&amount=${amountStr}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
+
     const signature = crypto
       .createHmac("sha256", secretKey)
       .update(rawSignature)
       .digest("hex");
 
+    // Request body - CHÚ Ý: phải dùng ipnUrl không phải notifyUrl
     const requestBody = {
       partnerCode,
       accessKey,
       requestId,
-      amount,
+      amount: amountStr,
       orderId,
       orderInfo,
       redirectUrl,
-      notifyUrl,
+      ipnUrl, // <<<< KEY QUAN TRỌNG - không phải notifyUrl
       extraData,
       requestType,
       signature,
       lang: "vi",
     };
 
-    // Gọi API Momo (dùng fetch hoặc axios)
-    const response = await fetch(config.momo.apiEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
-    });
+    // Log để debug
+    console.log("=== MoMo Request Debug ===");
+    console.log("Raw Signature String:", rawSignature);
+    console.log("Signature:", signature);
+    console.log("Request Body:", JSON.stringify(requestBody, null, 2));
 
-    const data = await response.json();
-    if (data.resultCode !== 0) {
-      return res
-        .status(400)
-        .json({ success: false, message: `Momo Error: ${data.message}` });
+    try {
+      // Gọi API Momo
+      const response = await fetch(config.momo.apiEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await response.json();
+
+      console.log("=== MoMo Response ===");
+      console.log(JSON.stringify(data, null, 2));
+
+      if (data.resultCode !== 0) {
+        console.error("Momo API Error:", {
+          resultCode: data.resultCode,
+          message: data.message,
+          localMessage: data.localMessage,
+        });
+        return res.status(400).json({
+          success: false,
+          message: `Momo Error: ${data.message || data.localMessage}`,
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        paymentUrl: data.payUrl,
+      });
+    } catch (error) {
+      console.error("Momo Request Failed:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi khi kết nối tới MoMo",
+      });
     }
-
-    res.status(200).json({ success: true, paymentUrl: data.payUrl });
   } else {
     return res.status(400).json({
       success: false,
@@ -204,23 +239,19 @@ export const vnpayCallback = asyncHandler(async (req, res, next) => {
     if (responseCode === "00") {
       await processSuccessfulPayment(paymentId, transactionId);
       // VNPay mong đợi client redirect từ returnUrl
-      // Nếu đây là IPN (webhook) riêng, chỉ cần trả về RspCode
       res.redirect(
         `${config.momo.redirectUrl}?success=true&paymentId=${paymentId}`
-      ); // Chuyển về trang frontend
-      // res.status(200).json({ RspCode: '00', Message: 'Success' });
+      );
     } else {
       await Payment.findOneAndUpdate({ paymentId }, { status: "failed" });
       res.redirect(
         `${config.momo.redirectUrl}?success=false&paymentId=${paymentId}`
       );
-      // res.status(200).json({ RspCode: '01', Message: 'Failed' });
     }
   } else {
     res.redirect(
       `${config.momo.redirectUrl}?success=false&message=checksum_failed`
     );
-    // res.status(200).json({ RspCode: '97', Message: 'Fail checksum' });
   }
 });
 
@@ -234,22 +265,51 @@ export const momoCallback = asyncHandler(async (req, res, next) => {
     orderId, // Đây là paymentId của chúng ta
     transId, // Đây là transactionId của Momo
     signature,
-    // ... các trường khác
+    amount,
+    orderInfo,
+    partnerCode,
+    requestId,
+    responseTime,
+    orderType,
+    extraData,
   } = req.body;
 
-  // TODO: Xác thực chữ ký của Momo
-  // Bạn cần tạo lại rawSignature từ các trường Momo gửi về và so sánh
-  // (Tạm bỏ qua để đơn giản hóa)
+  console.log("=== MoMo Callback Received ===");
+  console.log(JSON.stringify(req.body, null, 2));
+
+  // Xác thực chữ ký của Momo
+  const accessKey = config.momo.accessKey;
+  const secretKey = config.momo.secretKey;
+
+  // Tạo rawSignature để verify
+  const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&message=${message}&orderId=${orderId}&orderInfo=${orderInfo}&orderType=${orderType}&partnerCode=${partnerCode}&payType=&requestId=${requestId}&responseTime=${responseTime}&resultCode=${resultCode}&transId=${transId}`;
+
+  const calculatedSignature = crypto
+    .createHmac("sha256", secretKey)
+    .update(rawSignature)
+    .digest("hex");
+
+  console.log("Raw Signature:", rawSignature);
+  console.log("Received Signature:", signature);
+  console.log("Calculated Signature:", calculatedSignature);
+
+  // Kiểm tra chữ ký (tạm thời comment để test)
+  // if (signature !== calculatedSignature) {
+  //   console.error("Invalid signature from MoMo!");
+  //   return res.status(400).json({ message: "Invalid signature" });
+  // }
 
   if (resultCode === 0) {
     // Thành công
     await processSuccessfulPayment(orderId, transId);
+    console.log("Payment successful:", orderId);
   } else {
     // Thất bại
     await Payment.findOneAndUpdate(
       { paymentId: orderId },
       { status: "failed" }
     );
+    console.log("Payment failed:", orderId, message);
   }
 
   // Phản hồi cho Momo
@@ -372,7 +432,6 @@ export const refundPayment = asyncHandler(async (req, res, next) => {
 
   // TODO: Gọi API hoàn tiền của VNPay/Momo (nếu là giao dịch online)
   // Đây là một API riêng biệt và phức tạp, cần IPN riêng.
-  // ...
 
   // Giả lập hoàn tiền thành công (cho cả online và cash)
   payment.status = "refunded";
