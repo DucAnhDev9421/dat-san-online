@@ -104,14 +104,37 @@ export const userApi = {
   // --- ADMIN ONLY OPERATIONS ---
 
   /**
-   * Get all users (Admin only)
-   * GET /api/users
-   * @param {number} page - Page number
-   * @param {number} limit - Items per page
+   * Get all users (Admin only) with search and filters
+   * GET /api/users?page=1&limit=10&search=xxx&role=xxx&status=xxx
+   * @param {Object} params - { page?, limit?, search?, role?, status? }
    */
-  getAllUsers: async (page = 1, limit = 10) => {
+  getAllUsers: async (params = {}) => {
     try {
-      const response = await api.get(`/users?page=${page}&limit=${limit}`);
+      const queryParams = new URLSearchParams();
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+      
+      const queryString = queryParams.toString();
+      const url = `/users${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await api.get(url);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Get user by ID (Admin only)
+   * GET /api/users/:userId
+   * @param {string} userId
+   */
+  getUserById: async (userId) => {
+    try {
+      const response = await api.get(`/users/${userId}`);
       return handleApiSuccess(response);
     } catch (error) {
       throw handleApiError(error);
@@ -127,6 +150,62 @@ export const userApi = {
   changeUserRole: async (userId, role) => {
     try {
       const response = await api.put(`/users/role/${userId}`, { role });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Lock user account (Admin only)
+   * PATCH /api/users/:userId/lock
+   * @param {string} userId
+   */
+  lockUser: async (userId) => {
+    try {
+      const response = await api.patch(`/users/${userId}/lock`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Unlock user account (Admin only)
+   * PATCH /api/users/:userId/unlock
+   * @param {string} userId
+   */
+  unlockUser: async (userId) => {
+    try {
+      const response = await api.patch(`/users/${userId}/unlock`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Delete user (soft delete, Admin only)
+   * DELETE /api/users/:userId
+   * @param {string} userId
+   */
+  deleteUser: async (userId) => {
+    try {
+      const response = await api.delete(`/users/${userId}`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Restore deleted user (Admin only)
+   * PATCH /api/users/:userId/restore
+   * @param {string} userId
+   */
+  restoreUser: async (userId) => {
+    try {
+      const response = await api.patch(`/users/${userId}/restore`);
       return handleApiSuccess(response);
     } catch (error) {
       throw handleApiError(error);

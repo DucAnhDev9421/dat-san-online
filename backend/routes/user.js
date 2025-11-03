@@ -1,6 +1,7 @@
 // routes/user.js
 import express from "express";
 import User from "../models/User.js";
+import Facility from "../models/Facility.js";
 import { authenticateToken, requireAdmin } from "../middleware/auth.js";
 import { logAudit } from "../utils/auditLogger.js";
 import upload, { cloudinaryUtils } from "../config/cloudinary.js"; // Cloudinary upload middleware
@@ -256,8 +257,8 @@ router.put("/role/:userId", requireAdmin, async (req, res, next) => {
 });
 
 /**
- * Lấy tất cả users (Admin only)
- * GET /api/users
+ * Lấy tất cả users (Admin only) với search và filter
+ * GET /api/users?page=1&limit=10&search=xxx&role=xxx&status=xxx
  */
 router.get("/", requireAdmin, async (req, res, next) => {
   try {
@@ -265,13 +266,55 @@ router.get("/", requireAdmin, async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const users = await User.find()
+    // Build query filters
+    const query = {};
+
+    // Search filter
+    if (req.query.search) {
+      const searchRegex = new RegExp(req.query.search, "i");
+      query.$or = [
+        { name: searchRegex },
+        { email: searchRegex },
+        { phone: searchRegex },
+      ];
+    }
+
+    // Role filter
+    if (req.query.role && ["user", "owner", "admin"].includes(req.query.role)) {
+      query.role = req.query.role;
+    }
+
+    // Status filter
+    if (req.query.status) {
+      switch (req.query.status) {
+        case "active":
+          query.isDeleted = false;
+          query.isLocked = false;
+          break;
+        case "locked":
+          query.isLocked = true;
+          query.isDeleted = false;
+          break;
+        case "deleted":
+          query.isDeleted = true;
+          break;
+      }
+    } else {
+      // Khi không có status filter, chỉ filter deleted nếu có yêu cầu rõ ràng
+      // Mặc định lấy TẤT CẢ users (kể cả deleted)
+      if (req.query.includeDeleted === 'false') {
+        query.isDeleted = false;
+      }
+      // Nếu không có includeDeleted, không filter gì - lấy tất cả
+    }
+
+    const users = await User.find(query)
       .select("-password -refreshTokens")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
-    const total = await User.countDocuments();
+    const total = await User.countDocuments(query);
 
     res.json({
       success: true,
@@ -332,6 +375,237 @@ router.delete("/avatar", async (req, res, next) => {
       success: true,
       message: "Xóa ảnh đại diện thành công.",
       data: { user: updatedUser }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// --- ADMIN USER MANAGEMENT ROUTES ---
+
+/**
+ * GET /api/users/:userId
+ * Lấy chi tiết user (Admin only)
+ */
+router.get("/:userId", requireAdmin, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId)
+      .select("-password -refreshTokens");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Nếu user là owner, lấy danh sách facilities của họ
+    let facilities = [];
+    if (user.role === "owner") {
+      facilities = await Facility.find({ 
+        owner: userId,
+        status: { $ne: "deleted" }
+      })
+      .select("name address status createdAt")
+      .sort({ createdAt: -1 });
+    }
+
+    // Get additional stats if needed
+    // TODO: Có thể thêm stats về booking, revenue, etc.
+
+    res.json({
+      success: true,
+      data: { 
+        user: user.toObject(),
+        facilities: facilities.length > 0 ? facilities : undefined
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/users/:userId/lock
+ * Khóa tài khoản (Admin only)
+ */
+router.patch("/:userId/lock", requireAdmin, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    // Không cho phép khóa chính mình
+    if (userId === req.user._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: "Bạn không thể khóa chính tài khoản của mình",
+      });
+    }
+
+    // Không cho phép khóa admin khác
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    if (targetUser.role === "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Không thể khóa tài khoản admin",
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { isLocked: true },
+      { new: true }
+    ).select("-password -refreshTokens");
+
+    logAudit("LOCK_USER", req.user._id, req, {
+      targetUser: userId,
+      userName: user.name,
+    });
+
+    res.json({
+      success: true,
+      message: `Đã khóa tài khoản ${user.name}`,
+      data: { user },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/users/:userId/unlock
+ * Mở khóa tài khoản (Admin only)
+ */
+router.patch("/:userId/unlock", requireAdmin, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { isLocked: false },
+      { new: true }
+    ).select("-password -refreshTokens");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    logAudit("UNLOCK_USER", req.user._id, req, {
+      targetUser: userId,
+      userName: user.name,
+    });
+
+    res.json({
+      success: true,
+      message: `Đã mở khóa tài khoản ${user.name}`,
+      data: { user },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/users/:userId
+ * Soft delete user (Admin only)
+ */
+router.delete("/:userId", requireAdmin, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    // Không cho phép xóa chính mình
+    if (userId === req.user._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: "Bạn không thể xóa chính tài khoản của mình",
+      });
+    }
+
+    // Không cho phép xóa admin khác
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    if (targetUser.role === "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Không thể xóa tài khoản admin",
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        isLocked: false, // Unlock khi xóa
+      },
+      { new: true }
+    ).select("-password -refreshTokens");
+
+    logAudit("DELETE_USER", req.user._id, req, {
+      targetUser: userId,
+      userName: user.name,
+    });
+
+    res.json({
+      success: true,
+      message: `Đã xóa tài khoản ${user.name}`,
+      data: { user },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/users/:userId/restore
+ * Khôi phục user đã xóa (Admin only)
+ */
+router.patch("/:userId/restore", requireAdmin, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        isDeleted: false,
+        deletedAt: null,
+      },
+      { new: true }
+    ).select("-password -refreshTokens");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    logAudit("RESTORE_USER", req.user._id, req, {
+      targetUser: userId,
+      userName: user.name,
+    });
+
+    res.json({
+      success: true,
+      message: `Đã khôi phục tài khoản ${user.name}`,
+      data: { user },
     });
   } catch (error) {
     next(error);

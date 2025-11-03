@@ -66,6 +66,18 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isLocked: {
+      type: Boolean,
+      default: false, // Admin có thể khóa tài khoản
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false, // Soft delete
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
 
     // Thông tin đăng nhập
     lastLogin: {

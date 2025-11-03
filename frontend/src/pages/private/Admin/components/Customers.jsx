@@ -5,45 +5,17 @@ import CustomerDetailModal from "../modals/CustomerDetailModal";
 import CustomerEditModal from "../modals/CustomerEditModal";
 import CustomerDeleteModal from "../modals/CustomerDeleteModal";
 import CustomerAddModal from "../modals/CustomerAddModal";
-
-const ActionButton = ({ bg, Icon, onClick, title }) => (
-  <button
-    onClick={onClick}
-    title={title}
-    style={{
-      background: bg,
-      color: "#fff",
-      border: 0,
-      borderRadius: 8,
-      padding: 8,
-      marginRight: 6,
-      cursor: "pointer",
-    }}
-  >
-    <Icon size={16} />
-  </button>
-);
+import { ActionButton } from "./shared";
 
 const Customers = () => {
-
-  // -- 2. LƯU DATA VÀO STATE ĐỂ CÓ THỂ CẬP NHẬT --
   const [customers, setCustomers] = useState(customerData);
-
   const [searchQuery, setSearchQuery] = useState("");
-
-  // -- THÊM STATE CHO MODAL --
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-
-    // -- THÊM STATE CHO MODAL CHỈNH SỬA --
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState(null);
-
-  // -- THÊM STATE CHO MODAL XÓA --
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState(null);
-
-  // -- THÊM STATE CHO MODAL THÊM MỚI --
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const filteredCustomers = useMemo(
@@ -57,7 +29,6 @@ const Customers = () => {
     [customers, searchQuery]
   );
 
-  // -- THÊM HÀM ĐIỀU KHIỂN MODAL --
   const handleViewDetails = (customer) => {
     setSelectedCustomer(customer);
     setIsDetailModalOpen(true);
@@ -68,7 +39,6 @@ const Customers = () => {
     setSelectedCustomer(null);
   };
 
-  // -- THÊM HÀM CHO MODAL CHỈNH SỬA --
   const handleOpenEditModal = (customer) => {
     setCustomerToEdit(customer);
     setIsEditModalOpen(true);
@@ -80,7 +50,6 @@ const Customers = () => {
   };
 
   const handleSaveCustomer = (updatedCustomer) => {
-    // Cập nhật mảng 'customers' trong state
     setCustomers(currentCustomers =>
       currentCustomers.map(c =>
         c.id === updatedCustomer.id ? updatedCustomer : c
@@ -89,7 +58,6 @@ const Customers = () => {
     handleCloseEditModal();
   };
 
-  // -- THÊM CÁC HÀM XỬ LÝ XÓA --
   const handleOpenDeleteModal = (customer) => {
     setCustomerToDelete(customer);
     setIsDeleteModalOpen(true);
@@ -109,7 +77,6 @@ const Customers = () => {
     }
   };
 
-  // -- THÊM HÀM CHO MODAL THÊM MỚI --
   const handleOpenAddModal = () => {
     setIsAddModalOpen(true);
   };
@@ -119,9 +86,8 @@ const Customers = () => {
   };
 
   const handleAddNewCustomer = (newCustomer) => {
-    // Thêm người dùng mới vào đầu danh sách
     setCustomers((currentCustomers) => [newCustomer, ...currentCustomers]);
-    handleCloseAddModal(); // Đóng modal sau khi lưu
+    handleCloseAddModal();
   };
 
   return (
@@ -307,7 +273,6 @@ const Customers = () => {
         </div>
       </div>
 
-      {/* -- RENDER MODAL TẠI ĐÂY -- */}
       <CustomerDetailModal
         isOpen={isDetailModalOpen}
         onClose={handleCloseDetailModal}
@@ -338,3 +303,4 @@ const Customers = () => {
 };
 
 export default Customers;
+
