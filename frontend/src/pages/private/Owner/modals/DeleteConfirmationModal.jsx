@@ -1,11 +1,30 @@
 import React from "react";
 import { X, AlertTriangle } from "lucide-react";
+import useClickOutside from "../../../../hook/use-click-outside";
+import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
+import useEscapeKey from "../../../../hook/use-escape-key";
 
-const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, logId }) => {
+const DeleteConfirmationModal = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title = "Xác nhận xóa",
+  message = "Bạn có chắc muốn xóa mục này?",
+  itemName = "",
+  warningMessage = "Hành động này không thể hoàn tác."
+}) => {
+  // Lock body scroll
+  useBodyScrollLock(isOpen);
+  
+  // Handle escape key
+  useEscapeKey(onClose, isOpen);
+  
+  // Handle click outside
+  const modalRef = useClickOutside(onClose, isOpen);
+
   if (!isOpen) return null;
 
   return (
-    // Backdrop
     <div
       style={{
         position: "fixed",
@@ -15,20 +34,21 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, logId }) => {
         bottom: 0,
         background: "rgba(0, 0, 0, 0.5)",
         display: "flex",
-        justifyContent: "center",
         alignItems: "center",
-        zIndex: 1010, // Đảm bảo modal này ở trên modal chi tiết
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: "20px",
       }}
       onClick={onClose}
     >
-      {/* Nội dung Modal */}
       <div
+        ref={modalRef}
         style={{
           background: "#fff",
-          borderRadius: 12,
-          boxShadow: "0 10px 30px rgba(0,0,0,.1)",
-          width: "90%",
-          maxWidth: "450px",
+          borderRadius: 16,
+          width: "100%",
+          maxWidth: "480px",
+          overflow: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -38,52 +58,53 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, logId }) => {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "16px 24px",
+            padding: "24px",
             borderBottom: "1px solid #e5e7eb",
           }}
         >
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#ef4444" }}>
-            Xác nhận xóa
-          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                background: "#fee2e2",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <AlertTriangle size={20} color="#ef4444" />
+            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#111827" }}>
+              {title}
+            </h3>
+          </div>
           <button
             onClick={onClose}
             style={{
-              background: "none",
-              border: 0,
+              background: "transparent",
+              border: "none",
               cursor: "pointer",
               color: "#6b7280",
-              padding: 4,
+              padding: "4px",
             }}
+            aria-label="Đóng"
           >
-            <X size={20} />
+            <X size={24} />
           </button>
         </div>
 
         {/* Body */}
-        <div style={{ padding: 24, display: "flex", alignItems: "center", gap: 16 }}>
-          <div 
-            style={{ 
-              background: "#fee2e2", 
-              color: "#ef4444", 
-              borderRadius: "50%", 
-              padding: 12,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
-            }}
-          >
-            <AlertTriangle size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "#1f2937" }}>
-              Bạn có chắc chắn muốn xóa không?
-            </div>
-            <div style={{ fontSize: 14, color: "#4b5563" }}>
-              Hành động này sẽ xóa vĩnh viễn nhật ký
-              <strong style={{ margin: "0 4px" }}>{logId}</strong>.
-              Bạn không thể hoàn tác hành động này.
-            </div>
-          </div>
+        <div style={{ padding: "24px" }}>
+          <p style={{ fontSize: 15, color: "#374151", marginBottom: 12, lineHeight: 1.6 }}>
+            {message} {itemName && <strong>{itemName}</strong>}
+          </p>
+          {warningMessage && (
+            <p style={{ fontSize: 13, color: "#ef4444", margin: 0 }}>
+              ⚠️ {warningMessage}
+            </p>
+          )}
         </div>
 
         {/* Footer */}
@@ -92,42 +113,57 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, logId }) => {
             display: "flex",
             justifyContent: "flex-end",
             gap: 12,
-            padding: "16px 24px",
-            background: "#f9fafb",
+            padding: "20px 24px",
             borderTop: "1px solid #e5e7eb",
-            borderBottomLeftRadius: 12,
-            borderBottomRightRadius: 12,
+            background: "#f9fafb",
           }}
         >
           <button
             onClick={onClose}
             style={{
+              padding: "10px 24px",
               background: "#fff",
               color: "#374151",
-              border: "1px solid #d1d5db",
-              borderRadius: 8,
-              padding: "8px 14px",
-              cursor: "pointer",
+              border: "2px solid #e5e7eb",
+              borderRadius: 10,
+              fontSize: 15,
               fontWeight: 600,
-              fontSize: 14,
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.borderColor = "#d1d5db";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.borderColor = "#e5e7eb";
             }}
           >
             Hủy
           </button>
           <button
-            onClick={onConfirm}
+            onClick={() => {
+              if (onConfirm) onConfirm();
+              if (onClose) onClose();
+            }}
             style={{
+              padding: "10px 24px",
               background: "#ef4444",
               color: "#fff",
-              border: 0,
-              borderRadius: 8,
-              padding: "8px 14px",
-              cursor: "pointer",
+              border: "none",
+              borderRadius: 10,
+              fontSize: 15,
               fontWeight: 600,
-              fontSize: 14,
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = "#dc2626";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = "#ef4444";
             }}
           >
-            Xác nhận Xóa
+            Xóa
           </button>
         </div>
       </div>
@@ -136,3 +172,4 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, logId }) => {
 };
 
 export default DeleteConfirmationModal;
+

@@ -168,7 +168,6 @@ const Reviews = () => {
                   <button
                       onClick={() => {
                         setReplyingReview(review);
-                        // reuse replyingReview state to hold the item being operated on
                         setIsReportOpen(true);
                       }}
                     style={{
@@ -243,47 +242,47 @@ const Reviews = () => {
       </div>
 
       {/* Reply modal */}
-      {isReplyOpen && replyingReview && (
-        <ReplyReviewModal
-          isOpen={isReplyOpen}
-          review={replyingReview}
-          onClose={() => {
-            setIsReplyOpen(false);
-            setReplyingReview(null);
-          }}
-          onSubmit={(replyText) => {
-            const now = new Date().toISOString().split('T')[0];
-            setReviews((prev) =>
-              prev.map((r) =>
-                r.id === replyingReview.id
-                  ? { ...r, isOwnerReplied: true, ownerReply: replyText, replyDate: now }
-                  : r
-              )
-            );
-          }}
-        />
-      )}
+      <ReplyReviewModal
+        isOpen={isReplyOpen}
+        onClose={() => {
+          setIsReplyOpen(false);
+          setReplyingReview(null);
+        }}
+        review={replyingReview}
+        onSubmit={(replyText) => {
+          const now = new Date().toISOString().split('T')[0];
+          setReviews((prev) =>
+            prev.map((r) =>
+              r.id === replyingReview.id
+                ? { ...r, isOwnerReplied: true, ownerReply: replyText, replyDate: now }
+                : r
+            )
+          );
+          setIsReplyOpen(false);
+          setReplyingReview(null);
+        }}
+      />
+
       {/* Report modal */}
-      {isReportOpen && replyingReview && (
-        <ReportReviewModal
-          isOpen={isReportOpen}
-          review={replyingReview}
-          onClose={() => {
-            setIsReportOpen(false);
-            setReplyingReview(null);
-          }}
-          onSubmit={({ reason, note }) => {
-            // mark review as reported locally and attach report metadata
-            setReviews((prev) =>
-              prev.map((r) =>
-                r.id === replyingReview.id
-                  ? { ...r, status: 'reported', report: { reason, note, date: new Date().toISOString().split('T')[0] } }
-                  : r
-              )
-            );
-          }}
-        />
-      )}
+      <ReportReviewModal
+        isOpen={isReportOpen}
+        onClose={() => {
+          setIsReportOpen(false);
+          setReplyingReview(null);
+        }}
+        review={replyingReview}
+        onSubmit={({ reason, note }) => {
+          setReviews((prev) =>
+            prev.map((r) =>
+              r.id === replyingReview.id
+                ? { ...r, status: 'reported', report: { reason, note, date: new Date().toISOString().split('T')[0] } }
+                : r
+            )
+          );
+          setIsReportOpen(false);
+          setReplyingReview(null);
+        }}
+      />
     </div>
   );
 };

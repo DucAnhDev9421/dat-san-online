@@ -143,33 +143,15 @@ const Courts = () => {
     [searchQuery, courts, selectedFacilityFilter, selectedStatusFilter]
   );
 
-  const handleSaveCourt = async (updated) => {
+  const handleSaveCourt = async (updatedCourt) => {
+    // Refresh list sau khi Add hoặc Edit thành công
+    // AddCourtModal và EditCourtModal đã tự gọi API rồi
     try {
-      if (updated._id || updated.id) {
-        // Update existing court
-        const courtId = updated._id || updated.id;
-        const payload = {
-          name: updated.name,
-          type: updated.type,
-          capacity: Number(updated.capacity),
-          price: Number(updated.price),
-          description: updated.description,
-          status: updated.status,
-          maintenance: updated.maintenance || "Không có lịch bảo trì",
-          services: updated.services || [],
-        };
-
-        await courtApi.updateCourt(courtId, payload);
-        await fetchCourts();
-      } else {
-        // New court created via AddCourtModal (already saved via API)
-        await fetchCourts();
-      }
+      await fetchCourts();
       setIsModalOpen(false);
       setSelectedCourt(null);
     } catch (err) {
-      console.error("Error saving court:", err);
-      alert(err.message || "Có lỗi xảy ra khi lưu sân");
+      console.error("Error refreshing courts:", err);
     }
   };
 

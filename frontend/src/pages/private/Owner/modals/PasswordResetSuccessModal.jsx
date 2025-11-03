@@ -1,87 +1,194 @@
 import React from "react";
-import { X, CheckCircle } from "lucide-react";
+import { X, CheckCircle, Key } from "lucide-react";
+import useClickOutside from "../../../../hook/use-click-outside";
+import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
+import useEscapeKey from "../../../../hook/use-escape-key";
 
-const SUCCESS_COLOR = "#10b981"; // Màu xanh lá cho thành công
-const BORDER_COLOR = "#e5e7eb";
-const TEXT_COLOR = "#1f2937";
-const WHITE_BG = "#fff"; 
+const PasswordResetSuccessModal = ({ isOpen, onClose, item: staff = {} }) => {
+  useBodyScrollLock(isOpen);
+  useEscapeKey(onClose, isOpen);
+  const modalRef = useClickOutside(onClose, isOpen);
 
-const overlayStyle = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.4)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 9999,
-};
-
-const modalBoxStyle = {
-  width: 380,
-  background: WHITE_BG,
-  borderRadius: 8,
-  boxShadow: "0 5px 15px rgba(0,0,0,0.15)",
-  maxHeight: "90vh",
-  overflowY: "auto",
-  textAlign: "center",
-};
-
-const contentStyle = {
-  padding: "30px 20px",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: 15,
-};
-
-const footerStyle = {
-    padding: "0 20px 20px 20px",
-    borderTop: `1px solid ${BORDER_COLOR}`,
-};
-
-const PasswordResetSuccessModal = ({ isOpen, item, onClose }) => {
-  if (!isOpen || !item) return null;
+  if (!isOpen) return null;
 
   return (
-    <div style={overlayStyle}>
-      <div style={modalBoxStyle}>
-        
-        {/* Content */}
-        <div style={contentStyle}>
-            <CheckCircle size={48} color={SUCCESS_COLOR} style={{ marginBottom: 10 }} />
-
-            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: SUCCESS_COLOR }}>
-                Thành công!
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: "20px",
+      }}
+      onClick={onClose}
+    >
+      <div
+        ref={modalRef}
+        style={{
+          background: "#fff",
+          borderRadius: 16,
+          width: "100%",
+          maxWidth: "480px",
+          overflow: "hidden",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "24px",
+            borderBottom: "1px solid #e5e7eb",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                background: "#dcfce7",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <CheckCircle size={20} color="#059669" />
+            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#111827" }}>
+              Đặt lại mật khẩu thành công
             </h3>
-            
-            <div style={{ fontSize: 15, color: TEXT_COLOR, lineHeight: 1.5 }}>
-                Mật khẩu của nhân viên <span style={{fontWeight: 700}}>"{item.name}"</span> đã được đặt lại thành công.
-            </div>
-            
-            <div style={{ fontSize: 13, color: SUCCESS_COLOR, fontWeight: 500, fontStyle: 'italic' }}>
-                Vui lòng thông báo mật khẩu mới cho nhân viên.
-            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: "#6b7280",
+              padding: "4px",
+            }}
+          >
+            <X size={24} />
+          </button>
         </div>
 
-        {/* Footer - Nút Đóng */}
-        <div style={footerStyle}>
-            <button
-                type="button"
-                onClick={onClose}
-                style={{
-                    width: '100%',
-                    background: SUCCESS_COLOR,
-                    color: "#fff",
-                    border: 0,
-                    borderRadius: 4,
-                    padding: "10px 15px",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    fontSize: 15,
-                }}
+        {/* Body */}
+        <div style={{ padding: "24px", textAlign: "center" }}>
+          <div
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: "50%",
+              background: "#dcfce7",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 20px",
+            }}
+          >
+            <CheckCircle size={40} color="#059669" />
+          </div>
+
+          <h4 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 12px 0", color: "#111827" }}>
+            Thành công!
+          </h4>
+
+          <p style={{ fontSize: 15, color: "#374151", marginBottom: 16, lineHeight: 1.6 }}>
+            Đã đặt lại mật khẩu thành công cho nhân viên <strong>{staff?.name || ""}</strong>
+          </p>
+
+          {staff?.initialPassword && (
+            <div
+              style={{
+                background: "#f0f9ff",
+                borderRadius: 8,
+                padding: 16,
+                marginBottom: 16,
+                border: "1px solid #bae6fd",
+              }}
             >
-                Đóng
-            </button>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 8,
+                  justifyContent: "center",
+                }}
+              >
+                <Key size={16} color="#0369a1" />
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#0369a1" }}>
+                  Mật khẩu mới:
+                </div>
+              </div>
+              <div
+                style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: "#0284c7",
+                  fontFamily: "monospace",
+                  letterSpacing: 2,
+                }}
+              >
+                {staff.initialPassword}
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 8 }}>
+                ⚠️ Vui lòng ghi lại mật khẩu này và gửi cho nhân viên
+              </div>
+            </div>
+          )}
+
+          <div
+            style={{
+              background: "#f0fdf4",
+              borderRadius: 8,
+              padding: 12,
+              border: "1px solid #dcfce7",
+            }}
+          >
+            <div style={{ fontSize: 13, color: "#059669", lineHeight: 1.6 }}>
+              ✓ Mật khẩu mới đã được cập nhật vào hệ thống.
+              <br />
+              ✓ Nhân viên có thể sử dụng mật khẩu mới để đăng nhập.
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 12,
+            padding: "20px 24px",
+            borderTop: "1px solid #e5e7eb",
+            background: "#fff",
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              padding: "10px 24px",
+              background: "#10b981",
+              color: "#fff",
+              border: "none",
+              borderRadius: 10,
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Đã hiểu
+          </button>
         </div>
       </div>
     </div>
@@ -89,3 +196,4 @@ const PasswordResetSuccessModal = ({ isOpen, item, onClose }) => {
 };
 
 export default PasswordResetSuccessModal;
+

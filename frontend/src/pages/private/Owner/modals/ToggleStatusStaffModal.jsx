@@ -1,198 +1,180 @@
 import React from "react";
 import { X, Lock, Unlock, AlertTriangle } from "lucide-react";
+import useClickOutside from "../../../../hook/use-click-outside";
+import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
+import useEscapeKey from "../../../../hook/use-escape-key";
 
+const ToggleStatusStaffModal = ({ isOpen, onClose, item: staff = {}, actionType = "lock", onToggle }) => {
+  useBodyScrollLock(isOpen);
+  useEscapeKey(onClose, isOpen);
+  const modalRef = useClickOutside(onClose, isOpen);
 
-const PRIMARY_COLOR = "#3b82f6"; 
-const DANGER_COLOR = "#ef4444"; 
-const WARNING_COLOR = "#f97316";  
-const SUCCESS_COLOR = "#10b981"; 
-const BORDER_COLOR = "#e5e7eb";
-const TEXT_COLOR = "#1f2937";
-const MUTED_TEXT_COLOR = "#6b7280";
-const WHITE_BG = "#fff";
-
-const overlayStyle = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.5)", 
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 9999,
-};
-
-const modalBoxStyle = {
-  width: 400,
-  background: WHITE_BG,
-  borderRadius: 12,
-  boxShadow: "0 15px 45px rgba(2,6,23,0.25)", 
-  maxHeight: "90vh",
-  overflowY: "auto",
-  border: `1px solid #f3f4f6`,
-};
-
-const headerStyle = () => ({
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "16px 24px",
-  // Không dùng background màu nhạt ở đây, để trắng sạch sẽ hơn
-  borderBottom: `1px solid ${BORDER_COLOR}`,
-});
-
-const contentStyle = {
-  padding: 30, // Tăng padding
-  display: "flex",
-  flexDirection: "column",
-  gap: 15,
-  textAlign: "center",
-};
-
-const ToggleStatusStaffModal = ({
-  isOpen,
-  item,
-  onClose,
-  onToggle,
-  actionType,
-}) => {
-  if (!isOpen || !item) return null;
+  if (!isOpen || !staff) return null;
 
   const isLock = actionType === "lock";
+  const title = isLock ? "Khóa tài khoản" : "Mở khóa tài khoản";
+  const message = isLock
+    ? `Bạn có chắc muốn khóa tài khoản của nhân viên ${staff.name}?`
+    : `Bạn có chắc muốn mở khóa tài khoản của nhân viên ${staff.name}?`;
+  const warningMessage = isLock
+    ? "Nhân viên sẽ không thể đăng nhập vào hệ thống cho đến khi được mở khóa."
+    : "Nhân viên sẽ có thể đăng nhập và sử dụng hệ thống bình thường.";
 
-  // ⭐️ Tinh chỉnh màu sắc và nội dung cho Lock/Unlock
-  const title = isLock ? "Khóa Tài khoản" : "Mở khóa Tài khoản";
-  const buttonText = isLock ? "Xác nhận Khóa" : "Xác nhận Mở khóa";
-  const buttonColor = isLock ? WARNING_COLOR : SUCCESS_COLOR;
-  const iconColor = isLock ? WARNING_COLOR : SUCCESS_COLOR;
-  const Icon = isLock ? Lock : Unlock;
-
-  const handleAction = () => {
-    onToggle(item.id, actionType);
-    onClose();
+  const handleConfirm = () => {
+    if (onToggle && staff?.id) {
+      onToggle(staff.id, actionType);
+    }
+    if (onClose) onClose();
   };
 
   return (
-    <div style={overlayStyle}>
-      <div style={modalBoxStyle}>
-        {/* ⭐️ Header - Đơn giản, Tiêu đề In đậm */}
-        <div style={headerStyle(isLock)}>
-          <h3
-            style={{
-              margin: 0,
-              fontSize: 18,
-              fontWeight: 800,
-              color: TEXT_COLOR,
-            }}
-          >
-            <Icon size={20} style={{ marginRight: 8, color: iconColor }} />{" "}
-            {title}
-          </h3>
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: "20px",
+      }}
+      onClick={onClose}
+    >
+      <div
+        ref={modalRef}
+        style={{
+          background: "#fff",
+          borderRadius: 16,
+          width: "100%",
+          maxWidth: "480px",
+          overflow: "hidden",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "24px",
+            borderBottom: "1px solid #e5e7eb",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                background: isLock ? "#fee2e2" : "#dcfce7",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {isLock ? (
+                <Lock size={20} color="#ef4444" />
+              ) : (
+                <Unlock size={20} color="#059669" />
+              )}
+            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#111827" }}>
+              {title}
+            </h3>
+          </div>
           <button
             onClick={onClose}
             style={{
-              background: "none",
-              border: 0,
+              background: "transparent",
+              border: "none",
               cursor: "pointer",
-              color: MUTED_TEXT_COLOR,
-              padding: 4,
-              borderRadius: 4,
+              color: "#6b7280",
+              padding: "4px",
             }}
           >
-            <X size={20} />
+            <X size={24} />
           </button>
         </div>
 
-        {/* ⭐️ Content - Bố cục phân cấp thông tin */}
-        <div style={contentStyle}>
-          {/* Icon cảnh báo to, màu nhấn mạnh */}
-          <AlertTriangle
-            size={48}
-            style={{ margin: "0 auto", color: iconColor }}
-          />
-
-          {/* Nội dung chính (In đậm) */}
+        {/* Body */}
+        <div style={{ padding: "24px" }}>
           <div
             style={{
-              fontWeight: 700,
-              fontSize: 18,
-              color: TEXT_COLOR,
-              marginTop: 5,
-            }}
-          >
-            Bạn có chắc chắn muốn{" "}
-            <span style={{ color: iconColor }}>
-              {isLock ? "khóa" : "mở khóa"}
-            </span>{" "}
-            tài khoản này?
-          </div>
-
-          {/* Thông tin phụ (Chữ thường, màu xám) */}
-          <div
-            style={{ fontSize: 14, color: MUTED_TEXT_COLOR, lineHeight: 1.5 }}
-          >
-            Nhân viên:{" "}
-            <span style={{ fontWeight: 700, color: TEXT_COLOR }}>
-              {item.name}
-            </span>{" "}
-            (<span style={{ color: PRIMARY_COLOR }}>{item.id}</span>)
-          </div>
-
-          {/* Cảnh báo nhỏ (Chữ nhỏ hơn, màu đỏ) */}
-          <div style={{ fontSize: 13, color: DANGER_COLOR, fontWeight: 500 }}>
-            {isLock
-              ? "Tài khoản bị khóa sẽ không thể đăng nhập."
-              : "Tài khoản sẽ trở lại trạng thái Hoạt động."}
-          </div>
-
-          {/* Nút Hành động */}
-          <div
-            style={{
+              background: isLock ? "#fef2f2" : "#f0fdf4",
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 16,
+              border: `1px solid ${isLock ? "#fee2e2" : "#dcfce7"}`,
               display: "flex",
-              justifyContent: "center",
-              paddingTop: 10,
-              gap: 12,
+              gap: 8,
             }}
           >
-            {/* Nút Hủy bỏ */}
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                background: "#e5e7eb",
-                color: TEXT_COLOR,
-                border: 0,
-                borderRadius: 10,
-                padding: "10px 20px", // Tăng padding
-                cursor: "pointer",
-                fontWeight: 600,
-                fontSize: 16,
-              }}
-            >
-              Hủy bỏ
-            </button>
-
-            {/* Nút Xác nhận Khóa/Mở khóa */}
-            <button
-              type="button"
-              onClick={handleAction}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                background: buttonColor,
-                color: "#fff",
-                border: 0,
-                borderRadius: 10,
-                padding: "10px 20px", // Tăng padding
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: 16,
-                boxShadow: `0 4px 10px ${buttonColor}50`,
-              }}
-            >
-              <Icon size={18} /> {buttonText}
-            </button>
+            <AlertTriangle
+              size={18}
+              color={isLock ? "#ef4444" : "#059669"}
+              style={{ flexShrink: 0, marginTop: 2 }}
+            />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: isLock ? "#ef4444" : "#059669", marginBottom: 4 }}>
+                {title}
+              </div>
+              <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.6 }}>
+                {warningMessage}
+              </div>
+            </div>
           </div>
+
+          <p style={{ fontSize: 15, color: "#374151", margin: 0, lineHeight: 1.6 }}>
+            {message}
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 12,
+            padding: "20px 24px",
+            borderTop: "1px solid #e5e7eb",
+            background: "#f9fafb",
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              padding: "10px 24px",
+              background: "#fff",
+              color: "#374151",
+              border: "2px solid #e5e7eb",
+              borderRadius: 10,
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Hủy
+          </button>
+          <button
+            onClick={handleConfirm}
+            style={{
+              padding: "10px 24px",
+              background: isLock ? "#ef4444" : "#10b981",
+              color: "#fff",
+              border: "none",
+              borderRadius: 10,
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {isLock ? "Khóa tài khoản" : "Mở khóa tài khoản"}
+          </button>
         </div>
       </div>
     </div>
@@ -200,3 +182,4 @@ const ToggleStatusStaffModal = ({
 };
 
 export default ToggleStatusStaffModal;
+
