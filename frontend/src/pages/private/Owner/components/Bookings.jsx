@@ -2,6 +2,9 @@ import React, { useState, useMemo } from "react";
 import { Download, Eye, Pencil, CheckCircle2, XCircle, Clock5 } from "lucide-react";
 import { bookingData, courtData } from "../data/mockData";
 import BookingDetailModal from "../modals/BookingDetailModal";
+import BookingEditModal from "../modals/BookingEditModal";
+import ConfirmBookingModal from "../modals/ConfirmBookingModal";
+import CancelBookingModal from "../modals/CancelBookingModal";
 
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
@@ -69,6 +72,9 @@ const Status = ({ value }) => {
 const Bookings = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isCancelOpen, setIsCancelOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
   // local editable bookings state
   const [bookings, setBookings] = useState(bookingData);
@@ -274,13 +280,19 @@ const Bookings = () => {
                         <ActionButton
                           bg="#10b981"
                           Icon={CheckCircle2}
-                          onClick={() => alert("Xác nhận " + r.id)}
+                          onClick={() => {
+                            setSelectedBooking(r);
+                            setIsConfirmOpen(true);
+                          }}
                           title="Xác nhận"
                         />
                         <ActionButton
                           bg="#ef4444"
                           Icon={XCircle}
-                          onClick={() => alert("Hủy " + r.id)}
+                          onClick={() => {
+                            setSelectedBooking(r);
+                            setIsCancelOpen(true);
+                          }}
                           title="Hủy"
                         />
                       </>
@@ -288,7 +300,10 @@ const Bookings = () => {
                     <ActionButton
                       bg="#6b7280"
                       Icon={Pencil}
-                      onClick={() => alert("Chức năng chỉnh sửa đang được phát triển")}
+                      onClick={() => {
+                        setSelectedBooking(r);
+                        setIsEditOpen(true);
+                      }}
                       title="Sửa"
                     />
                   </td>
@@ -323,6 +338,55 @@ const Bookings = () => {
           }}
           booking={selectedBooking}
           courtInfo={courtInfo}
+        />
+
+        {/* Booking edit modal */}
+        <BookingEditModal
+          isOpen={isEditOpen}
+          onClose={() => {
+            setIsEditOpen(false);
+            setSelectedBooking(null);
+          }}
+          booking={selectedBooking}
+          onSave={(updated) => {
+            setBookings((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+            setIsEditOpen(false);
+            setSelectedBooking(null);
+          }}
+        />
+
+        {/* Confirm booking modal */}
+        <ConfirmBookingModal
+          isOpen={isConfirmOpen}
+          onClose={() => {
+            setIsConfirmOpen(false);
+            setSelectedBooking(null);
+          }}
+          booking={selectedBooking}
+          onConfirm={(bookingId) => {
+            setBookings((prev) =>
+              prev.map((b) => (b.id === bookingId ? { ...b, status: "confirmed" } : b))
+            );
+            setIsConfirmOpen(false);
+            setSelectedBooking(null);
+          }}
+        />
+
+        {/* Cancel booking modal */}
+        <CancelBookingModal
+          isOpen={isCancelOpen}
+          onClose={() => {
+            setIsCancelOpen(false);
+            setSelectedBooking(null);
+          }}
+          booking={selectedBooking}
+          onCancel={(bookingId, reason) => {
+            setBookings((prev) =>
+              prev.map((b) => (b.id === bookingId ? { ...b, status: "cancelled", notes: reason } : b))
+            );
+            setIsCancelOpen(false);
+            setSelectedBooking(null);
+          }}
         />
     </div>
   );
