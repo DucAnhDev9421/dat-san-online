@@ -43,7 +43,7 @@ const courtTypeSchema = new mongoose.Schema(
 );
 
 // Indexes
-courtTypeSchema.index({ name: 1 });
+// courtTypeSchema.index({ name: 1 }); // Không cần vì unique: true đã tự tạo index
 courtTypeSchema.index({ sportCategory: 1 });
 courtTypeSchema.index({ status: 1 });
 courtTypeSchema.index({ order: 1 });
