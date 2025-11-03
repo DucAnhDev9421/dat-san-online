@@ -30,7 +30,7 @@ const sportCategorySchema = new mongoose.Schema(
 );
 
 // Indexes
-sportCategorySchema.index({ name: 1 });
+// sportCategorySchema.index({ name: 1 }); // Không cần vì unique: true đã tự tạo index
 sportCategorySchema.index({ status: 1 });
 sportCategorySchema.index({ order: 1 });
 

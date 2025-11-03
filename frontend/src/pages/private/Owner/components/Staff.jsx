@@ -9,14 +9,14 @@ import {
   Lock,
   Unlock,
 } from "lucide-react";
-import PasswordResetSuccessModal from "../modals/PasswordResetSuccessModal";
-import DeleteStaffModal from "../modals/DeleteStaffModal";
-import ToggleStatusStaffModal from "../modals/ToggleStatusStaffModal";
-import ResetPasswordStaffModal from "../modals/ResetPasswordStaffModal";
-import StaffEditModal from "../modals/StaffEditModal";
 import { staffData as initialStaffData } from "../data/mockData";
 import StaffDetailModal from "../modals/StaffDetailModal";
-import AddStaffModal from "../modals/AddStaffModal";
+import StaffEditModal from "../modals/StaffEditModal";
+import StaffAddModal from "../modals/StaffAddModal";
+import ResetPasswordStaffModal from "../modals/ResetPasswordStaffModal";
+import ToggleStatusStaffModal from "../modals/ToggleStatusStaffModal";
+import PasswordResetSuccessModal from "../modals/PasswordResetSuccessModal";
+import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -43,30 +43,17 @@ const Staff = () => {
   const [staffList, setStaffList] = useState(initialStaffData);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // State cho Modal Chi tiết
+  // Modal states
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-
-  // Nhân viên được chọn để xem/chỉnh sửa/đặt lại mật khẩu/xóa/khóa-mở khóa
-  const [selectedStaff, setSelectedStaff] = useState(null);
-
-  // State cho Modal Chỉnh sửa
   const [isEditOpen, setIsEditOpen] = useState(false);
-
-  // State cho Modal Đặt lại mật khẩu
+  const [isAddOpen, setIsAddOpen] = useState(false);
   const [isResetPassOpen, setIsResetPassOpen] = useState(false);
-
-  // State cho Modal thông báo thành công
-  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
-
-  // State cho Modal Xóa
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-
-  // State cho Modal Thêm mới
-  const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
-
-  // State cho Modal Khóa/Mở khóa
   const [isToggleStatusOpen, setIsToggleStatusOpen] = useState(false);
-  const [toggleActionType, setToggleActionType] = useState("lock"); // 'lock' hoặc 'unlock'
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState(null);
+  const [toggleActionType, setToggleActionType] = useState("lock");
+  const [newPassword, setNewPassword] = useState("");
 
   const handleOpenDetail = (staff) => {
     setSelectedStaff(staff);
@@ -82,56 +69,49 @@ const Staff = () => {
     setSelectedStaff(staff);
     setIsEditOpen(true);
   };
+
   const handleCloseEdit = () => {
     setIsEditOpen(false);
     setSelectedStaff(null);
   };
 
-  // --- Logic mở/đóng Modal Đặt lại mật khẩu
   const handleOpenResetPass = (staff) => {
     setSelectedStaff(staff);
     setIsResetPassOpen(true);
   };
+
   const handleCloseResetPass = () => {
     setIsResetPassOpen(false);
     setSelectedStaff(null);
   };
 
-  // Hàm đóng cuối cùng sau khi hoàn thành hành động
-  const handleFinalActionClose = () => {
-    setIsSuccessModalOpen(false);
-    setSelectedStaff(null); // Xóa selectedStaff
-  };
-
-  /// --- Logic Đặt lại mật khẩu (CHỈNH SỬA)
-  const handleResetPassword = (staffId, newPassword) => {
+  const handleResetPassword = (staffId, password) => {
     const staff = staffList.find((s) => s.id === staffId);
-
-    // 1. Đóng Modal Đặt lại mật khẩu
-    setIsResetPassOpen(false);
-
-    // 2. Mở Modal thông báo thành công (selectedStaff vẫn giữ dữ liệu)
-    setIsSuccessModalOpen(true);
-
-    // (logic gọi API thực tế)
-    console.log(`Password for ${staff.name} reset to: ${newPassword}`);
+    if (staff) {
+      setNewPassword(password);
+      setIsResetPassOpen(false);
+      setIsSuccessOpen(true);
+      // (logic gọi API thực tế)
+      console.log(`Password for ${staff.name} reset to: ${password}`);
+    }
   };
 
-  const handleSaveStaff = (updatedStaff) => {
-    setStaffList((prevList) =>
-      prevList.map((s) => (s.id === updatedStaff.id ? updatedStaff : s))
-    );
-    alert(`Đã lưu thành công thông tin của ${updatedStaff.name}`);
-    handleCloseEdit();
-  };
-
-  // --- Logic mở/đóng Modal Khóa/Mở khóa
   const handleOpenToggleStatus = (staff, action) => {
     setSelectedStaff(staff);
-    setToggleActionType(action); // 'lock' hoặc 'unlock'
+    setToggleActionType(action);
     setIsToggleStatusOpen(true);
   };
+
   const handleCloseToggleStatus = () => {
+    setIsToggleStatusOpen(false);
+    setSelectedStaff(null);
+  };
+
+  const handleToggleStatus = (staffId, action) => {
+    const newStatus = action === "lock" ? "inactive" : "active";
+    setStaffList((prevList) =>
+      prevList.map((s) => (s.id === staffId ? { ...s, status: newStatus } : s))
+    );
     setIsToggleStatusOpen(false);
     setSelectedStaff(null);
   };
@@ -140,41 +120,35 @@ const Staff = () => {
     setSelectedStaff(staff);
     setIsDeleteOpen(true);
   };
+
   const handleCloseDelete = () => {
     setIsDeleteOpen(false);
     setSelectedStaff(null);
   };
 
-  // --- Logic Xóa nhân viên (SỬA LỖI)
   const handleDeleteStaff = (staffId) => {
-    // Nhận staffId từ modal
-
-    // Cập nhật state: Xóa nhân viên khỏi danh sách
     setStaffList((prevList) => prevList.filter((s) => s.id !== staffId));
-
-    handleCloseDelete(); // Đóng modal sau khi xóa thành công
+    setIsDeleteOpen(false);
+    setSelectedStaff(null);
   };
 
-  // --- Logic Xử lý Khóa/Mở khóa (Cập nhật trạng thái)
-  const handleToggleStatus = (staffId, action) => {
-    const newStatus = action === "lock" ? "inactive" : "active";
-
+  const handleSaveStaff = (updatedStaff) => {
     setStaffList((prevList) =>
-      prevList.map((s) => (s.id === staffId ? { ...s, status: newStatus } : s))
+      prevList.map((s) => (s.id === updatedStaff.id ? updatedStaff : s))
     );
+    setIsEditOpen(false);
+    setSelectedStaff(null);
   };
 
-  // --- Logic mở/đóng Modal Thêm mới
   const handleOpenAddStaff = () => {
-    setIsAddStaffOpen(true);
-  };
-  const handleCloseAddStaff = () => {
-    setIsAddStaffOpen(false);
+    setIsAddOpen(true);
   };
 
-  // --- 🚨 Logic Xử lý Thêm nhân viên (CẬP NHẬT)
+  const handleCloseAddStaff = () => {
+    setIsAddOpen(false);
+  };
+
   const handleAddStaff = (newStaffData) => {
-    // 1. Tạo ID mới
     const currentMaxId = staffList.reduce((max, staff) => {
       const num = parseInt(staff.id.replace("STAFF", ""), 10);
       return num > max ? num : max;
@@ -182,28 +156,30 @@ const Staff = () => {
     const newIdNumber = currentMaxId + 1;
     const newId = `STAFF${String(newIdNumber).padStart(3, "0")}`;
 
-    // 🚨 2. Lấy dữ liệu mật khẩu và hiệu suất từ newStaffData
     const newStaff = {
       ...newStaffData,
       id: newId,
-      // Lưu trữ các trường cần thiết
-      performance: newStaffData.performance, // ✅ Lấy giá trị đã chọn
-      // Lưu mật khẩu ban đầu (chỉ để minh họa, không nên lưu mật khẩu thật trong mock data)
-      initialPassword: newStaffData.initialPassword,
-
-      // Thêm các trường mặc định khác
+      status: "active",
       lastLogin: "Chưa từng đăng nhập",
       totalHours: 0,
+      permissions: [],
+      // Lưu mật khẩu ban đầu (chỉ để hiển thị trong modal success, không lưu vào mock data thực tế)
+      initialPassword: newStaffData.initialPassword,
     };
 
-    // 3. Cập nhật state
     setStaffList((prevList) => [...prevList, newStaff]);
+    
+    // Hiển thị modal success với mật khẩu
+    setNewPassword(newStaffData.initialPassword);
+    setSelectedStaff(newStaff);
+    setIsAddOpen(false);
+    setIsSuccessOpen(true);
+  };
 
-    // 4. Thông báo và đóng
-    alert(
-      `Đã thêm thành công nhân viên: ${newStaff.name} (ID: ${newId}). Mật khẩu: ${newStaffData.initialPassword}`
-    );
-    handleCloseAddStaff();
+  const handleCloseSuccess = () => {
+    setIsSuccessOpen(false);
+    setSelectedStaff(null);
+    setNewPassword("");
   };
 
   const filteredStaff = useMemo(
@@ -537,69 +513,69 @@ const Staff = () => {
           </table>
         </div>
       </div>
+
       {/* Detail Modal */}
-      {selectedStaff && (
-        <StaffDetailModal
-          isOpen={isDetailOpen}
-          item={selectedStaff} // ✅ Truyền đối tượng nhân viên vào prop 'item'
-          onClose={handleCloseDetail}
-        />
-      )}
+      <StaffDetailModal
+        isOpen={isDetailOpen}
+        onClose={handleCloseDetail}
+        item={selectedStaff}
+      />
 
-      {/* 🚨 Edit Modal */}
-      {selectedStaff && (
-        <StaffEditModal
-          isOpen={isEditOpen}
-          item={selectedStaff}
-          onClose={handleCloseEdit}
-          onSave={handleSaveStaff} // Truyền hàm lưu vào modal
-        />
-      )}
+      {/* Edit Modal */}
+      <StaffEditModal
+        isOpen={isEditOpen}
+        onClose={handleCloseEdit}
+        item={selectedStaff}
+        onSave={handleSaveStaff}
+      />
 
-      {/* 🚨 Reset Password Modal */}
-      {selectedStaff && (
-        <ResetPasswordStaffModal
-          isOpen={isResetPassOpen}
-          item={selectedStaff}
-          onClose={handleCloseResetPass}
-          onReset={handleResetPassword} // Truyền hàm xử lý reset
-        />
-      )}
-
-      {/*Toggle Status Modal */}
-      {selectedStaff && (
-        <ToggleStatusStaffModal
-          isOpen={isToggleStatusOpen}
-          item={selectedStaff}
-          onClose={handleCloseToggleStatus}
-          onToggle={handleToggleStatus} // Hàm xử lý Khóa/Mở khóa
-          actionType={toggleActionType} // Truyền hành động hiện tại ('lock'/'unlock')
-        />
-      )}
-
-      {/* Delete modal */}
-      {selectedStaff && ( // Chỉ render khi có nhân viên được chọn
-        <DeleteStaffModal
-          isOpen={isDeleteOpen}
-          item={selectedStaff} // ✅ Prop đúng
-          onClose={handleCloseDelete} // ✅ Hàm đóng đúng
-          onDelete={handleDeleteStaff} // ✅ Prop hàm xử lý đúng
-        />
-      )}
-      {/* Password Reset Success Modal */}
-      {selectedStaff && (
-        <PasswordResetSuccessModal
-          isOpen={isSuccessModalOpen}
-          item={selectedStaff}
-          onClose={handleFinalActionClose} // Hàm đóng cuối cùng
-        />
-      )}
-
-      {/* Add Staff Modal */}
-      <AddStaffModal
-        isOpen={isAddStaffOpen}
+      {/* Add Modal */}
+      <StaffAddModal
+        isOpen={isAddOpen}
         onClose={handleCloseAddStaff}
         onAdd={handleAddStaff}
+      />
+
+      {/* Reset Password Modal */}
+      <ResetPasswordStaffModal
+        isOpen={isResetPassOpen}
+        onClose={handleCloseResetPass}
+        item={selectedStaff}
+        onReset={handleResetPassword}
+      />
+
+      {/* Toggle Status Modal */}
+      <ToggleStatusStaffModal
+        isOpen={isToggleStatusOpen}
+        onClose={handleCloseToggleStatus}
+        item={selectedStaff}
+        actionType={toggleActionType}
+        onToggle={handleToggleStatus}
+      />
+
+      {/* Delete Modal */}
+      <DeleteConfirmationModal
+        isOpen={isDeleteOpen}
+        onClose={handleCloseDelete}
+        onConfirm={() => {
+          if (selectedStaff) {
+            handleDeleteStaff(selectedStaff.id);
+          }
+        }}
+        title="Xóa nhân viên"
+        message="Bạn có chắc muốn xóa nhân viên"
+        itemName={`${selectedStaff?.name}`}
+        warningMessage="Hành động này không thể hoàn tác. Tất cả dữ liệu liên quan sẽ bị xóa."
+      />
+
+      {/* Password Reset Success Modal */}
+      <PasswordResetSuccessModal
+        isOpen={isSuccessOpen}
+        onClose={handleCloseSuccess}
+        item={{
+          ...selectedStaff,
+          initialPassword: newPassword,
+        }}
       />
     </div>
   );

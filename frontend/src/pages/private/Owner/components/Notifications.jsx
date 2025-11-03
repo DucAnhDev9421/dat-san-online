@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Send, Eye, Trash2 } from "lucide-react";
 import { notificationData } from "../data/mockData";
 import NotificationDetailModal from "../modals/NotificationDetailModal";
-import DeleteNotificationModal from "../modals/DeleteNotificationModal";
+import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -45,8 +45,6 @@ const Notifications = () => {
     setNotifications((prev) =>
       prev.filter((n) => n.id !== notificationToDelete.id)
     );
-    setSelectedNotification(null);
-    setIsDeleteOpen(false);
   };
 
   return (
@@ -277,7 +275,7 @@ const Notifications = () => {
                       bg="#06b6d4"
                       Icon={Eye}
                       onClick={() => {
-                        // mark as read locally and open detail modal
+                        // mark as read locally
                         setNotifications((prev) =>
                           prev.map((n) =>
                             n.id === r.id ? { ...n, status: "read" } : n
@@ -319,27 +317,33 @@ const Notifications = () => {
           </table>
         </div>
       </div>
+
       {/* Notification detail modal */}
-      {isDetailOpen && selectedNotification && (
-        <NotificationDetailModal
-          isOpen={isDetailOpen}
-          notification={selectedNotification}
-          onClose={() => {
-            setIsDetailOpen(false);
-            setSelectedNotification(null);
-          }}
-        />
-      )}
+      <NotificationDetailModal
+        isOpen={isDetailOpen}
+        onClose={() => {
+          setIsDetailOpen(false);
+          setSelectedNotification(null);
+        }}
+        notification={selectedNotification}
+      />
 
       {/* Delete modal */}
-      <DeleteNotificationModal
+      <DeleteConfirmationModal
         isOpen={isDeleteOpen}
         onClose={() => {
           setIsDeleteOpen(false);
           setSelectedNotification(null);
         }}
-        notification={selectedNotification}
-        onConfirm={handleDeleteNotification}
+        onConfirm={() => {
+          if (selectedNotification) {
+            handleDeleteNotification(selectedNotification);
+          }
+        }}
+        title="Xóa thông báo"
+        message={`Bạn có chắc muốn xóa thông báo`}
+        itemName={`"${selectedNotification?.title}"`}
+        warningMessage="Thông báo này sẽ bị xóa vĩnh viễn."
       />
     </div>
   );

@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Eye, Trash2 } from "lucide-react";
 import { activityLogData } from "../data/mockData";
-import ActivityLogDetailModal from "../modals/ActivityLogDetailModal";
-import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
     onClick={onClick}
@@ -27,14 +25,6 @@ const ActivityLog = () => {
   // -- LƯU LOGS VÀO STATE ĐỂ CÓ THỂ XÓA --
   const [logs, setLogs] = useState(activityLogData);
 
-  // State cho modal chi tiết
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedLog, setSelectedLog] = useState(null);
-
-  // -- THÊM STATE CHO MODAL XÓA --
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [logToDelete, setLogToDelete] = useState(null);
-
   const filteredActivityLogs = useMemo(
     () =>
       logs.filter((log) =>
@@ -53,33 +43,22 @@ const ActivityLog = () => {
 
   // -- 3. THÊM HÀM ĐIỀU KHIỂN MODAL --
   const handleViewDetails = (log) => {
-    setSelectedLog(log);
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedLog(null);
+    alert(`Chi tiết hoạt động:\nNgười dùng: ${log.user}\nHành động: ${log.action}\nMục tiêu: ${log.target}\nChi tiết: ${log.details}\nIP: ${log.ip}\nThời gian: ${log.timestamp}\nTrạng thái: ${log.status}`);
   };
 
   // Các hàm xử lý xóa
   const handleDeleteLog = (log) => {
-    setLogToDelete(log);
-    setIsDeleteModalOpen(true);
+    if (window.confirm(`Bạn có chắc muốn xóa log "${log.action}"?`)) {
+      handleConfirmDelete(log);
+    }
   };
 
-  const handleCloseDeleteModal = () => {
-    setLogToDelete(null);
-    setIsDeleteModalOpen(false);
-  };
-
-  const handleConfirmDelete = () => {
-    if (logToDelete) {
+  const handleConfirmDelete = (log) => {
+    if (log) {
       // Lọc ra log cần xóa khỏi state 'logs'
       setLogs((currentLogs) =>
-        currentLogs.filter((log) => log.id !== logToDelete.id)
+        currentLogs.filter((l) => l.id !== log.id)
       );
-      handleCloseDeleteModal();
     }
   };
 
@@ -370,19 +349,7 @@ const ActivityLog = () => {
         </div>
       </div>
 
-      {/* -- RENDER MODAL TẠI ĐÂY */}
-      <ActivityLogDetailModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        log={selectedLog}
-      />
-
-      <DeleteConfirmationModal
-        isOpen={isDeleteModalOpen}
-        onClose={handleCloseDeleteModal}
-        onConfirm={handleConfirmDelete}
-        logId={logToDelete?.id}
-      />
+      {/* Modals temporarily disabled - will be implemented later */}
     </div>
   );
 };

@@ -1,228 +1,303 @@
-import React, { useState, useEffect } from "react";
-import { X, Key, Save } from "lucide-react";
+import React, { useState } from "react";
+import { X, Key, Lock } from "lucide-react";
+import useClickOutside from "../../../../hook/use-click-outside";
+import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
+import useEscapeKey from "../../../../hook/use-escape-key";
 
-const PRIMARY_COLOR = "#3b82f6";
-const DANGER_COLOR = "#ef4444";
-const BORDER_COLOR = "#e5e7eb";
-const TEXT_COLOR = "#1f2937";
-const MUTED_TEXT_COLOR = "#6b7280";
-const BG_HEADER = "#eef2ff";
+const ResetPasswordStaffModal = ({ isOpen, onClose, item: staff = {}, onReset }) => {
+  useBodyScrollLock(isOpen);
+  useEscapeKey(onClose, isOpen);
+  const modalRef = useClickOutside(onClose, isOpen);
 
-const overlayStyle = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.4)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 9999,
-};
-
-const modalBoxStyle = {
-  width: 450,
-  background: "#fff",
-  borderRadius: 12,
-  boxShadow: "0 10px 40px rgba(2,6,23,0.2)",
-  maxHeight: "90vh",
-  overflowY: "auto",
-};
-
-const headerStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "16px 24px",
-  borderBottom: `1px solid ${BORDER_COLOR}`,
-  background: BG_HEADER,
-  borderTopLeftRadius: 12,
-  borderTopRightRadius: 12,
-};
-
-const formStyle = {
-  padding: 24,
-  display: "flex",
-  flexDirection: "column",
-  gap: 16,
-};
-
-// Component cho trường nhập mật khẩu
-const PasswordField = ({ label, name, value, onChange, error }) => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-    <label style={{ fontSize: 13, color: MUTED_TEXT_COLOR, fontWeight: 600 }}>
-      {label}
-    </label>
-    <input
-      type="password"
-      name={name}
-      value={value}
-      onChange={onChange}
-      style={{
-        padding: "10px 12px",
-        borderRadius: 8,
-        border: `1px solid ${error ? DANGER_COLOR : BORDER_COLOR}`,
-        fontSize: 15,
-        color: TEXT_COLOR,
-      }}
-    />
-    {error && (
-      <div style={{ fontSize: 12, color: DANGER_COLOR, marginTop: 2 }}>
-        {error}
-      </div>
-    )}
-  </div>
-);
-
-const ResetPasswordStaffModal = ({ isOpen, item, onClose, onReset }) => {
-  const [passwords, setPasswords] = useState({
-    newPassword: "",
-    confirmPassword: "",
-  });
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    // Reset state khi modal đóng hoặc mở cho nhân viên khác
-    setPasswords({ newPassword: "", confirmPassword: "" });
-    setErrors({});
-  }, [isOpen, item]);
-
-  if (!isOpen || !item) return null;
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setPasswords((prev) => ({ ...prev, [name]: value }));
-  };
+  if (!isOpen) return null;
 
   const validate = () => {
     const newErrors = {};
-    if (!passwords.newPassword || passwords.newPassword.length < 6) {
-      newErrors.newPassword = "Mật khẩu phải có ít nhất 6 ký tự.";
+    if (!newPassword.trim()) {
+      newErrors.newPassword = "Mật khẩu không được để trống";
+    } else if (newPassword.length < 6) {
+      newErrors.newPassword = "Mật khẩu phải có ít nhất 6 ký tự";
     }
-    if (passwords.newPassword !== passwords.confirmPassword) {
-      newErrors.confirmPassword = "Mật khẩu xác nhận không khớp.";
+    if (newPassword !== confirmPassword) {
+      newErrors.confirmPassword = "Mật khẩu xác nhận không khớp";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (validate()) {
-      // Gọi hàm onReset từ Staff.jsx
-      onReset(item.id, passwords.newPassword);
+    if (!validate()) return;
+
+    setLoading(true);
+    try {
+      if (onReset && staff?.id) {
+        await onReset(staff.id, newPassword);
+      }
+      setNewPassword("");
+      setConfirmPassword("");
+      setErrors({});
+      if (onClose) onClose();
+    } catch (error) {
+      console.error("Error resetting password:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div style={overlayStyle}>
-      <div style={modalBoxStyle}>
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: "20px",
+      }}
+      onClick={onClose}
+    >
+      <div
+        ref={modalRef}
+        style={{
+          background: "#fff",
+          borderRadius: 16,
+          width: "100%",
+          maxWidth: "500px",
+          overflow: "hidden",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div style={headerStyle}>
-          <h3
-            style={{
-              margin: 0,
-              fontSize: 18,
-              fontWeight: 800,
-              color: TEXT_COLOR,
-            }}
-          >
-            <Key size={20} style={{ marginRight: 8, color: PRIMARY_COLOR }} />
-            Đặt lại mật khẩu
-          </h3>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "24px",
+            borderBottom: "1px solid #e5e7eb",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                background: "#e6f3ff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Key size={20} color="#3b82f6" />
+            </div>
+            <div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#111827" }}>
+                Đặt lại mật khẩu
+              </h3>
+              <p style={{ fontSize: 13, color: "#6b7280", margin: "4px 0 0 0" }}>
+                {staff?.name || "Nhân viên"}
+              </p>
+            </div>
+          </div>
           <button
             onClick={onClose}
             style={{
-              background: "none",
-              border: 0,
+              background: "transparent",
+              border: "none",
               cursor: "pointer",
-              color: MUTED_TEXT_COLOR,
-              padding: 4,
-              borderRadius: 4,
+              color: "#6b7280",
+              padding: "4px",
             }}
           >
-            <X size={20} />
+            <X size={24} />
           </button>
         </div>
 
-        {/* Form Content */}
+        {/* Body */}
         <form onSubmit={handleSubmit}>
-          <div style={formStyle}>
+          <div style={{ padding: "24px" }}>
             <div
               style={{
-                padding: "0 0 10px 0",
-                borderBottom: `1px dashed ${BORDER_COLOR}`,
+                background: "#f0f9ff",
+                borderRadius: 8,
+                padding: 12,
+                marginBottom: 20,
+                border: "1px solid #bae6fd",
               }}
             >
-              <div style={{ fontWeight: 700, fontSize: 16 }}>
-                Nhân viên:{" "}
-                <span style={{ color: PRIMARY_COLOR }}>{item.name}</span>
-              </div>
-              <div style={{ fontSize: 13, color: MUTED_TEXT_COLOR }}>
-                Mã: {item.id}
+              <div style={{ fontSize: 13, color: "#0369a1", lineHeight: 1.6 }}>
+                ⚠️ Mật khẩu mới sẽ được gửi cho nhân viên để đăng nhập. Vui lòng đảm bảo mật khẩu có độ bảo mật cao.
               </div>
             </div>
 
-            <PasswordField
-              label="Mật khẩu mới"
-              name="newPassword"
-              value={passwords.newPassword}
-              onChange={handleChange}
-              error={errors.newPassword}
-            />
-            <PasswordField
-              label="Xác nhận mật khẩu mới"
-              name="confirmPassword"
-              value={passwords.confirmPassword}
-              onChange={handleChange}
-              error={errors.confirmPassword}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                paddingTop: 10,
-                gap: 12,
-              }}
-            >
-              {/* Nút Hủy */}
-              <button
-                type="button"
-                onClick={onClose}
+            <div style={{ marginBottom: 20 }}>
+              <label
                 style={{
-                  background: "#e5e7eb",
-                  color: TEXT_COLOR,
-                  border: 0,
-                  borderRadius: 10,
-                  padding: "10px 20px",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  fontSize: 16,
-                }}
-              >
-                Hủy bỏ
-              </button>
-
-              {/* Nút Lưu */}
-              <button
-                type="submit"
-                style={{
-                  display: "inline-flex",
+                  display: "flex",
                   alignItems: "center",
-                  gap: 8,
-                  background: PRIMARY_COLOR,
-                  color: "#fff",
-                  border: 0,
-                  borderRadius: 10,
-                  padding: "10px 20px",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  fontSize: 16,
-                  boxShadow: "0 4px 10px rgba(59, 130, 246, 0.3)",
+                  gap: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#374151",
+                  marginBottom: 8,
                 }}
               >
-                <Save size={18} /> Lưu
-              </button>
+                <Lock size={16} />
+                Mật khẩu mới <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    if (errors.newPassword) setErrors((prev) => ({ ...prev, newPassword: "" }));
+                  }}
+                  placeholder="Tối thiểu 6 ký tự"
+                  style={{
+                    width: "100%",
+                    padding: "10px 40px 10px 12px",
+                    borderRadius: 8,
+                    border: errors.newPassword ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                    fontSize: 14,
+                    outline: "none",
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = "#3b82f6";
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = errors.newPassword ? "#ef4444" : "#e5e7eb";
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: "absolute",
+                    right: 8,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#6b7280",
+                    padding: 4,
+                  }}
+                >
+                  {showPassword ? "Ẩn" : "Hiện"}
+                </button>
+              </div>
+              {errors.newPassword && (
+                <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>
+                  {errors.newPassword}
+                </div>
+              )}
             </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                <Lock size={16} />
+                Xác nhận mật khẩu <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (errors.confirmPassword) setErrors((prev) => ({ ...prev, confirmPassword: "" }));
+                }}
+                placeholder="Nhập lại mật khẩu"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: errors.confirmPassword ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#3b82f6";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = errors.confirmPassword ? "#ef4444" : "#e5e7eb";
+                }}
+              />
+              {errors.confirmPassword && (
+                <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>
+                  {errors.confirmPassword}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: 12,
+              padding: "20px 24px",
+              borderTop: "1px solid #e5e7eb",
+              background: "#f9fafb",
+            }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              style={{
+                padding: "10px 24px",
+                background: "#fff",
+                color: "#374151",
+                border: "2px solid #e5e7eb",
+                borderRadius: 10,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.6 : 1,
+              }}
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                padding: "10px 24px",
+                background: loading ? "#9ca3af" : "#3b82f6",
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: loading ? "not-allowed" : "pointer",
+              }}
+            >
+              {loading ? "Đang đặt lại..." : "Đặt lại mật khẩu"}
+            </button>
           </div>
         </form>
       </div>
@@ -231,3 +306,4 @@ const ResetPasswordStaffModal = ({ isOpen, item, onClose, onReset }) => {
 };
 
 export default ResetPasswordStaffModal;
+

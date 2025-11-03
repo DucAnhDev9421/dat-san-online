@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
-import { X, User, Mail, Phone, Briefcase, DollarSign } from "lucide-react";
+import React, { useState } from "react";
+import { X, UserPlus, Mail, Phone, Briefcase, DollarSign, Key } from "lucide-react";
 import useClickOutside from "../../../../hook/use-click-outside";
 import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
 import useEscapeKey from "../../../../hook/use-escape-key";
 
-const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
+const StaffAddModal = ({ isOpen, onClose, onAdd }) => {
   useBodyScrollLock(isOpen);
   useEscapeKey(onClose, isOpen);
   const modalRef = useClickOutside(onClose, isOpen);
@@ -16,24 +16,24 @@ const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
     position: "",
     salary: "",
     performance: "Tốt",
+    initialPassword: "",
   });
 
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && staff) {
-      setFormData({
-        name: staff.name || "",
-        email: staff.email || "",
-        phone: staff.phone || "",
-        position: staff.position || "",
-        salary: staff.salary || "",
-        performance: staff.performance || "Tốt",
-      });
-      setErrors({});
-    }
-  }, [isOpen, staff]);
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      email: "",
+      phone: "",
+      position: "",
+      salary: "",
+      performance: "Tốt",
+      initialPassword: "",
+    });
+    setErrors({});
+  };
 
   if (!isOpen) return null;
 
@@ -47,6 +47,10 @@ const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
     if (!formData.phone.trim()) newErrors.phone = "Số điện thoại không được để trống";
     if (!formData.position.trim()) newErrors.position = "Chức vụ không được để trống";
     if (!formData.salary || formData.salary <= 0) newErrors.salary = "Lương phải lớn hơn 0";
+    if (!formData.initialPassword.trim()) newErrors.initialPassword = "Mật khẩu không được để trống";
+    else if (formData.initialPassword.length < 6) {
+      newErrors.initialPassword = "Mật khẩu phải có ít nhất 6 ký tự";
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -65,17 +69,17 @@ const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
 
     setLoading(true);
     try {
-      const updatedStaff = {
-        ...staff,
+      const newStaffData = {
         ...formData,
         salary: Number(formData.salary),
       };
-      if (onSave) {
-        await onSave(updatedStaff);
+      if (onAdd) {
+        await onAdd(newStaffData);
       }
+      resetForm();
       if (onClose) onClose();
     } catch (error) {
-      console.error("Error saving staff:", error);
+      console.error("Error adding staff:", error);
     } finally {
       setLoading(false);
     }
@@ -123,13 +127,16 @@ const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <User size={20} color="#22c55e" />
+            <UserPlus size={20} color="#10b981" />
             <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#111827" }}>
-              Chỉnh sửa nhân viên
+              Thêm nhân viên mới
             </h3>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              resetForm();
+              if (onClose) onClose();
+            }}
             style={{
               background: "transparent",
               border: "none",
@@ -157,7 +164,7 @@ const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
                   marginBottom: 8,
                 }}
               >
-                <User size={16} />
+                <UserPlus size={16} />
                 Họ tên <span style={{ color: "#ef4444" }}>*</span>
               </label>
               <input
@@ -387,6 +394,51 @@ const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
                 <option value="Yếu">Yếu</option>
               </select>
             </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                <Key size={16} />
+                Mật khẩu ban đầu <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <input
+                type="password"
+                value={formData.initialPassword}
+                onChange={(e) => handleChange("initialPassword", e.target.value)}
+                placeholder="Tối thiểu 6 ký tự"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: errors.initialPassword ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#3b82f6";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = errors.initialPassword ? "#ef4444" : "#e5e7eb";
+                }}
+              />
+              {errors.initialPassword && (
+                <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>
+                  {errors.initialPassword}
+                </div>
+              )}
+              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+                Mật khẩu này sẽ được gửi cho nhân viên để đăng nhập lần đầu
+              </div>
+            </div>
           </div>
 
           {/* Footer */}
@@ -402,7 +454,10 @@ const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
           >
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                resetForm();
+                if (onClose) onClose();
+              }}
               disabled={loading}
               style={{
                 padding: "10px 24px",
@@ -423,7 +478,7 @@ const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
               disabled={loading}
               style={{
                 padding: "10px 24px",
-                background: loading ? "#9ca3af" : "#22c55e",
+                background: loading ? "#9ca3af" : "#10b981",
                 color: "#fff",
                 border: "none",
                 borderRadius: 10,
@@ -432,7 +487,7 @@ const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
                 cursor: loading ? "not-allowed" : "pointer",
               }}
             >
-              {loading ? "Đang lưu..." : "Lưu thay đổi"}
+              {loading ? "Đang thêm..." : "Thêm nhân viên"}
             </button>
           </div>
         </form>
@@ -441,5 +496,5 @@ const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
   );
 };
 
-export default StaffEditModal;
+export default StaffAddModal;
 
