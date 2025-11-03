@@ -42,6 +42,10 @@ const Staff = () => {
   // State quản lý danh sách nhân viên thực tế
   const [staffList, setStaffList] = useState(initialStaffData);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Modal states
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -193,6 +197,15 @@ const Staff = () => {
     [searchQuery, staffList]
   );
 
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredStaff.length / pageSize)
+  );
+  const staffSlice = filteredStaff.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  );
+
   const totalStaff = filteredStaff.length;
   const activeStaff = filteredStaff.filter((s) => s.status === "active").length;
 
@@ -304,6 +317,28 @@ const Staff = () => {
             <div>
               <strong>Tổng:</strong> {filteredStaff.length} nhân viên
             </div>
+            <div>
+              <label style={{ marginRight: 8 }}>Hiển thị</label>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                style={{
+                  padding: 6,
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                }}
+              >
+                {[5, 10, 20, 50].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              <span style={{ marginLeft: 8 }}>bản ghi</span>
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <select
                 style={{
@@ -329,7 +364,10 @@ const Staff = () => {
           <input
             placeholder="Tìm theo tên, email, SĐT, chức vụ…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             style={{
               padding: "8px 12px",
               borderRadius: 8,
@@ -372,7 +410,7 @@ const Staff = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredStaff.map((staff) => (
+              {staffSlice.map((staff) => (
                 <tr
                   key={staff.id}
                   style={{ borderBottom: "1px solid #f3f4f6" }}
@@ -511,6 +549,60 @@ const Staff = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: 12,
+          }}
+        >
+          <div>
+            Hiển thị {(page - 1) * pageSize + 1} đến{" "}
+            {Math.min(page * pageSize, filteredStaff.length)} trong tổng số{" "}
+            {filteredStaff.length} bản ghi
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === 1 ? "not-allowed" : "pointer",
+                opacity: page === 1 ? 0.5 : 1,
+              }}
+            >
+              Trước
+            </button>
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: "#10b981",
+                color: "#fff",
+              }}
+            >
+              {page}
+            </div>
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === totalPages ? "not-allowed" : "pointer",
+                opacity: page === totalPages ? 0.5 : 1,
+              }}
+            >
+              Sau
+            </button>
+          </div>
         </div>
       </div>
 

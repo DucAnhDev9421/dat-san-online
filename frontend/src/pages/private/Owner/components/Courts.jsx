@@ -50,6 +50,10 @@ const Courts = () => {
   const [facilities, setFacilities] = useState([]);
   const [selectedFacilityFilter, setSelectedFacilityFilter] = useState("all");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("all");
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // added state for detail modal
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -141,6 +145,15 @@ const Courts = () => {
         return matchesSearch && matchesFacility && matchesStatus;
       }),
     [searchQuery, courts, selectedFacilityFilter, selectedStatusFilter]
+  );
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredCourts.length / pageSize)
+  );
+  const courtSlice = filteredCourts.slice(
+    (page - 1) * pageSize,
+    page * pageSize
   );
 
   const handleSaveCourt = async (updatedCourt) => {
@@ -289,7 +302,10 @@ const Courts = () => {
                   border: "1px solid #e5e7eb",
                   fontSize: 14,
                 }}
-                onChange={(e) => setSelectedFacilityFilter(e.target.value)}
+                onChange={(e) => {
+                  setSelectedFacilityFilter(e.target.value);
+                  setPage(1);
+                }}
               >
                 <option value="all">Tất cả cơ sở</option>
                 {facilities.map((facility) => (
@@ -306,7 +322,10 @@ const Courts = () => {
                   border: "1px solid #e5e7eb",
                   fontSize: 14,
                 }}
-                onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                onChange={(e) => {
+                  setSelectedStatusFilter(e.target.value);
+                  setPage(1);
+                }}
               >
                 <option value="all">Tất cả trạng thái</option>
                 <option value="active">Hoạt động</option>
@@ -318,7 +337,10 @@ const Courts = () => {
           <input
             placeholder="Tìm theo tên, loại, mô tả…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             style={{
               padding: "8px 12px",
               borderRadius: 8,
@@ -327,6 +349,41 @@ const Courts = () => {
               fontSize: 14,
             }}
           />
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: 12,
+            borderBottom: "1px solid #e5e7eb",
+          }}
+        >
+          <div>
+            <label style={{ marginRight: 8 }}>Hiển thị</label>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+              style={{
+                padding: 6,
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              {[5, 10, 20, 50].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <span style={{ marginLeft: 8 }}>bản ghi</span>
+          </div>
+          <div style={{ color: "#6b7280", fontSize: 14 }}>
+            Hiển thị {filteredCourts.length} kết quả
+          </div>
         </div>
 
         <div style={{ overflowX: "auto" }}>
@@ -378,7 +435,7 @@ const Courts = () => {
                   </td>
                 </tr>
               ) : (
-                filteredCourts.map((court) => (
+                courtSlice.map((court) => (
                   <tr
                     key={court._id || court.id}
                     style={{ borderBottom: "1px solid #f3f4f6" }}
@@ -489,6 +546,60 @@ const Courts = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: 12,
+          }}
+        >
+          <div>
+            Hiển thị {(page - 1) * pageSize + 1} đến{" "}
+            {Math.min(page * pageSize, filteredCourts.length)} trong tổng số{" "}
+            {filteredCourts.length} bản ghi
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === 1 ? "not-allowed" : "pointer",
+                opacity: page === 1 ? 0.5 : 1,
+              }}
+            >
+              Trước
+            </button>
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: "#10b981",
+                color: "#fff",
+              }}
+            >
+              {page}
+            </div>
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === totalPages ? "not-allowed" : "pointer",
+                opacity: page === totalPages ? 0.5 : 1,
+              }}
+            >
+              Sau
+            </button>
+          </div>
         </div>
       </div>
 

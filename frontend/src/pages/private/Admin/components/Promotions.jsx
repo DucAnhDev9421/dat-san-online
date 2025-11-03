@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { promotionsData } from "../data/mockData";
 import { facilityData } from "../data/mockData";
+import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -40,6 +41,7 @@ const Promotions = () => {
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedPromotion, setSelectedPromotion] = useState(null);
   const [selectedFacilities, setSelectedFacilities] = useState(["Tất cả sân"]);
 
@@ -112,15 +114,18 @@ const Promotions = () => {
   };
 
   const handleDelete = (promotion) => {
-    if (
-      window.confirm(
-        `Bạn có chắc muốn xóa chương trình khuyến mãi "${promotion.name}"?`
-      )
-    ) {
+    setSelectedPromotion(promotion);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (selectedPromotion) {
       setPromotions((current) =>
-        current.filter((p) => p.id !== promotion.id)
+        current.filter((p) => p.id !== selectedPromotion.id)
       );
     }
+    setIsDeleteModalOpen(false);
+    setSelectedPromotion(null);
   };
 
   const handleSave = (promotionData) => {
@@ -976,6 +981,20 @@ const Promotions = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Modal */}
+      <DeleteConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedPromotion(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Xóa chương trình khuyến mãi"
+        message="Bạn có chắc muốn xóa chương trình khuyến mãi"
+        itemName={selectedPromotion?.name}
+        warningMessage="Hành động này không thể hoàn tác."
+      />
     </div>
   );
 };

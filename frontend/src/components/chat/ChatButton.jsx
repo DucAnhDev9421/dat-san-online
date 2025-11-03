@@ -11,9 +11,11 @@ const ChatButton = () => {
   const [isOpen, { toggle: toggleChat }] = useToggle(false);
   const [isTyping, setIsTyping] = useState(false);
   
-  // Hide chat button on auth pages
+  // Hide chat button on auth pages, admin pages, and owner pages
   const authPages = ['/login', '/register', '/verify-otp', '/forgot-password', '/reset-password', '/auth/callback', '/auth/error'];
   const isAuthPage = authPages.some(path => location.pathname.startsWith(path));
+  const isAdminPage = location.pathname.startsWith('/admin');
+  const isOwnerPage = location.pathname.startsWith('/owner');
 
   // Simulate typing effect
   useEffect(() => {
@@ -26,8 +28,8 @@ const ChatButton = () => {
     }
   }, [isOpen]);
 
-  // Don't render chat button on auth pages
-  if (isAuthPage) {
+  // Don't render chat button on auth pages, admin pages, or owner pages
+  if (isAuthPage || isAdminPage || isOwnerPage) {
     return null;
   }
 

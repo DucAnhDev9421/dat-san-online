@@ -29,6 +29,10 @@ const Notifications = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState(null);
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const filteredNotifications = useMemo(
     () =>
@@ -39,6 +43,15 @@ const Notifications = () => {
           .includes(searchQuery.toLowerCase())
       ),
     [searchQuery, notifications]
+  );
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredNotifications.length / pageSize)
+  );
+  const notificationSlice = filteredNotifications.slice(
+    (page - 1) * pageSize,
+    page * pageSize
   );
 
   const handleDeleteNotification = (notificationToDelete) => {
@@ -98,6 +111,28 @@ const Notifications = () => {
             <div>
               <strong>Tổng:</strong> {filteredNotifications.length} thông báo
             </div>
+            <div>
+              <label style={{ marginRight: 8 }}>Hiển thị</label>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                style={{
+                  padding: 6,
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                }}
+              >
+                {[5, 10, 20, 50].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              <span style={{ marginLeft: 8 }}>bản ghi</span>
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <select
                 style={{
@@ -112,6 +147,7 @@ const Notifications = () => {
                   } else {
                     setSearchQuery(e.target.value);
                   }
+                  setPage(1);
                 }}
               >
                 <option value="all">Tất cả loại</option>
@@ -134,6 +170,7 @@ const Notifications = () => {
                   } else {
                     setSearchQuery(e.target.value);
                   }
+                  setPage(1);
                 }}
               >
                 <option value="all">Tất cả trạng thái</option>
@@ -145,7 +182,10 @@ const Notifications = () => {
           <input
             placeholder="Tìm theo tiêu đề, nội dung, loại…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             style={{
               padding: "8px 12px",
               borderRadius: 8,
@@ -185,7 +225,7 @@ const Notifications = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredNotifications.map((r) => (
+              {notificationSlice.map((r) => (
                 <tr key={r.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                   <td
                     style={{ padding: 12, fontWeight: 700, color: "#1f2937" }}
@@ -315,6 +355,60 @@ const Notifications = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: 12,
+          }}
+        >
+          <div>
+            Hiển thị {(page - 1) * pageSize + 1} đến{" "}
+            {Math.min(page * pageSize, filteredNotifications.length)} trong tổng số{" "}
+            {filteredNotifications.length} bản ghi
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === 1 ? "not-allowed" : "pointer",
+                opacity: page === 1 ? 0.5 : 1,
+              }}
+            >
+              Trước
+            </button>
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: "#10b981",
+                color: "#fff",
+              }}
+            >
+              {page}
+            </div>
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: page === totalPages ? "not-allowed" : "pointer",
+                opacity: page === totalPages ? 0.5 : 1,
+              }}
+            >
+              Sau
+            </button>
+          </div>
         </div>
       </div>
 

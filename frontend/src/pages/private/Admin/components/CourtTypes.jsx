@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { categoryApi } from "../../../../api/categoryApi";
 import CourtTypeModal from "../modals/CourtTypeModal";
+import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 
 const ActionButton = ({ bg, Icon, onClick, title }) => (
   <button
@@ -28,6 +29,7 @@ const CourtTypes = () => {
   const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedCourtType, setSelectedCourtType] = useState(null);
   const [error, setError] = useState("");
 
@@ -95,13 +97,22 @@ const CourtTypes = () => {
     }
   };
 
-  const handleDelete = async (courtType) => {
-    if (window.confirm(`Bạn có chắc muốn xóa loại sân "${courtType.name}"?`)) {
+  const handleDelete = (courtType) => {
+    setSelectedCourtType(courtType);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (selectedCourtType) {
       try {
-        await categoryApi.deleteCourtType(courtType._id);
+        await categoryApi.deleteCourtType(selectedCourtType._id);
         await fetchCourtTypes();
+        setIsDeleteModalOpen(false);
+        setSelectedCourtType(null);
       } catch (err) {
         alert(err.message || "Không thể xóa loại sân");
+        setIsDeleteModalOpen(false);
+        setSelectedCourtType(null);
       }
     }
   };
@@ -362,6 +373,20 @@ const CourtTypes = () => {
         }}
         onSave={handleSave}
         courtType={selectedCourtType}
+      />
+
+      {/* Delete Modal */}
+      <DeleteConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedCourtType(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Xóa loại sân"
+        message="Bạn có chắc muốn xóa loại sân"
+        itemName={selectedCourtType?.name}
+        warningMessage="Hành động này không thể hoàn tác."
       />
     </div>
   );

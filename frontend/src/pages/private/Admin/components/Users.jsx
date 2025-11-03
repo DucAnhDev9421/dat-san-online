@@ -9,6 +9,8 @@ import {
   Filter,
 } from "lucide-react";
 import { userData } from "../data/mockData";
+import ActionConfirmationModal from "../modals/ActionConfirmationModal";
+import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 
 const Users = () => {
   const [users, setUsers] = useState(userData);
@@ -20,6 +22,11 @@ const Users = () => {
 
   // Modal
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isLockModalOpen, setIsLockModalOpen] = useState(false);
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
   // Lọc dữ liệu
@@ -66,73 +73,88 @@ const Users = () => {
   };
 
   const handleLock = (user) => {
-    if (
-      window.confirm(
-        `Bạn có chắc muốn khóa tài khoản "${user.name}"?`
-      )
-    ) {
+    setSelectedUser(user);
+    setIsLockModalOpen(true);
+  };
+
+  const handleConfirmLock = () => {
+    if (selectedUser) {
       setUsers((current) =>
         current.map((u) =>
-          u.id === user.id ? { ...u, isLocked: true } : u
+          u.id === selectedUser.id ? { ...u, isLocked: true } : u
         )
       );
     }
+    setIsLockModalOpen(false);
+    setSelectedUser(null);
   };
 
   const handleUnlock = (user) => {
-    if (
-      window.confirm(
-        `Bạn có chắc muốn mở khóa tài khoản "${user.name}"?`
-      )
-    ) {
+    setSelectedUser(user);
+    setIsUnlockModalOpen(true);
+  };
+
+  const handleConfirmUnlock = () => {
+    if (selectedUser) {
       setUsers((current) =>
         current.map((u) =>
-          u.id === user.id ? { ...u, isLocked: false } : u
+          u.id === selectedUser.id ? { ...u, isLocked: false } : u
         )
       );
     }
+    setIsUnlockModalOpen(false);
+    setSelectedUser(null);
   };
 
   const handleSoftDelete = (user) => {
-    if (
-      window.confirm(
-        `Bạn có chắc muốn xóa tài khoản "${user.name}"? Tài khoản sẽ bị ẩn khỏi hệ thống.`
-      )
-    ) {
+    setSelectedUser(user);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (selectedUser) {
       setUsers((current) =>
         current.map((u) =>
-          u.id === user.id ? { ...u, isDeleted: true, isLocked: false } : u
+          u.id === selectedUser.id ? { ...u, isDeleted: true, isLocked: false } : u
         )
       );
     }
+    setIsDeleteModalOpen(false);
+    setSelectedUser(null);
   };
 
   const handleRestore = (user) => {
-    if (
-      window.confirm(
-        `Bạn có chắc muốn khôi phục tài khoản "${user.name}"?`
-      )
-    ) {
+    setSelectedUser(user);
+    setIsRestoreModalOpen(true);
+  };
+
+  const handleConfirmRestore = () => {
+    if (selectedUser) {
       setUsers((current) =>
         current.map((u) =>
-          u.id === user.id ? { ...u, isDeleted: false } : u
+          u.id === selectedUser.id ? { ...u, isDeleted: false } : u
         )
       );
     }
+    setIsRestoreModalOpen(false);
+    setSelectedUser(null);
   };
 
   const handlePromoteToOwner = (user) => {
-    if (
-      window.confirm(
-        `Bạn có chắc muốn cấp quyền Owner cho "${user.name}"? Người dùng này sẽ có thể đăng ký mở cơ sở.`
-      )
-    ) {
+    setSelectedUser(user);
+    setIsPromoteModalOpen(true);
+  };
+
+  const handleConfirmPromote = () => {
+    if (selectedUser) {
       setUsers((current) =>
         current.map((u) =>
-          u.id === user.id ? { ...u, role: "owner" } : u
+          u.id === selectedUser.id ? { ...u, role: "owner" } : u
         )
       );
     }
+    setIsPromoteModalOpen(false);
+    setSelectedUser(null);
   };
 
   const resetFilters = () => {
@@ -794,6 +816,90 @@ const Users = () => {
           </div>
         </div>
       )}
+
+      {/* Lock Modal */}
+      <ActionConfirmationModal
+        isOpen={isLockModalOpen}
+        onClose={() => {
+          setIsLockModalOpen(false);
+          setSelectedUser(null);
+        }}
+        onConfirm={handleConfirmLock}
+        title="Khóa tài khoản"
+        message={`Bạn có chắc muốn khóa tài khoản "${selectedUser?.name}"?`}
+        confirmText="Khóa"
+        confirmColor="#ef4444"
+        icon={Lock}
+        iconBg="#fee2e2"
+        iconColor="#ef4444"
+        warningMessage="Người dùng sẽ không thể đăng nhập cho đến khi mở khóa."
+      />
+
+      {/* Unlock Modal */}
+      <ActionConfirmationModal
+        isOpen={isUnlockModalOpen}
+        onClose={() => {
+          setIsUnlockModalOpen(false);
+          setSelectedUser(null);
+        }}
+        onConfirm={handleConfirmUnlock}
+        title="Mở khóa tài khoản"
+        message={`Bạn có chắc muốn mở khóa tài khoản "${selectedUser?.name}"?`}
+        confirmText="Mở khóa"
+        confirmColor="#10b981"
+        icon={Unlock}
+        iconBg="#e6f9f0"
+        iconColor="#10b981"
+      />
+
+      {/* Delete Modal */}
+      <DeleteConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedUser(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Xóa tài khoản"
+        message="Bạn có chắc muốn xóa tài khoản"
+        itemName={selectedUser?.name}
+        warningMessage="Tài khoản sẽ bị ẩn khỏi hệ thống nhưng có thể khôi phục."
+      />
+
+      {/* Restore Modal */}
+      <ActionConfirmationModal
+        isOpen={isRestoreModalOpen}
+        onClose={() => {
+          setIsRestoreModalOpen(false);
+          setSelectedUser(null);
+        }}
+        onConfirm={handleConfirmRestore}
+        title="Khôi phục tài khoản"
+        message={`Bạn có chắc muốn khôi phục tài khoản "${selectedUser?.name}"?`}
+        confirmText="Khôi phục"
+        confirmColor="#10b981"
+        icon={UserPlus}
+        iconBg="#e6f9f0"
+        iconColor="#10b981"
+      />
+
+      {/* Promote Modal */}
+      <ActionConfirmationModal
+        isOpen={isPromoteModalOpen}
+        onClose={() => {
+          setIsPromoteModalOpen(false);
+          setSelectedUser(null);
+        }}
+        onConfirm={handleConfirmPromote}
+        title="Cấp quyền Owner"
+        message={`Bạn có chắc muốn cấp quyền Owner cho "${selectedUser?.name}"?`}
+        confirmText="Cấp quyền"
+        confirmColor="#3b82f6"
+        icon={UserPlus}
+        iconBg="#dbeafe"
+        iconColor="#3b82f6"
+        warningMessage="Người dùng này sẽ có thể đăng ký mở cơ sở."
+      />
     </div>
   );
 };
