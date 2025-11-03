@@ -8,6 +8,8 @@ import PopularLocationsSection from './HomePage/components/PopularLocationsSecti
 import VenuesSection from './HomePage/components/VenuesSection'
 import { venues, getVenueImage } from './HomePage/mockData'
 import { scrollToElement, buildSearchParams } from './HomePage/utils/helpers'
+import { getProvinces } from '../../api/provinceApi'
+import { toast } from 'react-toastify'
 import '../../styles/HomePage.css'
 
 function HomePage() {
@@ -38,15 +40,22 @@ function HomePage() {
     const fetchProvinces = async () => {
       try {
         setIsPageLoading(true)
-        const response = await fetch('https://provinces.open-api.vn/api/v1/?depth=2')
-        const data = await response.json()
-        setProvinces(data)
-        // Simulate API loading
-        setTimeout(() => {
-          setIsPageLoading(false)
-        }, 1000)
+        const result = await getProvinces()
+        
+        if (result.success && result.data && result.data.length > 0) {
+          setProvinces(result.data)
+        } else {
+          console.warn('No provinces data received')
+          setProvinces([])
+          if (result.error) {
+            toast.error(result.error)
+          }
+        }
       } catch (error) {
         console.error('Error fetching provinces:', error)
+        setProvinces([])
+        toast.error('Không thể tải danh sách tỉnh thành. Vui lòng thử lại sau.')
+      } finally {
         setIsPageLoading(false)
       }
     }

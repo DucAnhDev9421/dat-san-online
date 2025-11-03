@@ -7,6 +7,8 @@ import VenueGrid from "./Facilities/components/VenueGrid"
 import VenueListItem from "./Facilities/components/VenueListItem"
 import { mockFacilities } from "./Facilities/mockData"
 import { filterFacilities } from "./Facilities/utils/filters"
+import { getProvinces } from "../../api/provinceApi"
+import { toast } from "react-toastify"
 import "../../styles/Facilities.css"
 
 export default function Facilities() {
@@ -26,15 +28,22 @@ export default function Facilities() {
     const fetchProvinces = async () => {
       try {
         setIsPageLoading(true)
-        const response = await fetch('https://provinces.open-api.vn/api/v1/?depth=2')
-        const data = await response.json()
-        setProvinces(data)
-        // Simulate API loading
-        setTimeout(() => {
-          setIsPageLoading(false)
-        }, 1200)
+        const result = await getProvinces()
+        
+        if (result.success && result.data && result.data.length > 0) {
+          setProvinces(result.data)
+        } else {
+          console.warn('No provinces data received')
+          setProvinces([])
+          if (result.error) {
+            toast.error(result.error)
+          }
+        }
       } catch (error) {
         console.error('Error fetching provinces:', error)
+        setProvinces([])
+        toast.error('Không thể tải danh sách tỉnh thành. Vui lòng thử lại sau.')
+      } finally {
         setIsPageLoading(false)
       }
     }
