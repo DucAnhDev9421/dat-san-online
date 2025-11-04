@@ -19,6 +19,12 @@ const courtSchema = new mongoose.Schema(
       required: [true, "Loại sân là bắt buộc"],
       trim: true,
     },
+    // Tham chiếu đến CourtType (loại sân)
+    courtType: {
+      type: Schema.Types.ObjectId,
+      ref: "CourtType",
+      required: false, // Optional để backward compatible với dữ liệu cũ
+    },
     capacity: {
       type: Number,
       required: [true, "Sức chứa là bắt buộc"],
@@ -66,6 +72,7 @@ const courtSchema = new mongoose.Schema(
 courtSchema.index({ facility: 1 });
 courtSchema.index({ status: 1 });
 courtSchema.index({ type: 1 });
+courtSchema.index({ courtType: 1 }); // Index cho courtType reference
 courtSchema.index({ name: "text" }); // Hỗ trợ tìm kiếm text
 
 export default mongoose.model("Court", courtSchema);

@@ -98,6 +98,11 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Favicon handler - prevent 404 errors for browser favicon requests
+app.get("/favicon.ico", (req, res) => {
+  res.status(204).end();
+});
+
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);

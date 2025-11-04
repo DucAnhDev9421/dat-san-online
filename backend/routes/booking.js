@@ -95,13 +95,83 @@ router.get("/availability", async (req, res, next) => {
       });
     }
 
-    // Get court info
+    // Get court info with facility
     const court = await Court.findById(courtId).populate("facility");
     if (!court) {
       return res.status(404).json({
         success: false,
         message: "Không tìm thấy sân",
       });
+    }
+
+    // Get facility operating hours
+    const facility = court.facility;
+    if (!facility) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy cơ sở",
+      });
+    }
+
+    // Get day of week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+    const dayOfWeek = bookingDate.getDay();
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayName = dayNames[dayOfWeek];
+
+    // Get operating hours for this day
+    const dayOperatingHours = facility.operatingHours?.[dayName];
+    
+    // Check if facility is open on this day
+    if (!dayOperatingHours || !dayOperatingHours.isOpen) {
+      return res.json({
+        success: true,
+        data: {
+          slots: [],
+          totalAvailable: 0,
+          totalSlots: 0,
+          court: {
+            name: court.name,
+            type: court.type,
+            price: court.price,
+            status: court.status,
+          },
+          facility: {
+            name: facility.name,
+            address: facility.address,
+            location: facility.location,
+          },
+          message: "Cơ sở không hoạt động vào ngày này",
+        },
+      });
+    }
+
+    // Get open and close times
+    const openTime = dayOperatingHours.open || "06:00";
+    const closeTime = dayOperatingHours.close || "22:00";
+
+    // Parse time strings to hours
+    const [openHour, openMinute] = openTime.split(':').map(Number);
+    const [closeHour, closeMinute] = closeTime.split(':').map(Number);
+
+    // Convert to total minutes for easier calculation
+    let openMinutes = openHour * 60 + openMinute;
+    let closeMinutes = closeHour * 60 + closeMinute;
+
+    // Use query params if provided (override facility hours, but within valid range)
+    if (timeStart) {
+      const [startHour, startMinute] = timeStart.split(':').map(Number);
+      const startMinutes = startHour * 60 + startMinute;
+      if (startMinutes >= openMinutes && startMinutes < closeMinutes) {
+        openMinutes = startMinutes;
+      }
+    }
+
+    if (timeEnd) {
+      const [endHour, endMinute] = timeEnd.split(':').map(Number);
+      const endMinutes = endHour * 60 + endMinute;
+      if (endMinutes <= closeMinutes && endMinutes > openMinutes) {
+        closeMinutes = endMinutes;
+      }
     }
 
     // Get existing bookings for this date
@@ -111,14 +181,24 @@ router.get("/availability", async (req, res, next) => {
       status: { $in: ["pending", "confirmed"] },
     });
 
-    // Generate all time slots (6:00 AM to 22:00 PM)
+    // Generate time slots based on operating hours
     const allSlots = [];
-    const startHour = timeStart || "06:00";
-    const endHour = timeEnd || "22:00";
+    let currentMinutes = openMinutes;
 
-    for (let hour = 6; hour <= 22; hour++) {
-      const startTime = `${hour.toString().padStart(2, "0")}:00`;
-      const endTime = `${(hour + 1).toString().padStart(2, "0")}:00`;
+    while (currentMinutes < closeMinutes) {
+      const currentHour = Math.floor(currentMinutes / 60);
+      const currentMin = currentMinutes % 60;
+      const nextMinutes = currentMinutes + 60; // Each slot is 1 hour
+      const nextHour = Math.floor(nextMinutes / 60);
+      const nextMin = nextMinutes % 60;
+
+      // Don't exceed close time
+      if (nextMinutes > closeMinutes) {
+        break;
+      }
+
+      const startTime = `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`;
+      const endTime = `${String(nextHour).padStart(2, "0")}:${String(nextMin).padStart(2, "0")}`;
       const slotString = `${startTime}-${endTime}`;
 
       // Check if this slot is booked
@@ -132,6 +212,8 @@ router.get("/availability", async (req, res, next) => {
         available: !isBooked,
         price: court.price,
       });
+
+      currentMinutes = nextMinutes;
     }
 
     res.json({
@@ -147,9 +229,15 @@ router.get("/availability", async (req, res, next) => {
           status: court.status,
         },
         facility: {
-          name: court.facility.name,
-          address: court.facility.address,
-          location: court.facility.location,
+          name: facility.name,
+          address: facility.address,
+          location: facility.location,
+        },
+        operatingHours: {
+          day: dayName,
+          isOpen: dayOperatingHours.isOpen,
+          open: openTime,
+          close: closeTime,
         },
       },
     });
