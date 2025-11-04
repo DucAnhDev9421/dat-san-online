@@ -179,8 +179,18 @@ router.get("/", async (req, res, next) => {
 
     // Filter
     const query = {};
-    if (req.query.type) {
-      query.type = req.query.type;
+    // Xử lý filter theo type/types
+    if (req.query.types) {
+      // Hỗ trợ filter theo nhiều types (types=a,b,c)
+      const typesArray = Array.isArray(req.query.types) 
+        ? req.query.types 
+        : req.query.types.split(',').map(t => t.trim()).filter(t => t);
+      if (typesArray.length > 0) {
+        query.types = { $in: typesArray };
+      }
+    } else if (req.query.type) {
+      // Tìm kiếm facilities có types chứa type được chỉ định
+      query.types = { $in: [req.query.type] };
     }
     if (req.query.address) {
       // Tìm kiếm address gần đúng
