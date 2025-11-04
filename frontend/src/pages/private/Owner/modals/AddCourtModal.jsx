@@ -29,7 +29,7 @@ const AddCourtModal = ({ isOpen, onClose, onSave }) => {
   });
 
   const [facilityId, setFacilityId] = useState(null);
-  const [facilityType, setFacilityType] = useState(null);
+  const [facilityTypes, setFacilityTypes] = useState([]);
   const [courtTypes, setCourtTypes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingFacility, setLoadingFacility] = useState(true);
@@ -49,7 +49,9 @@ const AddCourtModal = ({ isOpen, onClose, onSave }) => {
         if (result.success && result.data?.facilities?.length > 0) {
           const facility = result.data.facilities[0];
           setFacilityId(facility._id || facility.id);
-          setFacilityType(facility.type);
+          // Hỗ trợ cả type (cũ) và types (mới)
+          const types = facility.types || (facility.type ? [facility.type] : []);
+          setFacilityTypes(types);
         } else {
           toast.error("Bạn chưa có cơ sở. Vui lòng tạo cơ sở trước.");
           onClose();
@@ -66,29 +68,40 @@ const AddCourtModal = ({ isOpen, onClose, onSave }) => {
     fetchFacility();
   }, [isOpen, user, onClose]);
 
-  // Lấy danh sách court types theo sport category
+  // Lấy danh sách court types theo sport categories (hỗ trợ nhiều loại)
   useEffect(() => {
     const fetchCourtTypes = async () => {
-      if (!facilityType) return;
+      if (!facilityTypes || facilityTypes.length === 0) return;
       
       setLoadingCourtTypes(true);
       try {
         // Lấy tất cả sport categories
         const categoriesResult = await categoryApi.getSportCategories();
         
-        // Tìm sport category khớp với facility.type
-        const sportCategory = categoriesResult.data?.find(
-          cat => cat.name === facilityType
-        );
+        // Tìm tất cả sport categories khớp với các types trong facility
+        const matchingCategories = categoriesResult.data?.filter(
+          cat => facilityTypes.includes(cat.name)
+        ) || [];
         
-        if (sportCategory) {
-          // Lấy court types theo sport category
-          const result = await categoryApi.getCourtTypes({
-            sportCategory: sportCategory._id,
-            status: 'active'
-          });
+        if (matchingCategories.length > 0) {
+          // Lấy court types từ tất cả các sport categories tương ứng
+          const courtTypesPromises = matchingCategories.map(category =>
+            categoryApi.getCourtTypes({
+              sportCategory: category._id,
+              status: 'active'
+            })
+          );
           
-          setCourtTypes(result.data || []);
+          const results = await Promise.all(courtTypesPromises);
+          
+          // Hợp nhất tất cả court types và loại bỏ trùng lặp
+          const allCourtTypes = results
+            .flatMap(result => result.data || [])
+            .filter((courtType, index, self) =>
+              index === self.findIndex(t => t._id === courtType._id)
+            );
+          
+          setCourtTypes(allCourtTypes);
         } else {
           setCourtTypes([]);
         }
@@ -102,7 +115,7 @@ const AddCourtModal = ({ isOpen, onClose, onSave }) => {
     };
 
     fetchCourtTypes();
-  }, [facilityType]);
+  }, [facilityTypes]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

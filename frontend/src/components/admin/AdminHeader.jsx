@@ -75,6 +75,11 @@ export default function AdminHeader({ onToggleSidebar, isSidebarOpen, currentTab
     navigate("/profile?tab=bookings");
   };
 
+  const handleTopUpClick = () => {
+    setIsProfileOpen(false);
+    alert('Chức năng nạp tiền sẽ được triển khai sớm');
+  };
+
   const handleLogoClick = () => {
     navigate("/");
   };
@@ -170,6 +175,7 @@ export default function AdminHeader({ onToggleSidebar, isSidebarOpen, currentTab
             onLogout={handleLogout}
             onSettingsClick={handleSettingsClick}
             onBookingHistoryClick={handleBookingHistoryClick}
+            onTopUpClick={handleTopUpClick}
           />
         </div>
       </div>

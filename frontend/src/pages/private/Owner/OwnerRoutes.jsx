@@ -1,34 +1,46 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
-// Import các component pages
-import Dashboard from "./pages/Dashboard";
-import Courts from "./pages/Courts";
-import Bookings from "./pages/Bookings";
-import Reports from "./pages/Reports";
-import Reviews from "./pages/Reviews";
-import Analytics from "./pages/Analytics";
-import Notifications from "./pages/Notifications";
-import Staff from "./pages/Staff";
-import ActivityLog from "./pages/ActivityLog";
-import Settings from "./pages/Settings";
+// Lazy load các component pages
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Courts = lazy(() => import("./pages/Courts"));
+const Bookings = lazy(() => import("./pages/Bookings"));
+const Reports = lazy(() => import("./pages/Reports"));
+const Reviews = lazy(() => import("./pages/Reviews"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const Staff = lazy(() => import("./pages/Staff"));
+const ActivityLog = lazy(() => import("./pages/ActivityLog"));
+const Settings = lazy(() => import("./pages/Settings"));
+
+// Loading component
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[400px]">
+    <div className="flex flex-col items-center gap-4">
+      <div className="w-12 h-12 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
+      <p className="text-gray-600">Đang tải...</p>
+    </div>
+  </div>
+);
 
 const OwnerRoutes = () => {
   return (
-    <Routes>
-      <Route index element={<Navigate to="dashboard" replace />} />
-      <Route path="dashboard" element={<Dashboard />} />
-      <Route path="courts" element={<Courts />} />
-      <Route path="bookings" element={<Bookings />} />
-      <Route path="reports" element={<Reports />} />
-      <Route path="reviews" element={<Reviews />} />
-      <Route path="analytics" element={<Analytics />} />
-      <Route path="notifications" element={<Notifications />} />
-      <Route path="staff" element={<Staff />} />
-      <Route path="activity" element={<ActivityLog />} />
-      <Route path="settings" element={<Settings />} />
-      <Route path="*" element={<Navigate to="dashboard" replace />} />
-    </Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="courts" element={<Courts />} />
+        <Route path="bookings" element={<Bookings />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="reviews" element={<Reviews />} />
+        <Route path="analytics" element={<Analytics />} />
+        <Route path="notifications" element={<Notifications />} />
+        <Route path="staff" element={<Staff />} />
+        <Route path="activity" element={<ActivityLog />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="*" element={<Navigate to="dashboard" replace />} />
+      </Routes>
+    </Suspense>
   );
 };
 

@@ -13,8 +13,8 @@ const FALLBACK_API_URL = 'https://vapi.vnappmob.com/api/province';
 export const getProvinces = async () => {
   // Try multiple endpoints
   const endpoints = [
-    `${PROVINCES_API_BASE}/v1/?depth=2`,  // With /v1 (original)
-    `${PROVINCES_API_BASE}/?depth=2`,     // Without /v1 (newer version)
+    `${PROVINCES_API_BASE}/v1/?depth=2`,  //  v1:trước khi sát nhập(63 tỉnh thành)| v2:sau khi sát nhập(34 tỉnh thành)
+    `${PROVINCES_API_BASE}/?depth=2`,     
   ];
 
   for (const endpoint of endpoints) {

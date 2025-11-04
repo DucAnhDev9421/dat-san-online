@@ -77,6 +77,11 @@ export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
     navigate("/profile?tab=bookings");
   };
 
+  const handleTopUpClick = () => {
+    setIsProfileOpen(false);
+    alert('Chức năng nạp tiền sẽ được triển khai sớm');
+  };
+
   const handleNotificationClick = () => {
     setIsNotificationOpen(!isNotificationOpen);
     setIsProfileOpen(false);
@@ -161,6 +166,7 @@ export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
             onLogout={handleLogout}
             onSettingsClick={handleSettingsClick}
             onBookingHistoryClick={handleBookingHistoryClick}
+            onTopUpClick={handleTopUpClick}
           />
         </div>
       </div>
