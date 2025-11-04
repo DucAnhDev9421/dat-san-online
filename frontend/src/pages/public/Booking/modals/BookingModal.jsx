@@ -5,7 +5,7 @@ import useClickOutside from '../../../../hook/use-click-outside'
 import useBodyScrollLock from '../../../../hook/use-body-scroll-lock'
 import useEscapeKey from '../../../../hook/use-escape-key'
 
-export default function BookingModal({ selectedDate, selectedSlots, selectedCourt, selectedFieldType, venueData, onClose, onSubmit }) {
+export default function BookingModal({ selectedDate, selectedSlots, selectedCourt, selectedFieldType, venueData, courts, onClose, onSubmit }) {
   // Lock body scroll
   useBodyScrollLock(true)
   
@@ -31,7 +31,32 @@ export default function BookingModal({ selectedDate, selectedSlots, selectedCour
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    onSubmit()
+    
+    // Validate required fields
+    if (!bookingForm.name.trim()) {
+      alert('Vui lòng nhập tên người đặt')
+      return
+    }
+    
+    if (!bookingForm.phone.trim()) {
+      alert('Vui lòng nhập số điện thoại')
+      return
+    }
+
+    // Validate phone format (10-11 digits)
+    const phoneRegex = /^[0-9]{10,11}$/
+    if (!phoneRegex.test(bookingForm.phone.replace(/\s/g, ''))) {
+      alert('Số điện thoại không hợp lệ. Vui lòng nhập 10-11 chữ số')
+      return
+    }
+    
+    // Pass contactInfo to parent
+    onSubmit({
+      name: bookingForm.name.trim(),
+      phone: bookingForm.phone.replace(/\s/g, ''),
+      email: bookingForm.email.trim() || undefined,
+      notes: bookingForm.notes.trim() || undefined
+    })
   }
 
   const calculateTotal = () => {
@@ -110,7 +135,11 @@ export default function BookingModal({ selectedDate, selectedSlots, selectedCour
                   <MapPin size={14} color="#6b7280" />
                   <span style={{ color: '#6b7280' }}>Sân:</span>
                 </div>
-                <span style={{ fontWeight: '500' }}>{selectedCourt}</span>
+                <span style={{ fontWeight: '500' }}>
+                  {courts && selectedCourt 
+                    ? (courts.find(c => (c.id || c._id) === selectedCourt)?.name || 'Sân đã chọn')
+                    : selectedCourt || 'Chưa chọn'}
+                </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

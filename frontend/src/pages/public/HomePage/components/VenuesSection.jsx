@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react'
 import { Filter } from 'lucide-react'
 import VenueCard from '../../../../components/VenueCard'
 import { SkeletonVenueCard } from '../../../../components/ui/Skeleton'
-import { getVenueImage } from '../mockData'
 import '../../../../styles/HomePage.css'
 
 const sports = [
@@ -76,13 +75,13 @@ export default function VenuesSection({
               <VenueCard
                 key={venue.id}
                 venueId={venue.id}
-                image={getVenueImage(venue.id)}
+                image={venue.image || venue.images?.[0] || venue.imageUrl}
                 name={venue.name}
                 address={venue.address}
-                rating={venue.rating}
-                open={venue.operatingHours}
-                price={venue.price}
-                chip={venue.facilities && venue.facilities[0]}
+                rating={venue.rating || venue.averageRating}
+                open={venue.operatingHours || venue.hours}
+                price={venue.price || venue.pricePerHour}
+                chip={venue.facilities?.[0] || venue.sportCategory}
                 onBook={() => onBookVenue(venue.id)}
               />
             ))}

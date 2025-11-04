@@ -165,26 +165,31 @@ const AddCourtModal = ({ isOpen, onClose, onSave }) => {
     setLoading(true);
 
     try {
+      // Tìm courtType object từ courtTypes array dựa trên name đã chọn
+      const selectedCourtType = courtTypes.find(ct => 
+        ct.name === formData.type
+      );
+
       // Chuẩn bị dữ liệu để gửi API
       const courtData = {
         facility: facilityId,
         name: formData.name.trim(),
-        type: formData.type,
+        type: formData.type,  // Giữ lại để backward compatible
         capacity: Number(formData.capacity),
         price: Number(formData.price),
       };
 
-      console.log("Creating court with data:", courtData);
+      // Thêm courtType ID nếu tìm thấy (để filter chính xác hơn)
+      if (selectedCourtType) {
+        courtData.courtType = selectedCourtType._id || selectedCourtType.id;
+      }
 
       // Gọi API tạo court
       const result = await courtApi.createCourt(courtData);
 
-      console.log("Court creation response:", result);
-
       if (result.success && result.data) {
         const court = result.data;
         
-        console.log("Court created successfully:", court);
         toast.success(result.message || "Thêm sân thành công!");
 
         // Reset form

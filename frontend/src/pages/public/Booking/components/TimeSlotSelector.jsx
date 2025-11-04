@@ -1,45 +1,126 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Clock, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import useDeviceType from '../../../../hook/use-device-type'
 import useClickOutside from '../../../../hook/use-click-outside'
 import useToggle from '../../../../hook/use-toggle'
 import { formatDate, generateCalendarDays } from '../utils/dateHelpers'
-import { getBookedSlots } from '../mockData'
+import { bookingApi } from '../../../../api/bookingApi'
 
 export default function TimeSlotSelector({ 
   selectedDate, 
   onDateChange, 
   selectedSlots, 
   onSlotSelect,
-  venuePrice
+  selectedCourt,
+  venuePrice,
+  onTimeSlotsDataChange
 }) {
   const { isMobile, isTablet } = useDeviceType()
   const [showDatePicker, { toggle: toggleDatePicker, setFalse: closeDatePicker }] = useToggle(false)
+  const [bookedTimes, setBookedTimes] = useState([])
+  const [timeSlots, setTimeSlots] = useState([])
+  const [loadingAvailability, setLoadingAvailability] = useState(false)
   
   const datePickerRef = useClickOutside(() => closeDatePicker(), showDatePicker)
-  
-  // Time slots 1 tiếng với giá tiền (hiển thị dạng range)
-  const timeSlots = [
-    { time: '06:00', endTime: '07:00', price: 200000 },
-    { time: '07:00', endTime: '08:00', price: 200000 },
-    { time: '08:00', endTime: '09:00', price: 200000 },
-    { time: '09:00', endTime: '10:00', price: 250000 },
-    { time: '10:00', endTime: '11:00', price: 250000 },
-    { time: '11:00', endTime: '12:00', price: 250000 },
-    { time: '12:00', endTime: '13:00', price: 250000 },
-    { time: '13:00', endTime: '14:00', price: 250000 },
-    { time: '14:00', endTime: '15:00', price: 300000 },
-    { time: '15:00', endTime: '16:00', price: 300000 },
-    { time: '16:00', endTime: '17:00', price: 300000 },
-    { time: '17:00', endTime: '18:00', price: 350000 },
-    { time: '18:00', endTime: '19:00', price: 350000 },
-    { time: '19:00', endTime: '20:00', price: 350000 },
-    { time: '20:00', endTime: '21:00', price: 350000 },
-    { time: '21:00', endTime: '22:00', price: 300000 }
-  ]
-  
-  // Mock booked slots - In real app, this would come from API
-  const bookedTimes = ['08:00', '11:00', '16:00', '20:00']
+
+  // Fetch availability from API when court or date changes
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      if (!selectedCourt || !selectedDate) {
+        // Reset to default if no court selected
+        const defaultSlots = [
+          { time: '06:00', endTime: '07:00', price: venuePrice || 200000 },
+          { time: '07:00', endTime: '08:00', price: venuePrice || 200000 },
+          { time: '08:00', endTime: '09:00', price: venuePrice || 200000 },
+          { time: '09:00', endTime: '10:00', price: venuePrice || 250000 },
+          { time: '10:00', endTime: '11:00', price: venuePrice || 250000 },
+          { time: '11:00', endTime: '12:00', price: venuePrice || 250000 },
+          { time: '12:00', endTime: '13:00', price: venuePrice || 250000 },
+          { time: '13:00', endTime: '14:00', price: venuePrice || 250000 },
+          { time: '14:00', endTime: '15:00', price: venuePrice || 300000 },
+          { time: '15:00', endTime: '16:00', price: venuePrice || 300000 },
+          { time: '16:00', endTime: '17:00', price: venuePrice || 300000 },
+          { time: '17:00', endTime: '18:00', price: venuePrice || 350000 },
+          { time: '18:00', endTime: '19:00', price: venuePrice || 350000 },
+          { time: '19:00', endTime: '20:00', price: venuePrice || 350000 },
+          { time: '20:00', endTime: '21:00', price: venuePrice || 350000 },
+          { time: '21:00', endTime: '22:00', price: venuePrice || 300000 }
+        ]
+        setTimeSlots(defaultSlots)
+        if (onTimeSlotsDataChange) {
+          onTimeSlotsDataChange(defaultSlots)
+        }
+        setBookedTimes([])
+        return
+      }
+
+      setLoadingAvailability(true)
+      try {
+        // Format date to YYYY-MM-DD
+        const dateStr = selectedDate.toISOString().split('T')[0]
+        
+        const result = await bookingApi.getAvailability(selectedCourt, dateStr)
+        
+        if (result.success && result.data) {
+          const slots = result.data.slots || []
+          
+          // Transform API response to timeSlots format
+          const transformedSlots = slots.map(slot => {
+            const [startTime, endTime] = slot.slot.split('-')
+            return {
+              time: startTime,
+              endTime: endTime,
+              price: slot.price || venuePrice || 200000,
+              available: slot.available
+            }
+          })
+
+          setTimeSlots(transformedSlots)
+          
+          // Pass time slots data to parent component for price calculation
+          if (onTimeSlotsDataChange) {
+            onTimeSlotsDataChange(transformedSlots)
+          }
+          
+          // Get booked times (not available)
+          const booked = slots
+            .filter(slot => !slot.available)
+            .map(slot => slot.time)
+          setBookedTimes(booked)
+        }
+      } catch (error) {
+        console.error('Error fetching availability:', error)
+        // Fallback to default slots on error
+        const defaultSlots = [
+          { time: '06:00', endTime: '07:00', price: venuePrice || 200000 },
+          { time: '07:00', endTime: '08:00', price: venuePrice || 200000 },
+          { time: '08:00', endTime: '09:00', price: venuePrice || 200000 },
+          { time: '09:00', endTime: '10:00', price: venuePrice || 250000 },
+          { time: '10:00', endTime: '11:00', price: venuePrice || 250000 },
+          { time: '11:00', endTime: '12:00', price: venuePrice || 250000 },
+          { time: '12:00', endTime: '13:00', price: venuePrice || 250000 },
+          { time: '13:00', endTime: '14:00', price: venuePrice || 250000 },
+          { time: '14:00', endTime: '15:00', price: venuePrice || 300000 },
+          { time: '15:00', endTime: '16:00', price: venuePrice || 300000 },
+          { time: '16:00', endTime: '17:00', price: venuePrice || 300000 },
+          { time: '17:00', endTime: '18:00', price: venuePrice || 350000 },
+          { time: '18:00', endTime: '19:00', price: venuePrice || 350000 },
+          { time: '19:00', endTime: '20:00', price: venuePrice || 350000 },
+          { time: '20:00', endTime: '21:00', price: venuePrice || 350000 },
+          { time: '21:00', endTime: '22:00', price: venuePrice || 300000 }
+        ]
+        setTimeSlots(defaultSlots)
+        if (onTimeSlotsDataChange) {
+          onTimeSlotsDataChange(defaultSlots)
+        }
+        setBookedTimes([])
+      } finally {
+        setLoadingAvailability(false)
+      }
+    }
+
+    fetchAvailability()
+  }, [selectedCourt, selectedDate, venuePrice])
 
   const handleSlotClick = (timeSlot) => {
     const slotKey = `${selectedDate.toISOString().split('T')[0]}-${timeSlot.time}`
@@ -65,6 +146,10 @@ export default function TimeSlotSelector({
   }
 
   const isSlotBooked = (timeSlot) => {
+    // Use available property from API if available, otherwise fallback to bookedTimes
+    if (timeSlot.hasOwnProperty('available')) {
+      return !timeSlot.available
+    }
     return bookedTimes.includes(timeSlot.time)
   }
 
@@ -290,6 +375,17 @@ export default function TimeSlotSelector({
 
         {/* Time Slots Grid */}
         <div style={{ marginBottom: '20px' }}>
+          {loadingAvailability && (
+            <div style={{
+              textAlign: 'center',
+              padding: '20px',
+              color: '#6b7280',
+              fontSize: '14px'
+            }}>
+              Đang tải thông tin khung giờ...
+            </div>
+          )}
+          {!loadingAvailability && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)',
@@ -349,6 +445,7 @@ export default function TimeSlotSelector({
               )
             })}
           </div>
+          )}
         </div>
         
         {/* Legend */}

@@ -46,9 +46,9 @@ export const defaultBookingData = {
   duration: 2,
   pricePerHour: 250000,
   subtotal: 500000,
-  serviceFee: 25000,
+  serviceFee: 0,
   discount: 0,
-  total: 525000
+  total: 500000
 }
 
 export const timeSlotPrices = [
