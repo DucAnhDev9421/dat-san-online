@@ -26,6 +26,7 @@ import paymentRoutes from "./routes/payment.js";
 import sportCategoryRoutes from "./routes/sportCategory.js";
 import courtTypeRoutes from "./routes/courtType.js";
 import reviewRoutes from "./routes/review.js";
+import notificationRoutes from "./routes/notification.js";
 import User from "./models/User.js";
 
 const app = express();
@@ -109,6 +110,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/sport-categories", sportCategoryRoutes);
 app.use("/api/court-types", courtTypeRoutes);
 app.use("/api/reviews", reviewRoutes);
+app.use("/api/notifications", notificationRoutes);
 // 404 handler
 app.use(notFound);
 
