@@ -4,6 +4,7 @@ import 'react-toastify/dist/ReactToastify.css';
 
 // Contexts
 import { AuthProvider } from "./contexts/AuthContext";
+import { SocketProvider } from "./contexts/SocketContext";
 
 // Layouts
 import Header from "./components/header/header.jsx";
@@ -46,7 +47,8 @@ import NotFound from "./pages/public/NotFoud.jsx";
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <SocketProvider>
+        <BrowserRouter>
         <ScrollToTop />
         <ToastContainer
           position="top-right"
@@ -67,13 +69,6 @@ function App() {
           <Route path="/auth/error" element={<AuthError />} />
 
           {/* Admin Routes - Protected */}
-          <Route path="/admin" element={
-            <AdminRoute>
-              <AdminLayout>
-                <AdminRoutes />
-              </AdminLayout>
-            </AdminRoute>
-          } />
           <Route path="/admin/*" element={
             <AdminRoute>
               <AdminLayout>
@@ -90,13 +85,6 @@ function App() {
           } />
 
           {/* Owner Routes - Protected */}
-          <Route path="/owner" element={
-            <OwnerRoute>
-              <OwnerLayout>
-                <OwnerRoutes />
-              </OwnerLayout>
-            </OwnerRoute>
-          } />
           <Route path="/owner/*" element={
             <OwnerRoute>
               <OwnerLayout>
@@ -155,6 +143,7 @@ function App() {
           } />
         </Routes>
       </BrowserRouter>
+      </SocketProvider>
     </AuthProvider>
   );
 }

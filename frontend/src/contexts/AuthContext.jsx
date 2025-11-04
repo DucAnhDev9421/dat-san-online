@@ -247,13 +247,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Get access token helper
+  const getAccessToken = () => {
+    return state.accessToken || authService.getTokens().accessToken;
+  };
+
   const value = {
     ...state,
     login,
     logout,
     updateUser,
     refreshUserData,
-    refreshAccessToken
+    refreshAccessToken,
+    getAccessToken
   };
 
   return (

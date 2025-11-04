@@ -10,6 +10,7 @@ import {
   requireAdmin,
 } from "../middleware/auth.js";
 import { logAudit } from "../utils/auditLogger.js";
+import { emitToUser, emitToFacility, emitToOwners } from "../socket/index.js";
 import QRCode from "qrcode";
 
 const router = express.Router();
@@ -340,6 +341,31 @@ router.post("/", authenticateToken, async (req, res, next) => {
     await booking.populate("court", "name type price");
     await booking.populate("facility", "name address location");
 
+    // Emit socket events for real-time updates
+    // Notify user about successful booking
+    emitToUser(req.user._id.toString(), 'booking:created', {
+      booking: booking.toObject(),
+      message: 'Đặt sân thành công! Vui lòng thanh toán để hoàn tất.',
+    });
+
+    // Notify facility owner about new booking
+    const facility = await Facility.findById(facilityId).select('owner').lean();
+    if (facility?.owner) {
+      const ownerId = facility.owner._id?.toString() || facility.owner.toString();
+      emitToUser(ownerId, 'booking:new', {
+        booking: booking.toObject(),
+        message: 'Có đặt sân mới',
+      });
+    }
+
+    // Notify all users in facility room about slot update
+    emitToFacility(facilityId, 'booking:slot:booked', {
+      courtId,
+      date,
+      timeSlots,
+      bookingId: booking._id,
+    });
+
     res.status(201).json({
       success: true,
       message: "Đặt sân thành công! Vui lòng thanh toán để hoàn tất.",
@@ -627,6 +653,27 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
     }
 
     await booking.save();
+
+    // Populate for socket events
+    await booking.populate("court", "name type price");
+    await booking.populate("facility", "name address location");
+
+    // Emit socket events for status update
+    const userId = booking.user._id?.toString() || booking.user.toString();
+    emitToUser(userId, 'booking:status:updated', {
+      booking: booking.toObject(),
+      status,
+      message: `Trạng thái booking đã được cập nhật thành: ${status}`,
+    });
+
+    // Notify facility room
+    const facilityId = booking.facility._id?.toString() || booking.facility.toString();
+    emitToFacility(facilityId, 'booking:status:updated', {
+      bookingId: booking._id,
+      courtId: booking.court._id?.toString() || booking.court.toString(),
+      status,
+      date: booking.date,
+    });
 
     res.json({
       success: true,

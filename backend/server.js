@@ -1,9 +1,11 @@
 import express from "express";
+import { createServer } from "http";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import passport from "passport";
+import { initializeSocket } from "./socket/index.js";
 
 // Import configurations
 import { config, validateConfig } from "./config/config.js";
@@ -122,14 +124,20 @@ app.use(notFound);
 // Error handler
 app.use(errorHandler);
 
-// Start server
+// Start server with Socket.IO
 const PORT = config.port;
-app.listen(PORT, () => {
+const httpServer = createServer(app);
+
+// Initialize Socket.IO
+initializeSocket(httpServer);
+
+httpServer.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`🌍 Environment: ${config.nodeEnv}`);
   console.log(`🔗 Frontend URL: ${config.frontendUrl}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Google OAuth: http://localhost:${PORT}/api/auth/google`);
+  console.log(`🔌 Socket.IO server initialized with namespaces`);
 });
 
 // Schedule cleanup job for unverified users every hour
