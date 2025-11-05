@@ -77,6 +77,10 @@ function Payment() {
     const startTimeKey = `payment_start_time_${currentBookingId}`
     localStorage.removeItem(startTimeKey)
     
+    // Clear pending booking from localStorage
+    const pendingBookingKey = `pending_booking_${currentBookingId}`
+    localStorage.removeItem(pendingBookingKey)
+    
     try {
       const result = await bookingApi.cancelBooking(currentBookingId)
       if (result.success) {
@@ -188,6 +192,10 @@ function Payment() {
     if (bookingId) {
       const startTimeKey = `payment_start_time_${bookingId}`
       localStorage.removeItem(startTimeKey)
+      
+      // Clear pending booking from localStorage
+      const pendingBookingKey = `pending_booking_${bookingId}`
+      localStorage.removeItem(pendingBookingKey)
     }
     
     setTimeout(() => {
@@ -209,7 +217,9 @@ function Payment() {
         <nav className="breadcrumb">
           <Link to="/">Trang chủ</Link>
           <span> / </span>
-          <Link to="/booking">Đặt sân</Link>
+          <Link to={rawBookingData?.venueId ? `/booking?venue=${rawBookingData.venueId}` : '/booking'}>
+            Đặt sân
+          </Link>
           <span> / </span>
           <span>Thanh toán</span>
         </nav>

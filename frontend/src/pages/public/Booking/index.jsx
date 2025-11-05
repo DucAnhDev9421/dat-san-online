@@ -657,6 +657,16 @@ function Booking() {
           booking: booking
         }
 
+        // Save pending booking to localStorage for recovery if user leaves payment page
+        const pendingBookingKey = `pending_booking_${bookingId}`
+        const pendingBookingData = {
+          bookingId: bookingId,
+          bookingInfo: bookingInfo,
+          createdAt: Date.now(),
+          expiresAt: Date.now() + (5 * 60 * 1000) // 5 minutes
+        }
+        localStorage.setItem(pendingBookingKey, JSON.stringify(pendingBookingData))
+
         toast.success('Đặt sân thành công! Đang chuyển đến trang thanh toán...')
 
         // Navigate to payment with booking data
