@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { X, XCircle, AlertTriangle } from "lucide-react";
+import { bookingApi } from "../../../../api/bookingApi";
+import { toast } from "react-toastify";
 import useClickOutside from "../../../../hook/use-click-outside";
 import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
 import useEscapeKey from "../../../../hook/use-escape-key";
@@ -24,19 +26,35 @@ const CancelBookingModal = ({ isOpen, onClose, booking = {}, onCancel }) => {
 
   const handleConfirm = async () => {
     if (!reason) {
-      alert("Vui lòng chọn lý do hủy đơn");
+      toast.error("Vui lòng chọn lý do hủy đơn");
+      return;
+    }
+
+    // Dùng bookingId (MongoDB _id) cho API, bookingCode chỉ để hiển thị
+    const bookingId = booking._original?._id || booking._original?.id || booking.bookingId || booking.id;
+    
+    if (!bookingId) {
+      toast.error('Không tìm thấy ID đơn đặt sân');
       return;
     }
 
     setLoading(true);
     try {
-      if (onCancel && booking?.id) {
-        await onCancel(booking.id, reason);
+      const result = await bookingApi.updateBookingStatus(bookingId, 'cancelled', reason);
+      
+      if (result.success) {
+        toast.success('Hủy đơn đặt sân thành công');
+        if (onCancel) {
+          await onCancel(bookingId, reason);
+        }
+        setReason("");
+        if (onClose) onClose();
+      } else {
+        toast.error(result.message || 'Không thể hủy đơn đặt sân');
       }
-      setReason("");
-      if (onClose) onClose();
     } catch (error) {
       console.error("Error cancelling booking:", error);
+      toast.error(error.message || 'Không thể hủy đơn đặt sân');
     } finally {
       setLoading(false);
     }

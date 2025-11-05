@@ -1,5 +1,5 @@
 import React from "react";
-import { Eye, Pencil, CheckCircle2, XCircle } from "lucide-react";
+import { Eye, CheckCircle2, XCircle } from "lucide-react";
 import { ActionButton } from "../shared";
 import StatusBadge from "../shared/StatusBadge";
 
@@ -83,12 +83,6 @@ const BookingRow = ({ booking, handlers }) => {
           Icon={Eye}
           onClick={() => handlers.onView(booking)}
           title="Xem"
-        />
-        <ActionButton
-          bg="#22c55e"
-          Icon={Pencil}
-          onClick={() => handlers.onEdit(booking)}
-          title="Sửa"
         />
         {booking.status === "pending" && (
           <ActionButton

@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import Booking from "../models/Booking.js";
 import Court from "../models/Court.js";
 import Facility from "../models/Facility.js";
+import User from "../models/User.js";
 import {
   authenticateToken,
   authorize,
@@ -396,14 +397,6 @@ router.get("/my-bookings", authenticateToken, async (req, res, next) => {
       filter.status = req.query.status;
     }
 
-    if (req.query.search) {
-      // Search in facility name
-      const facilities = await Facility.find({
-        name: { $regex: req.query.search, $options: "i" },
-      }).select("_id");
-      filter.facility = { $in: facilities.map((f) => f._id) };
-    }
-
     // Get bookings
     const bookings = await Booking.find(filter)
       .populate("court", "name type price")
@@ -469,6 +462,44 @@ router.get(
 
       if (req.query.date) {
         filter.date = new Date(req.query.date);
+      }
+
+      // Search functionality
+      if (req.query.search) {
+        const searchTerm = req.query.search.trim();
+        
+        // Check if search term looks like a booking code (BK-YYYYMMDD-XXXX)
+        if (/^BK-\d{8}-\d{4}$/i.test(searchTerm)) {
+          // Search by booking code
+          filter.bookingCode = searchTerm.toUpperCase();
+        } else {
+          // Search in facility name, user name, email, phone
+          const facilities = await Facility.find({
+            name: { $regex: searchTerm, $options: "i" },
+          }).select("_id");
+          
+          const facilityIds = facilities.map((f) => f._id);
+          
+          // Also search in user fields
+          const users = await User.find({
+            $or: [
+              { name: { $regex: searchTerm, $options: "i" } },
+              { email: { $regex: searchTerm, $options: "i" } },
+              { phone: { $regex: searchTerm, $options: "i" } },
+            ],
+          }).select("_id");
+          
+          const userIds = users.map((u) => u._id);
+          
+          // Combine filters - search in multiple fields
+          filter.$or = [
+            { facility: { $in: facilityIds } },
+            { user: { $in: userIds } },
+            { "contactInfo.name": { $regex: searchTerm, $options: "i" } },
+            { "contactInfo.email": { $regex: searchTerm, $options: "i" } },
+            { "contactInfo.phone": { $regex: searchTerm, $options: "i" } },
+          ];
+        }
       }
 
       // Get bookings

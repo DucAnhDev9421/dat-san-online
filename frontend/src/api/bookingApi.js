@@ -118,5 +118,34 @@ export const bookingApi = {
       throw handleApiError(error);
     }
   },
+
+  /**
+   * Lấy danh sách bookings của facility (cho owner)
+   * @param {string} facilityId - ID của facility
+   * @param {Object} params - Query parameters (page, limit, status, date, search)
+   */
+  getFacilityBookings: async (facilityId, params = {}) => {
+    try {
+      const response = await api.get(`/bookings/facility/${facilityId}`, { params });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Cập nhật trạng thái booking (cho owner)
+   * @param {string} bookingId - ID của booking
+   * @param {string} status - Trạng thái mới ('pending', 'confirmed', 'cancelled', 'completed')
+   * @param {string} [notes] - Ghi chú (optional)
+   */
+  updateBookingStatus: async (bookingId, status, notes) => {
+    try {
+      const response = await api.patch(`/bookings/${bookingId}/status`, { status, notes });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 
