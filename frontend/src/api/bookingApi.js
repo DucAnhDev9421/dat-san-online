@@ -147,5 +147,19 @@ export const bookingApi = {
       throw handleApiError(error);
     }
   },
+
+  /**
+   * Cập nhật phương thức thanh toán cho booking
+   * @param {string} bookingId - ID của booking
+   * @param {string} paymentMethod - Phương thức thanh toán ('momo', 'vnpay', 'cash')
+   */
+  updatePaymentMethod: async (bookingId, paymentMethod) => {
+    try {
+      const response = await api.patch(`/bookings/${bookingId}/payment-method`, { paymentMethod });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 

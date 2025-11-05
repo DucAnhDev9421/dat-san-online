@@ -1,5 +1,5 @@
 import React from 'react'
-import { Star, MapPin, Phone, Clock, Users, Wifi, Car, Coffee, Shield } from 'lucide-react'
+import { Star, MapPin, Phone, Clock, Wifi, Car, Coffee, Shield, DollarSign } from 'lucide-react'
 import useDeviceType from '../../../../hook/use-device-type'
 
 export default function VenueInfo({ venueData }) {
@@ -34,16 +34,12 @@ export default function VenueInfo({ venueData }) {
           <span style={{ fontSize: '14px', color: '#374151' }}>{venueData.phone}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: '#6b7280', fontSize: '16px' }}>💰</span>
+          <DollarSign size={16} style={{ color: '#6b7280' }} />
           <span style={{ fontSize: '14px', color: '#374151', fontWeight: '600' }}>{venueData.price}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Clock size={16} style={{ color: '#6b7280' }} />
           <span style={{ fontSize: '14px', color: '#374151' }}>Giờ hoạt động: {venueData.operatingHours}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Users size={16} style={{ color: '#6b7280' }} />
-          <span style={{ fontSize: '14px', color: '#374151' }}>Sức chứa: {venueData.capacity}</span>
         </div>
       </div>
 
