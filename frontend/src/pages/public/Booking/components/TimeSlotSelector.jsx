@@ -3,8 +3,9 @@ import { Clock, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import useDeviceType from '../../../../hook/use-device-type'
 import useClickOutside from '../../../../hook/use-click-outside'
 import useToggle from '../../../../hook/use-toggle'
-import { formatDate, generateCalendarDays } from '../utils/dateHelpers'
+import { formatDate, generateCalendarDays, formatDateToYYYYMMDD } from '../utils/dateHelpers'
 import { bookingApi } from '../../../../api/bookingApi'
+import { toast } from 'react-toastify'
 
 export default function TimeSlotSelector({ 
   selectedDate, 
@@ -13,7 +14,11 @@ export default function TimeSlotSelector({
   onSlotSelect,
   selectedCourt,
   venuePrice,
-  onTimeSlotsDataChange
+  onTimeSlotsDataChange,
+  lockedSlots = {},
+  onSlotLock,
+  onSlotUnlock,
+  currentUserId
 }) {
   const { isMobile, isTablet } = useDeviceType()
   const [showDatePicker, { toggle: toggleDatePicker, setFalse: closeDatePicker }] = useToggle(false)
@@ -56,8 +61,8 @@ export default function TimeSlotSelector({
 
       setLoadingAvailability(true)
       try {
-        // Format date to YYYY-MM-DD
-        const dateStr = selectedDate.toISOString().split('T')[0]
+        // Format date to YYYY-MM-DD in local timezone (not UTC)
+        const dateStr = formatDateToYYYYMMDD(selectedDate)
         
         const result = await bookingApi.getAvailability(selectedCourt, dateStr)
         
@@ -123,17 +128,42 @@ export default function TimeSlotSelector({
   }, [selectedCourt, selectedDate, venuePrice])
 
   const handleSlotClick = (timeSlot) => {
-    const slotKey = `${selectedDate.toISOString().split('T')[0]}-${timeSlot.time}`
+    // Require court to be selected before allowing slot selection
+    if (!selectedCourt) {
+      toast.warning('Vui lòng chọn sân trước khi chọn khung giờ')
+      return
+    }
+
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const slotKey = `${dateStr}-${timeSlot.time}`
+    const timeSlotStr = `${timeSlot.time}-${timeSlot.endTime}`
+    const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
+    const slotLock = lockedSlots[lockKey]
     
+    // Check if locked by another user
+    if (slotLock?.isLockedByOther) {
+      toast.warning('Slot này đang được người khác giữ chỗ')
+      return
+    }
+
     if (selectedSlots.includes(slotKey)) {
+      // Unlock slot when user deselects
+      if (onSlotUnlock && slotLock?.isLockedByMe) {
+        onSlotUnlock(timeSlotStr)
+      }
       onSlotSelect(selectedSlots.filter(slot => slot !== slotKey))
     } else {
+      // Lock slot when user selects
+      if (onSlotLock) {
+        onSlotLock(timeSlotStr)
+      }
       onSlotSelect([...selectedSlots, slotKey])
     }
   }
 
   const isSlotSelected = (timeSlot) => {
-    const slotKey = `${selectedDate.toISOString().split('T')[0]}-${timeSlot.time}`
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const slotKey = `${dateStr}-${timeSlot.time}`
     return selectedSlots.includes(slotKey)
   }
 
@@ -172,7 +202,13 @@ export default function TimeSlotSelector({
   }
   
   const getSlotStatus = (timeSlot) => {
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const timeSlotStr = `${timeSlot.time}-${timeSlot.endTime}`
+    const lockKey = selectedCourt ? `${selectedCourt}_${dateStr}_${timeSlotStr}` : null
+    const slotLock = lockKey ? lockedSlots[lockKey] : null
+    
     if (isPastTime(timeSlot) || isSlotBooked(timeSlot)) return 'booked'
+    if (slotLock?.isLockedByOther) return 'locked' // Locked by another user
     if (isSlotSelected(timeSlot)) return 'selected'
     return 'available'
   }
@@ -395,12 +431,14 @@ export default function TimeSlotSelector({
               const status = getSlotStatus(slot)
               const isSelected = status === 'selected'
               const isBooked = status === 'booked'
+              const isLockedByOther = status === 'locked'
+              const isDisabled = !selectedCourt || isBooked || isLockedByOther
               
               return (
                 <button
                   key={slot.time}
-                  onClick={() => !isBooked && handleSlotClick(slot)}
-                  disabled={isBooked}
+                  onClick={() => !isDisabled && handleSlotClick(slot)}
+                  disabled={isDisabled}
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -408,10 +446,15 @@ export default function TimeSlotSelector({
                     justifyContent: 'center',
                     gap: '8px',
                     padding: '16px 12px',
-                    border: isSelected ? '2px solid #000' : '1px solid #e5e7eb',
+                    border: isSelected ? '2px solid #000' : 
+                            isLockedByOther ? '2px solid #ffc107' : 
+                            '1px solid #e5e7eb',
                     borderRadius: '8px',
-                    background: isSelected ? '#000' : isBooked ? '#f5f5f5' : '#fff',
-                    cursor: isBooked ? 'not-allowed' : 'pointer',
+                    background: isSelected ? '#000' : 
+                               isBooked ? '#f5f5f5' : 
+                               isLockedByOther ? '#fff3cd' : '#fff',
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                    opacity: !selectedCourt ? 0.6 : 1,
                     transition: 'all 0.2s',
                     minHeight: '90px'
                   }}
@@ -429,7 +472,9 @@ export default function TimeSlotSelector({
                   <div style={{ 
                     fontSize: '16px',
                     fontWeight: '600',
-                    color: isSelected ? '#fff' : isBooked ? '#9ca3af' : '#1f2937'
+                    color: isSelected ? '#fff' : 
+                           isBooked ? '#9ca3af' : 
+                           isLockedByOther ? '#856404' : '#1f2937'
                   }}>
                     {slot.time} - {slot.endTime}
                   </div>
@@ -437,9 +482,14 @@ export default function TimeSlotSelector({
                   <div style={{ 
                     fontSize: '14px',
                     fontWeight: '500',
-                    color: isSelected ? '#fff' : isBooked ? '#9ca3af' : '#374151'
+                    color: isSelected ? '#fff' : 
+                           isBooked ? '#9ca3af' : 
+                           isLockedByOther ? '#856404' : '#374151'
                   }}>
-                    {isBooked ? 'Đã đặt' : `${slot.price.toLocaleString('vi-VN')} đ`}
+                    {!selectedCourt ? 'Chọn sân trước' :
+                     isBooked ? 'Đã đặt' : 
+                     isLockedByOther ? 'Đang giữ chỗ' : 
+                     `${slot.price.toLocaleString('vi-VN')} đ`}
                   </div>
                 </button>
               )
@@ -487,6 +537,17 @@ export default function TimeSlotSelector({
               borderRadius: '4px'
             }}></div>
             <span style={{ fontSize: '14px', color: '#374151' }}>Đã đặt</span>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '16px',
+              height: '16px',
+              background: '#fff3cd',
+              border: '2px solid #ffc107',
+              borderRadius: '4px'
+            }}></div>
+            <span style={{ fontSize: '14px', color: '#374151' }}>Đang giữ chỗ</span>
           </div>
         </div>
 

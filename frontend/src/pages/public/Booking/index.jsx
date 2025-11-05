@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import useDeviceType from '../../../hook/use-device-type'
 import VenueGallery from './components/VenueGallery'
@@ -15,8 +15,10 @@ import { courtApi } from '../../../api/courtApi'
 import { categoryApi } from '../../../api/categoryApi'
 import { bookingApi } from '../../../api/bookingApi'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useSocket } from '../../../contexts/SocketContext'
 import { toast } from 'react-toastify'
 import { reviews } from './mockData'
+import { formatDateToYYYYMMDD } from './utils/dateHelpers'
 
 function Booking() {
   const navigate = useNavigate()
@@ -24,6 +26,7 @@ function Booking() {
   const venueId = searchParams.get('venue')
   const { isMobile, isTablet, isDesktop } = useDeviceType()
   const { user, isAuthenticated } = useAuth()
+  const { defaultSocket, isConnected, joinFacility, leaveFacility, joinCourt, leaveCourt } = useSocket()
   
   // State management
   const [venueData, setVenueData] = useState(null)
@@ -44,6 +47,8 @@ function Booking() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [contactInfo, setContactInfo] = useState(null)
   const [timeSlotsData, setTimeSlotsData] = useState([])
+  const [lockedSlots, setLockedSlots] = useState({}) // Track locked slots: { "courtId_date_timeSlot": { lockedBy, expiresAt, isLockedByMe, isLockedByOther } }
+  const hasUnlockedRef = useRef(false) // Track if we've already unlocked on unmount
 
   // Transform facility data to venue format for components
   const transformFacilityToVenue = (facility) => {
@@ -270,11 +275,250 @@ function Booking() {
     fetchCourtsByType()
   }, [selectedFieldType, venueId, courtTypes])
 
+  // Socket.IO: Join facility and court rooms, listen for slot lock events
+  useEffect(() => {
+    if (!venueId || !selectedCourt || !isConnected || !defaultSocket || !isAuthenticated) return
+
+    // Join facility room to receive updates
+    joinFacility(venueId, 'default')
+    
+    // Join court room for specific court updates
+    joinCourt(selectedCourt, venueId, 'default')
+
+    // Listen for slot lock events from other users
+    const handleSlotLocked = (data) => {
+      const { courtId, date, timeSlot, lockedBy, expiresAt } = data
+      
+      // Only update if it's not locked by current user
+      if (lockedBy !== user?._id) {
+        const lockKey = `${courtId}_${date}_${timeSlot}`
+        setLockedSlots(prev => ({
+          ...prev,
+          [lockKey]: { lockedBy, expiresAt, isLockedByOther: true }
+        }))
+      }
+    }
+
+    const handleSlotUnlocked = (data) => {
+      const { courtId, date, timeSlot } = data
+      const lockKey = `${courtId}_${date}_${timeSlot}`
+      setLockedSlots(prev => {
+        const newState = { ...prev }
+        delete newState[lockKey]
+        return newState
+      })
+    }
+
+    const handleSlotConfirmed = (data) => {
+      const { courtId, date, timeSlots } = data
+      // Remove confirmed slots from locked slots
+      // date can be Date object or string (YYYY-MM-DD), handle both cases
+      let dateStr
+      if (date instanceof Date) {
+        dateStr = formatDateToYYYYMMDD(date)
+      } else if (typeof date === 'string') {
+        // If it's already in YYYY-MM-DD format, use it directly
+        dateStr = date.includes('T') ? formatDateToYYYYMMDD(new Date(date)) : date
+      } else {
+        dateStr = formatDateToYYYYMMDD(new Date(date))
+      }
+      
+      timeSlots.forEach(timeSlot => {
+        const lockKey = `${courtId}_${dateStr}_${timeSlot}`
+        setLockedSlots(prev => {
+          const newState = { ...prev }
+          delete newState[lockKey]
+          return newState
+        })
+      })
+    }
+
+    defaultSocket.on('booking:slot:locked', handleSlotLocked)
+    defaultSocket.on('booking:slot:unlocked', handleSlotUnlocked)
+    defaultSocket.on('booking:slot:confirmed', handleSlotConfirmed)
+
+    return () => {
+      defaultSocket.off('booking:slot:locked', handleSlotLocked)
+      defaultSocket.off('booking:slot:unlocked', handleSlotUnlocked)
+      defaultSocket.off('booking:slot:confirmed', handleSlotConfirmed)
+      leaveFacility(venueId, 'default')
+      leaveCourt(selectedCourt, 'default')
+    }
+  }, [venueId, selectedCourt, isConnected, defaultSocket, isAuthenticated, user?._id, joinFacility, leaveFacility, joinCourt, leaveCourt])
+
   // Reset slots when date changes
   const handleDateChange = (newDate) => {
     setSelectedDate(newDate)
     setSelectedSlots([])
   }
+
+  // Handle slot lock (when user selects a slot)
+  const handleSlotLock = (timeSlot) => {
+    if (!selectedCourt || !selectedDate || !defaultSocket || !isAuthenticated) return
+    
+    // Use local timezone format, not UTC
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const timeSlotStr = timeSlot // Format: "18:00-19:00"
+    
+    defaultSocket.emit('booking:lock', {
+      courtId: selectedCourt,
+      date: dateStr,
+      timeSlot: timeSlotStr
+    })
+
+    // Listen for lock success
+    const handleLockSuccess = (data) => {
+      if (data.courtId === selectedCourt && data.timeSlot === timeSlotStr) {
+        const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
+        setLockedSlots(prev => ({
+          ...prev,
+          [lockKey]: { 
+            lockedBy: user?._id, 
+            expiresAt: data.expiresAt,
+            isLockedByMe: true 
+          }
+        }))
+        defaultSocket.off('booking:lock:success', handleLockSuccess)
+        defaultSocket.off('booking:lock:error', handleLockError)
+      }
+    }
+
+    const handleLockError = (error) => {
+      toast.error(error.message || 'Không thể giữ chỗ. Slot có thể đang được người khác chọn.')
+      // Remove slot from selection if lock fails
+      const slotKey = `${dateStr}-${timeSlotStr.split('-')[0]}`
+      setSelectedSlots(prev => prev.filter(slot => slot !== slotKey))
+      defaultSocket.off('booking:lock:success', handleLockSuccess)
+      defaultSocket.off('booking:lock:error', handleLockError)
+    }
+
+    defaultSocket.once('booking:lock:success', handleLockSuccess)
+    defaultSocket.once('booking:lock:error', handleLockError)
+  }
+
+  // Handle slot unlock (when user deselects a slot)
+  const handleSlotUnlock = (timeSlot) => {
+    if (!selectedCourt || !selectedDate || !defaultSocket || !isAuthenticated) return
+    
+    // Use local timezone format, not UTC
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const timeSlotStr = timeSlot
+    
+    defaultSocket.emit('booking:unlock', {
+      courtId: selectedCourt,
+      date: dateStr,
+      timeSlot: timeSlotStr
+    })
+
+    // Remove from lockedSlots on success
+    const handleUnlockSuccess = () => {
+      const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
+      setLockedSlots(prev => {
+        const newState = { ...prev }
+        delete newState[lockKey]
+        return newState
+      })
+      defaultSocket.off('booking:unlock:success', handleUnlockSuccess)
+      defaultSocket.off('booking:unlock:error', handleUnlockError)
+    }
+
+    const handleUnlockError = (error) => {
+      // Silently fail unlock error, slot will expire anyway
+      defaultSocket.off('booking:unlock:success', handleUnlockSuccess)
+      defaultSocket.off('booking:unlock:error', handleUnlockError)
+    }
+
+    defaultSocket.once('booking:unlock:success', handleUnlockSuccess)
+    defaultSocket.once('booking:unlock:error', handleUnlockError)
+  }
+
+  // Unlock all slots when component unmounts
+  useEffect(() => {
+    return () => {
+      if (!hasUnlockedRef.current && defaultSocket && isAuthenticated) {
+        hasUnlockedRef.current = true
+        // Unlock all slots locked by current user
+        defaultSocket.emit('booking:unlock:all')
+      }
+    }
+  }, [defaultSocket, isAuthenticated])
+
+  // Track previous court to detect changes
+  const previousCourtRef = useRef(selectedCourt)
+  const previousDateRef = useRef(selectedDate)
+
+  // Cleanup locked slots and validate selected slots when court or date changes
+  useEffect(() => {
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const courtChanged = previousCourtRef.current !== selectedCourt
+    const dateChanged = previousDateRef.current?.getTime() !== selectedDate?.getTime()
+
+    if (!selectedCourt) {
+      // If no court selected, clear all selected slots and locked slots
+      setSelectedSlots([])
+      setLockedSlots({})
+      previousCourtRef.current = selectedCourt
+      previousDateRef.current = selectedDate
+      return
+    }
+
+    // When court changes, unlock all slots from previous court and clear selected slots
+    if (courtChanged && previousCourtRef.current && defaultSocket && isAuthenticated) {
+      // Unlock all slots from previous court
+      const previousLocks = Object.keys(lockedSlots)
+        .filter(key => {
+          const parts = key.split('_')
+          if (parts.length >= 3) {
+            const lockCourtId = parts[0]
+            return lockCourtId === previousCourtRef.current
+          }
+          return false
+        })
+        .map(key => {
+          const parts = key.split('_')
+          if (parts.length >= 3) {
+            const lockInfo = lockedSlots[key]
+            if (lockInfo?.isLockedByMe) {
+              return {
+                courtId: parts[0],
+                date: parts[1],
+                timeSlot: parts.slice(2).join('_')
+              }
+            }
+          }
+          return null
+        })
+        .filter(item => item !== null)
+
+      // Unlock slots from previous court
+      previousLocks.forEach(({ courtId, date, timeSlot }) => {
+        defaultSocket.emit('booking:unlock', { courtId, date, timeSlot })
+      })
+
+      // Clear selected slots when court changes
+      setSelectedSlots(prev => {
+        if (prev.length > 0) {
+          toast.info('Đã xóa các khung giờ đã chọn vì bạn đã đổi sân. Vui lòng chọn lại.')
+          return []
+        }
+        return prev
+      })
+    }
+
+    // Clear locked slots that don't match current court/date
+    setLockedSlots(prev => {
+      const newState = {}
+      Object.keys(prev).forEach(key => {
+        if (key.startsWith(`${selectedCourt}_${dateStr}_`)) {
+          newState[key] = prev[key]
+        }
+      })
+      return newState
+    })
+
+    previousCourtRef.current = selectedCourt
+    previousDateRef.current = selectedDate
+  }, [selectedCourt, selectedDate, defaultSocket, isAuthenticated])
 
   const handleBookNow = () => {
     // Validate all required fields before showing booking modal
@@ -362,7 +606,7 @@ function Booking() {
       const bookingPayload = {
         courtId: selectedCourt,
         facilityId: venueId,
-        date: selectedDate.toISOString().split('T')[0], // Format: YYYY-MM-DD
+        date: formatDateToYYYYMMDD(selectedDate), // Format: YYYY-MM-DD in local timezone
         timeSlots: formattedTimeSlots,
         contactInfo: contactInfo || {
           name: user?.name || '',
@@ -599,6 +843,10 @@ function Booking() {
             selectedCourt={selectedCourt}
             venuePrice={venueData.pricePerHour}
             onTimeSlotsDataChange={setTimeSlotsData}
+            lockedSlots={lockedSlots}
+            onSlotLock={handleSlotLock}
+            onSlotUnlock={handleSlotUnlock}
+            currentUserId={user?._id}
           />
         </div>
 

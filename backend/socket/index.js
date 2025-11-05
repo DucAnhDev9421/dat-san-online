@@ -106,6 +106,45 @@ export const initializeSocket = (httpServer) => {
       socket.join('admins');
     }
 
+    // Handle join facility room (for receiving facility-specific updates)
+    socket.on('join_facility', (facilityId) => {
+      if (!facilityId) {
+        socket.emit('error', { message: 'Facility ID is required' });
+        return;
+      }
+      socket.join(`facility_${facilityId}`);
+      console.log(`📌 User ${socket.userId} joined facility room [default]: ${facilityId}`);
+      socket.emit('joined_facility', { facilityId });
+    });
+
+    // Handle leave facility room
+    socket.on('leave_facility', (facilityId) => {
+      if (!facilityId) return;
+      socket.leave(`facility_${facilityId}`);
+      console.log(`👋 User ${socket.userId} left facility room [default]: ${facilityId}`);
+      socket.emit('left_facility', { facilityId });
+    });
+
+    // Handle join court room (for real-time slot updates)
+    socket.on('join_court', (data) => {
+      const { courtId, facilityId } = typeof data === 'object' ? data : { courtId: data, facilityId: null };
+      if (!courtId) {
+        socket.emit('error', { message: 'Court ID is required' });
+        return;
+      }
+      socket.join(`court_${courtId}`);
+      console.log(`📌 User ${socket.userId} joined court room [default]: ${courtId}`);
+      socket.emit('joined_court', { courtId, facilityId });
+    });
+
+    // Handle leave court room
+    socket.on('leave_court', (courtId) => {
+      if (!courtId) return;
+      socket.leave(`court_${courtId}`);
+      console.log(`👋 User ${socket.userId} left court room [default]: ${courtId}`);
+      socket.emit('left_court', { courtId });
+    });
+
     socket.on('disconnect', (reason) => {
       console.log(`❌ Socket disconnected [default]: ${socket.userId} - Reason: ${reason}`);
     });

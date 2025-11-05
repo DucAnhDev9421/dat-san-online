@@ -18,9 +18,10 @@ export const SocketProvider = ({ children }) => {
   const [ownerSocket, setOwnerSocket] = useState(null);
   const [adminSocket, setAdminSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
-  const { user, isAuthenticated, getAccessToken } = useAuth();
+  const { user, isAuthenticated, getAccessToken, refreshAccessToken, accessToken } = useAuth();
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
+  const isRefreshingRef = useRef(false); // Prevent multiple simultaneous refresh attempts
   
   // Use refs to track sockets for cleanup (avoid dependency issues)
   const socketsRef = useRef({
@@ -29,6 +30,52 @@ export const SocketProvider = ({ children }) => {
     owner: null,
     admin: null,
   });
+
+  // Function to handle authentication errors and refresh token
+  const handleAuthError = useCallback(async (socket, socketName) => {
+    if (isRefreshingRef.current) {
+      // Already refreshing, wait a bit
+      return new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (!isRefreshingRef.current) {
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 100);
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          resolve();
+        }, 5000); // Max wait 5 seconds
+      });
+    }
+
+    try {
+      isRefreshingRef.current = true;
+      console.log(`🔄 Token expired for ${socketName}, refreshing...`);
+      
+      // Refresh token
+      const newToken = await refreshAccessToken();
+      
+      if (!newToken) {
+        throw new Error('Failed to refresh token');
+      }
+
+      console.log(`✅ Token refreshed for ${socketName}, reconnecting...`);
+      
+      // Disconnect old socket
+      if (socket && socket.connected) {
+        socket.disconnect();
+      }
+      
+      // Reconnect with new token will be handled by useEffect
+      return newToken;
+    } catch (error) {
+      console.error(`❌ Failed to refresh token for ${socketName}:`, error);
+      throw error;
+    } finally {
+      isRefreshingRef.current = false;
+    }
+  }, [refreshAccessToken]);
 
   // Initialize socket connection
   useEffect(() => {
@@ -87,18 +134,42 @@ export const SocketProvider = ({ children }) => {
       }
     });
 
-    defaultSock.on('connect_error', (error) => {
+    defaultSock.on('connect_error', async (error) => {
       console.error('❌ Default socket connection error:', error.message);
-      reconnectAttemptsRef.current++;
       
+      // Check if it's an authentication error
+      if (error.message && error.message.includes('jwt expired') || 
+          error.message && error.message.includes('Authentication error')) {
+        try {
+          await handleAuthError(defaultSock, 'default socket');
+          // The useEffect will rerun with new token, triggering reconnect
+          return;
+        } catch (refreshError) {
+          console.error('Failed to refresh token, disconnecting socket');
+          setIsConnected(false);
+          return;
+        }
+      }
+      
+      reconnectAttemptsRef.current++;
       if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
         console.error('Max reconnection attempts reached');
       }
       setIsConnected(false);
     });
 
-    defaultSock.on('error', (error) => {
+    defaultSock.on('error', async (error) => {
       console.error('❌ Default socket error:', error);
+      
+      // Check if it's an authentication error
+      if (error.message && (error.message.includes('jwt expired') || 
+          error.message.includes('Authentication error'))) {
+        try {
+          await handleAuthError(defaultSock, 'default socket');
+        } catch (refreshError) {
+          console.error('Failed to refresh token on error event');
+        }
+      }
     });
 
     setDefaultSocket(defaultSock);
@@ -115,12 +186,30 @@ export const SocketProvider = ({ children }) => {
       console.log('❌ User namespace socket disconnected:', reason);
     });
 
-    userSock.on('connect_error', (error) => {
+    userSock.on('connect_error', async (error) => {
       console.error('❌ User namespace connection error:', error.message);
+      
+      if (error.message && (error.message.includes('jwt expired') || 
+          error.message.includes('Authentication error'))) {
+        try {
+          await handleAuthError(userSock, 'user socket');
+        } catch (refreshError) {
+          console.error('Failed to refresh token for user socket');
+        }
+      }
     });
 
-    userSock.on('error', (error) => {
+    userSock.on('error', async (error) => {
       console.error('❌ User namespace socket error:', error);
+      
+      if (error.message && (error.message.includes('jwt expired') || 
+          error.message.includes('Authentication error'))) {
+        try {
+          await handleAuthError(userSock, 'user socket');
+        } catch (refreshError) {
+          console.error('Failed to refresh token for user socket');
+        }
+      }
     });
 
     setUserSocket(userSock);
@@ -138,12 +227,30 @@ export const SocketProvider = ({ children }) => {
         console.log('❌ Owner namespace socket disconnected:', reason);
       });
 
-      ownerSock.on('connect_error', (error) => {
+      ownerSock.on('connect_error', async (error) => {
         console.error('❌ Owner namespace connection error:', error.message);
+        
+        if (error.message && (error.message.includes('jwt expired') || 
+            error.message.includes('Authentication error'))) {
+          try {
+            await handleAuthError(ownerSock, 'owner socket');
+          } catch (refreshError) {
+            console.error('Failed to refresh token for owner socket');
+          }
+        }
       });
 
-      ownerSock.on('error', (error) => {
+      ownerSock.on('error', async (error) => {
         console.error('❌ Owner namespace socket error:', error);
+        
+        if (error.message && (error.message.includes('jwt expired') || 
+            error.message.includes('Authentication error'))) {
+          try {
+            await handleAuthError(ownerSock, 'owner socket');
+          } catch (refreshError) {
+            console.error('Failed to refresh token for owner socket');
+          }
+        }
       });
 
       setOwnerSocket(ownerSock);
@@ -162,12 +269,30 @@ export const SocketProvider = ({ children }) => {
         console.log('❌ Admin namespace socket disconnected:', reason);
       });
 
-      adminSock.on('connect_error', (error) => {
+      adminSock.on('connect_error', async (error) => {
         console.error('❌ Admin namespace connection error:', error.message);
+        
+        if (error.message && (error.message.includes('jwt expired') || 
+            error.message.includes('Authentication error'))) {
+          try {
+            await handleAuthError(adminSock, 'admin socket');
+          } catch (refreshError) {
+            console.error('Failed to refresh token for admin socket');
+          }
+        }
       });
 
-      adminSock.on('error', (error) => {
+      adminSock.on('error', async (error) => {
         console.error('❌ Admin namespace socket error:', error);
+        
+        if (error.message && (error.message.includes('jwt expired') || 
+            error.message.includes('Authentication error'))) {
+          try {
+            await handleAuthError(adminSock, 'admin socket');
+          } catch (refreshError) {
+            console.error('Failed to refresh token for admin socket');
+          }
+        }
       });
 
       setAdminSocket(adminSock);
@@ -191,7 +316,7 @@ export const SocketProvider = ({ children }) => {
       socketsRef.current = { default: null, user: null, owner: null, admin: null };
       reconnectAttemptsRef.current = 0;
     };
-  }, [isAuthenticated, user?.role, user?._id]); // Chỉ theo dõi role và id, không theo dõi toàn bộ user object
+  }, [isAuthenticated, user?.role, user?._id, accessToken, handleAuthError]); // Include accessToken to reconnect when token is refreshed
 
   // Helper function to get appropriate socket based on namespace
   const getSocket = useCallback((namespace = 'default') => {
@@ -208,7 +333,7 @@ export const SocketProvider = ({ children }) => {
   }, [defaultSocket, userSocket, ownerSocket, adminSocket]);
 
   // Helper function to join facility room
-  const joinFacility = useCallback((facilityId, namespace = 'user') => {
+  const joinFacility = useCallback((facilityId, namespace = 'default') => {
     const sock = getSocket(namespace);
     if (sock && isConnected) {
       sock.emit('join_facility', facilityId);
@@ -216,7 +341,7 @@ export const SocketProvider = ({ children }) => {
   }, [getSocket, isConnected]);
 
   // Helper function to leave facility room
-  const leaveFacility = useCallback((facilityId, namespace = 'user') => {
+  const leaveFacility = useCallback((facilityId, namespace = 'default') => {
     const sock = getSocket(namespace);
     if (sock && isConnected) {
       sock.emit('leave_facility', facilityId);
@@ -224,7 +349,7 @@ export const SocketProvider = ({ children }) => {
   }, [getSocket, isConnected]);
 
   // Helper function to join court room
-  const joinCourt = useCallback((courtId, facilityId, namespace = 'user') => {
+  const joinCourt = useCallback((courtId, facilityId, namespace = 'default') => {
     const sock = getSocket(namespace);
     if (sock && isConnected) {
       sock.emit('join_court', { courtId, facilityId });
@@ -232,7 +357,7 @@ export const SocketProvider = ({ children }) => {
   }, [getSocket, isConnected]);
 
   // Helper function to leave court room
-  const leaveCourt = useCallback((courtId, namespace = 'user') => {
+  const leaveCourt = useCallback((courtId, namespace = 'default') => {
     const sock = getSocket(namespace);
     if (sock && isConnected) {
       sock.emit('leave_court', courtId);

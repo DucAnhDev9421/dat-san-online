@@ -23,9 +23,22 @@ setInterval(() => {
 
 /**
  * Generate lock key
+ * date can be Date object or string in YYYY-MM-DD format
  */
 const getLockKey = (courtId, date, timeSlot) => {
-  const dateStr = new Date(date).toISOString().split('T')[0];
+  let dateStr;
+  // If date is already a string in YYYY-MM-DD format, use it directly
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    dateStr = date;
+  } else {
+    // If date is Date object or ISO string, convert to YYYY-MM-DD
+    // Use local timezone to match frontend
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    dateStr = `${year}-${month}-${day}`;
+  }
   return `${courtId}_${dateStr}_${timeSlot}`;
 };
 
