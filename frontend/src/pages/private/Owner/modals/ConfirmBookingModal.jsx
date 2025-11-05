@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { X, CheckCircle, AlertCircle } from "lucide-react";
+import { bookingApi } from "../../../../api/bookingApi";
+import { toast } from "react-toastify";
 import useClickOutside from "../../../../hook/use-click-outside";
 import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
 import useEscapeKey from "../../../../hook/use-escape-key";
@@ -8,14 +10,38 @@ const ConfirmBookingModal = ({ isOpen, onClose, booking = {}, onConfirm }) => {
   useBodyScrollLock(isOpen);
   useEscapeKey(onClose, isOpen);
   const modalRef = useClickOutside(onClose, isOpen);
+  const [loading, setLoading] = useState(false);
 
   if (!isOpen || !booking) return null;
 
-  const handleConfirm = () => {
-    if (onConfirm && booking?.id) {
-      onConfirm(booking.id);
+  const handleConfirm = async () => {
+    // Dùng bookingId (MongoDB _id) cho API, bookingCode chỉ để hiển thị
+    const bookingId = booking._original?._id || booking._original?.id || booking.bookingId || booking.id;
+    
+    if (!bookingId) {
+      toast.error('Không tìm thấy ID đơn đặt sân');
+      return;
     }
-    if (onClose) onClose();
+
+    setLoading(true);
+    try {
+      const result = await bookingApi.updateBookingStatus(bookingId, 'confirmed');
+      
+      if (result.success) {
+        toast.success('Xác nhận đơn đặt sân thành công');
+        if (onConfirm) {
+          await onConfirm(bookingId);
+        }
+        if (onClose) onClose();
+      } else {
+        toast.error(result.message || 'Không thể xác nhận đơn đặt sân');
+      }
+    } catch (error) {
+      console.error('Error confirming booking:', error);
+      toast.error(error.message || 'Không thể xác nhận đơn đặt sân');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -142,6 +168,7 @@ const ConfirmBookingModal = ({ isOpen, onClose, booking = {}, onConfirm }) => {
         >
           <button
             onClick={onClose}
+            disabled={loading}
             style={{
               padding: "10px 24px",
               background: "#fff",
@@ -150,25 +177,27 @@ const ConfirmBookingModal = ({ isOpen, onClose, booking = {}, onConfirm }) => {
               borderRadius: 10,
               fontSize: 15,
               fontWeight: 600,
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.6 : 1,
             }}
           >
             Hủy
           </button>
           <button
             onClick={handleConfirm}
+            disabled={loading}
             style={{
               padding: "10px 24px",
-              background: "#10b981",
+              background: loading ? "#9ca3af" : "#10b981",
               color: "#fff",
               border: "none",
               borderRadius: 10,
               fontSize: 15,
               fontWeight: 600,
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
             }}
           >
-            Xác nhận
+            {loading ? "Đang xác nhận..." : "Xác nhận"}
           </button>
         </div>
       </div>

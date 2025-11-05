@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import Booking from "../models/Booking.js";
 import Court from "../models/Court.js";
 import Facility from "../models/Facility.js";
+import User from "../models/User.js";
 import {
   authenticateToken,
   authorize,
@@ -11,6 +12,10 @@ import {
 } from "../middleware/auth.js";
 import { logAudit } from "../utils/auditLogger.js";
 import { emitToUser, emitToFacility, emitToOwners } from "../socket/index.js";
+import {
+  createNotification,
+  notifyFacilityOwner,
+} from "../utils/notificationService.js";
 import QRCode from "qrcode";
 
 const router = express.Router();
@@ -348,15 +353,35 @@ router.post("/", authenticateToken, async (req, res, next) => {
       message: 'Đặt sân thành công! Vui lòng thanh toán để hoàn tất.',
     });
 
+    // Create notification for user
+    await createNotification({
+      userId: req.user._id.toString(),
+      type: 'booking',
+      title: 'Đặt sân thành công',
+      message: `Bạn đã đặt sân thành công tại ${booking.facility.name}. Mã đặt sân: ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()}. Vui lòng thanh toán để hoàn tất.`,
+      metadata: {
+        bookingId: booking._id.toString(),
+        bookingCode: booking.bookingCode,
+        facilityId: facilityId.toString(),
+        courtId: courtId.toString(),
+      },
+      priority: 'high',
+    });
+
     // Notify facility owner about new booking
-    const facility = await Facility.findById(facilityId).select('owner').lean();
-    if (facility?.owner) {
-      const ownerId = facility.owner._id?.toString() || facility.owner.toString();
-      emitToUser(ownerId, 'booking:new', {
-        booking: booking.toObject(),
-        message: 'Có đặt sân mới',
-      });
-    }
+    await notifyFacilityOwner({
+      facilityId: facilityId.toString(),
+      type: 'booking',
+      title: 'Có đặt sân mới',
+      message: `Có đặt sân mới tại ${booking.facility.name}. Mã đặt sân: ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()}.`,
+      metadata: {
+        bookingId: booking._id.toString(),
+        bookingCode: booking.bookingCode,
+        facilityId: facilityId.toString(),
+        courtId: courtId.toString(),
+        userId: req.user._id.toString(),
+      },
+    });
 
     // Notify all users in facility room about slot update
     emitToFacility(facilityId, 'booking:slot:booked', {
@@ -394,14 +419,6 @@ router.get("/my-bookings", authenticateToken, async (req, res, next) => {
 
     if (req.query.status) {
       filter.status = req.query.status;
-    }
-
-    if (req.query.search) {
-      // Search in facility name
-      const facilities = await Facility.find({
-        name: { $regex: req.query.search, $options: "i" },
-      }).select("_id");
-      filter.facility = { $in: facilities.map((f) => f._id) };
     }
 
     // Get bookings
@@ -469,6 +486,44 @@ router.get(
 
       if (req.query.date) {
         filter.date = new Date(req.query.date);
+      }
+
+      // Search functionality
+      if (req.query.search) {
+        const searchTerm = req.query.search.trim();
+        
+        // Check if search term looks like a booking code (BK-YYYYMMDD-XXXX)
+        if (/^BK-\d{8}-\d{4}$/i.test(searchTerm)) {
+          // Search by booking code
+          filter.bookingCode = searchTerm.toUpperCase();
+        } else {
+          // Search in facility name, user name, email, phone
+          const facilities = await Facility.find({
+            name: { $regex: searchTerm, $options: "i" },
+          }).select("_id");
+          
+          const facilityIds = facilities.map((f) => f._id);
+          
+          // Also search in user fields
+          const users = await User.find({
+            $or: [
+              { name: { $regex: searchTerm, $options: "i" } },
+              { email: { $regex: searchTerm, $options: "i" } },
+              { phone: { $regex: searchTerm, $options: "i" } },
+            ],
+          }).select("_id");
+          
+          const userIds = users.map((u) => u._id);
+          
+          // Combine filters - search in multiple fields
+          filter.$or = [
+            { facility: { $in: facilityIds } },
+            { user: { $in: userIds } },
+            { "contactInfo.name": { $regex: searchTerm, $options: "i" } },
+            { "contactInfo.email": { $regex: searchTerm, $options: "i" } },
+            { "contactInfo.phone": { $regex: searchTerm, $options: "i" } },
+          ];
+        }
       }
 
       // Get bookings
@@ -666,6 +721,37 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
       message: `Trạng thái booking đã được cập nhật thành: ${status}`,
     });
 
+    // Status messages
+    const statusMessages = {
+      confirmed: 'Đã xác nhận',
+      cancelled: 'Đã hủy',
+      completed: 'Đã hoàn thành',
+      pending: 'Đang chờ xử lý',
+    };
+
+    const statusTitles = {
+      confirmed: 'Đặt sân đã được xác nhận',
+      cancelled: 'Đặt sân đã bị hủy',
+      completed: 'Đặt sân đã hoàn thành',
+      pending: 'Đặt sân đang chờ xử lý',
+    };
+
+    // Create notification for user
+    await createNotification({
+      userId,
+      type: status === 'cancelled' ? 'cancellation' : 'booking',
+      title: statusTitles[status] || 'Trạng thái đặt sân đã thay đổi',
+      message: `Đặt sân ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()} tại ${booking.facility.name} đã được ${statusMessages[status] || status}.`,
+      metadata: {
+        bookingId: booking._id.toString(),
+        bookingCode: booking.bookingCode,
+        facilityId: booking.facility._id?.toString() || booking.facility.toString(),
+        status,
+        notes,
+      },
+      priority: status === 'cancelled' ? 'high' : 'normal',
+    });
+
     // Notify facility room
     const facilityId = booking.facility._id?.toString() || booking.facility.toString();
     emitToFacility(facilityId, 'booking:status:updated', {
@@ -732,6 +818,25 @@ router.patch("/:id/cancel", authenticateToken, checkBookingOwnership, async (req
 
     await booking.save();
 
+    // Populate for notifications
+    await booking.populate("facility", "name owner");
+    await booking.populate("court", "name");
+
+    // Notify facility owner about cancellation
+    const facilityId = booking.facility._id?.toString() || booking.facility.toString();
+    await notifyFacilityOwner({
+      facilityId,
+      type: 'cancellation',
+      title: 'Đặt sân đã bị hủy',
+      message: `Đặt sân ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()} tại ${booking.facility.name} đã bị hủy bởi người dùng.`,
+      metadata: {
+        bookingId: booking._id.toString(),
+        bookingCode: booking.bookingCode,
+        facilityId,
+        cancellationReason: reason || "Người dùng tự hủy",
+      },
+    });
+
     res.json({
       success: true,
       message: "Đã hủy booking thành công",
@@ -740,6 +845,97 @@ router.patch("/:id/cancel", authenticateToken, checkBookingOwnership, async (req
         refundAmount,
         refundStatus: refundAmount > 0 ? "processing" : "not_eligible",
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/bookings/:id/payment-method
+ * User chọn phương thức thanh toán
+ */
+router.patch("/:id/payment-method", authenticateToken, checkBookingOwnership, async (req, res, next) => {
+  try {
+    const { paymentMethod } = req.body;
+    
+    // Validate payment method
+    if (!paymentMethod || !['momo', 'vnpay', 'cash'].includes(paymentMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: "Phương thức thanh toán không hợp lệ. Vui lòng chọn: momo, vnpay, hoặc cash",
+      });
+    }
+    
+    const booking = req.booking;
+    
+    // Check if booking is already paid
+    if (booking.paymentStatus === "paid") {
+      return res.status(400).json({
+        success: false,
+        message: "Booking này đã được thanh toán",
+      });
+    }
+    
+    // Update payment method
+    booking.paymentMethod = paymentMethod;
+    
+    // If cash payment, keep paymentStatus as "pending" and status as "pending"
+    // User will pay at the venue, owner will confirm later
+    if (paymentMethod === 'cash') {
+      // Keep paymentStatus = "pending" (chưa thanh toán)
+      // Keep status = "pending" (chờ xác nhận)
+      // Just update paymentMethod
+      await booking.save();
+      
+      // Populate for response
+      await booking.populate("court", "name type price");
+      await booking.populate("facility", "name address location");
+      
+      // Create notification for user
+      await createNotification({
+        userId: booking.user._id?.toString() || booking.user.toString(),
+        type: 'booking',
+        title: 'Đã chọn thanh toán tiền mặt',
+        message: `Bạn đã chọn thanh toán tiền mặt cho đặt sân ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()}. Vui lòng thanh toán khi đến sân.`,
+        metadata: {
+          bookingId: booking._id.toString(),
+          bookingCode: booking.bookingCode,
+          facilityId: booking.facility._id?.toString() || booking.facility.toString(),
+          paymentMethod: 'cash',
+        },
+        priority: 'normal',
+      });
+      
+      // Notify facility owner
+      await notifyFacilityOwner({
+        facilityId: booking.facility._id?.toString() || booking.facility.toString(),
+        type: 'booking',
+        title: 'Đặt sân chọn thanh toán tiền mặt',
+        message: `Đặt sân ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()} tại ${booking.facility.name} đã chọn thanh toán tiền mặt. Vui lòng xác nhận khi khách đến sân.`,
+        metadata: {
+          bookingId: booking._id.toString(),
+          bookingCode: booking.bookingCode,
+          facilityId: booking.facility._id?.toString() || booking.facility.toString(),
+          paymentMethod: 'cash',
+        },
+      });
+      
+      return res.json({
+        success: true,
+        message: "Đã chọn thanh toán tiền mặt. Vui lòng thanh toán khi đến sân.",
+        data: booking,
+      });
+    }
+    
+    // For online payment methods (momo/vnpay), just update paymentMethod
+    // The actual payment will be handled by payment flow
+    await booking.save();
+    
+    res.json({
+      success: true,
+      message: `Đã chọn phương thức thanh toán: ${paymentMethod}`,
+      data: booking,
     });
   } catch (error) {
     next(error);

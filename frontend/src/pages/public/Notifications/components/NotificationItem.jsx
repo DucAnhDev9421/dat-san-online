@@ -1,5 +1,5 @@
 import React from 'react'
-import { CheckCircle, Trash2 } from 'lucide-react'
+import { CheckCircle, Trash2, Info } from 'lucide-react'
 import '../../../../styles/Notifications.css'
 
 export default function NotificationItem({
@@ -10,7 +10,8 @@ export default function NotificationItem({
   onDelete,
   onClick
 }) {
-  const IconComponent = notification.icon
+  const IconComponent = notification.icon || Info
+  const iconColor = notification.iconColor || '#6b7280'
 
   return (
     <div
@@ -19,9 +20,9 @@ export default function NotificationItem({
     >
       <div 
         className="notification-icon-wrapper"
-        style={{ background: `${notification.iconColor}20` }}
+        style={{ background: `${iconColor}20` }}
       >
-        <IconComponent size={20} color={notification.iconColor} />
+        {IconComponent && <IconComponent size={20} color={iconColor} />}
       </div>
 
       <div className="notification-content">
@@ -41,7 +42,7 @@ export default function NotificationItem({
           <button
             onClick={(e) => {
               e.stopPropagation()
-              onMarkAsRead(notification.id)
+              onMarkAsRead(notification.id || notification._id)
             }}
             className="notification-action-btn notification-action-read"
             title="Đánh dấu đã đọc"
@@ -52,7 +53,7 @@ export default function NotificationItem({
         <button
           onClick={(e) => {
             e.stopPropagation()
-            onDelete(notification.id)
+            onDelete(notification.id || notification._id)
           }}
           className="notification-action-btn notification-action-delete"
           title="Xóa"

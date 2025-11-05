@@ -185,30 +185,77 @@ function Payment() {
     setShowConfirmModal(true)
   }
 
-  const handleConfirmPayment = () => {
+  const handleConfirmPayment = async () => {
+    if (!bookingId) {
+      toast.error('Không tìm thấy thông tin đặt sân')
+      return
+    }
+
     setIsProcessing(true)
     
-    // Clear localStorage when payment is confirmed
-    if (bookingId) {
-      const startTimeKey = `payment_start_time_${bookingId}`
-      localStorage.removeItem(startTimeKey)
-      
-      // Clear pending booking from localStorage
-      const pendingBookingKey = `pending_booking_${bookingId}`
-      localStorage.removeItem(pendingBookingKey)
-    }
-    
-    setTimeout(() => {
+    try {
+      if (selectedMethod === 'cash') {
+        // Gọi API để cập nhật payment method = cash
+        const result = await bookingApi.updatePaymentMethod(bookingId, 'cash')
+        
+        if (result.success || result.data) {
+          // Stop countdown timer to prevent auto-cancel
+          stop()
+          
+          // Clear localStorage
+          const startTimeKey = `payment_start_time_${bookingId}`
+          localStorage.removeItem(startTimeKey)
+          
+          // Clear pending booking from localStorage
+          const pendingBookingKey = `pending_booking_${bookingId}`
+          localStorage.removeItem(pendingBookingKey)
+          
+          // Don't set isCancelled = true because booking is not cancelled,
+          // it's just pending payment at venue
+          // The countdown is stopped, so it won't auto-cancel
+          
+          // Show success message
+          toast.success('Đã chọn thanh toán tiền mặt. Vui lòng thanh toán khi đến sân.')
+          
+          // Close modal
+          setShowConfirmModal(false)
+          
+          // Navigate to profile bookings after delay
+          setTimeout(() => {
+            navigate('/profile?tab=bookings')
+          }, 2000)
+        } else {
+          throw new Error('Không thể cập nhật phương thức thanh toán')
+        }
+      } else {
+        // Online payment methods (momo/vnpay)
+        // TODO: Implement online payment flow
+        const method = paymentMethods.find(m => m.id === selectedMethod)
+        toast.info(`Đang chuyển hướng đến ${method?.name || selectedMethod}...`)
+        
+        // For now, just update payment method
+        const result = await bookingApi.updatePaymentMethod(bookingId, selectedMethod)
+        
+        if (result.success || result.data) {
+          // Clear localStorage
+          const startTimeKey = `payment_start_time_${bookingId}`
+          localStorage.removeItem(startTimeKey)
+          
+          const pendingBookingKey = `pending_booking_${bookingId}`
+          localStorage.removeItem(pendingBookingKey)
+          
+          // TODO: Redirect to payment gateway
+          // For now, just show message
+          toast.info('Chức năng thanh toán online sẽ được tích hợp sớm')
+        }
+      }
+    } catch (error) {
+      console.error('Error confirming payment:', error)
+      toast.error(error.message || 'Không thể xác nhận thanh toán. Vui lòng thử lại.')
+    } finally {
       setIsProcessing(false)
       setShowConfirmModal(false)
-      
-      const method = paymentMethods.find(m => m.id === selectedMethod)
-      if (selectedMethod === 'cash') {
-        alert(`✓ Đặt sân thành công!\n\nVui lòng thanh toán ${bookingData.total.toLocaleString('vi-VN')} VNĐ khi đến sân.\nChúng tôi sẽ liên hệ với bạn để xác nhận.`)
-      } else {
-        alert(`✓ Đang chuyển hướng đến ${method.name}...\n\n(Chức năng này sẽ được tích hợp khi có Backend)`)
-      }
-    }, 2000)
+    }
   }
 
   return (

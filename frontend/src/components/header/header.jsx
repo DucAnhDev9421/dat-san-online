@@ -1,25 +1,28 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { useSocket } from '../../contexts/SocketContext'
 import useDeviceType from '../../hook/use-device-type'
 import useToggle from '../../hook/use-toggle'
 import NotificationButton from './NotificationButton'
 import NotificationDropdown from './NotificationDropdown'
 import UserMenu from './UserMenu'
 import NavigationBar from './NavigationBar'
-import { mockNotifications } from './constants'
-import { Menu, X } from 'lucide-react'
+import { notificationApi } from '../../api/notificationApi'
+import { toast } from 'react-toastify'
+import { Menu, X, CheckCircle, DollarSign, XCircle, Star, Wrench, Tag, Clock, Info } from 'lucide-react'
 
 function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth()
+  const { defaultSocket, userSocket, ownerSocket, adminSocket, isConnected } = useSocket()
   const { isMobile, isTablet } = useDeviceType()
   const [showUserMenu, { toggle: toggleUserMenu, setFalse: closeUserMenu }] = useToggle(false)
   const [showNotificationDropdown, { toggle: toggleNotificationDropdown, setFalse: closeNotificationDropdown }] = useToggle(false)
   const [showMobileMenu, { toggle: toggleMobileMenu, setFalse: closeMobileMenu }] = useToggle(false)
-  const [unreadNotifications, setUnreadNotifications] = useState(3) // Mock data
+  const [notifications, setNotifications] = useState([])
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [loadingNotifications, setLoadingNotifications] = useState(false)
   const navigate = useNavigate()
-
-  const notifications = mockNotifications
 
   // Đóng mobile menu khi chuyển từ mobile sang desktop/tablet
   useEffect(() => {
@@ -34,6 +37,94 @@ function Header() {
       closeUserMenu()
     }
   }, [isAuthenticated, user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch notifications on mount and when authenticated
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      setNotifications([])
+      setUnreadNotifications(0)
+      return
+    }
+
+    const fetchNotifications = async () => {
+      try {
+        setLoadingNotifications(true)
+        const [notificationsData, unreadCountData] = await Promise.all([
+          notificationApi.getNotifications({ page: 1, limit: 10 }),
+          notificationApi.getUnreadCount(),
+        ])
+        
+        setNotifications(notificationsData.notifications || notificationsData || [])
+        setUnreadNotifications(unreadCountData.unreadCount || 0)
+      } catch (error) {
+        console.error('Error fetching notifications:', error)
+      } finally {
+        setLoadingNotifications(false)
+      }
+    }
+
+    fetchNotifications()
+  }, [isAuthenticated, user])
+
+  // Listen for real-time notifications
+  useEffect(() => {
+    if (!isAuthenticated || !user || !isConnected) return
+
+    const handleNewNotification = async (data) => {
+      try {
+        // If notification object is provided, add it to the list
+        if (data.notification) {
+          setNotifications(prev => [data.notification, ...prev].slice(0, 10))
+        }
+        
+        // Update unread count
+        if (data.unreadCount !== undefined) {
+          setUnreadNotifications(data.unreadCount)
+        } else {
+          // Fetch unread count if not provided
+          const unreadCountData = await notificationApi.getUnreadCount()
+          setUnreadNotifications(unreadCountData.unreadCount || 0)
+        }
+
+        // Show toast notification
+        if (data.notification) {
+          toast.info(data.notification.title || 'Có thông báo mới', {
+            position: 'top-right',
+            autoClose: 3000,
+          })
+        }
+      } catch (error) {
+        console.error('Error handling new notification:', error)
+      }
+    }
+
+    // Listen on default namespace (for user-specific notifications)
+    if (defaultSocket && isConnected) {
+      defaultSocket.on('notification:new', handleNewNotification)
+    }
+
+    // Listen on user namespace
+    if (userSocket && isConnected) {
+      userSocket.on('notification:new', handleNewNotification)
+    }
+
+    // Listen on owner namespace (if user is owner or admin)
+    if ((user.role === 'owner' || user.role === 'admin') && ownerSocket && isConnected) {
+      ownerSocket.on('notification:new', handleNewNotification)
+    }
+
+    // Listen on admin namespace (if user is admin)
+    if (user.role === 'admin' && adminSocket && isConnected) {
+      adminSocket.on('notification:new', handleNewNotification)
+    }
+
+    return () => {
+      defaultSocket?.off('notification:new', handleNewNotification)
+      userSocket?.off('notification:new', handleNewNotification)
+      ownerSocket?.off('notification:new', handleNewNotification)
+      adminSocket?.off('notification:new', handleNewNotification)
+    }
+  }, [isAuthenticated, user, defaultSocket, userSocket, ownerSocket, adminSocket, isConnected])
 
   // Debug logs
   console.log('🔍 Header - Auth state:', { isAuthenticated, user, loading });
@@ -61,21 +152,38 @@ function Header() {
     closeUserMenu() // Close user menu if open
   }
 
-  const handleNotificationItemClick = (notification) => {
+  const handleNotificationItemClick = async (notification) => {
     // Mark as read if unread
     if (!notification.isRead) {
-      setUnreadNotifications(prev => Math.max(0, prev - 1))
+      try {
+        await notificationApi.markAsRead(notification._id || notification.id)
+        setNotifications(prev =>
+          prev.map(n =>
+            (n._id || n.id) === (notification._id || notification.id)
+              ? { ...n, isRead: true }
+              : n
+          )
+        )
+        setUnreadNotifications(prev => Math.max(0, prev - 1))
+      } catch (error) {
+        console.error('Error marking notification as read:', error)
+      }
     }
+    
     // Navigate to relevant page based on notification type
-    switch (notification.type) {
-      case 'booking':
-        navigate('/profile?tab=bookings')
-        break
-      case 'payment':
-        navigate('/profile?tab=payments')
-        break
-      default:
-        navigate('/notifications')
+    if (notification.metadata?.bookingId) {
+      navigate(`/profile?tab=bookings`)
+    } else {
+      switch (notification.type) {
+        case 'booking':
+          navigate('/profile?tab=bookings')
+          break
+        case 'payment':
+          navigate('/profile?tab=payments')
+          break
+        default:
+          navigate('/notifications')
+      }
     }
     closeNotificationDropdown()
   }
@@ -95,8 +203,46 @@ function Header() {
     alert('Chức năng nạp tiền sẽ được triển khai sớm')
   }
 
-  const markAllAsRead = () => {
-    setUnreadNotifications(0)
+  // Helper function to get notification icon
+  const getNotificationIcon = (type) => {
+    const iconMap = {
+      booking: CheckCircle,
+      payment: DollarSign,
+      cancellation: XCircle,
+      review: Star,
+      maintenance: Wrench,
+      promotion: Tag,
+      reminder: Clock,
+      system: Info,
+    }
+    return iconMap[type] || Info
+  }
+
+  // Helper function to get notification icon color
+  const getNotificationIconColor = (type) => {
+    const colors = {
+      booking: '#10b981',
+      payment: '#3b82f6',
+      cancellation: '#ef4444',
+      review: '#f59e0b',
+      maintenance: '#8b5cf6',
+      promotion: '#ec4899',
+      reminder: '#06b6d4',
+      system: '#6b7280',
+    }
+    return colors[type] || '#6b7280'
+  }
+
+  const markAllAsRead = async () => {
+    try {
+      await notificationApi.markAllAsRead()
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
+      setUnreadNotifications(0)
+      toast.success('Đã đánh dấu tất cả thông báo là đã đọc')
+    } catch (error) {
+      console.error('Error marking all as read:', error)
+      toast.error('Không thể đánh dấu tất cả thông báo')
+    }
   }
 
   return (
@@ -166,8 +312,25 @@ function Header() {
                 <NotificationDropdown
                   isOpen={showNotificationDropdown}
                   onClose={closeNotificationDropdown}
-                  notifications={notifications}
+                  notifications={notifications.map(n => ({
+                    id: n._id || n.id,
+                    title: n.title,
+                    message: n.message,
+                    type: n.type,
+                    isRead: n.isRead,
+                    time: n.createdAt ? new Date(n.createdAt).toLocaleString('vi-VN', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    }) : '',
+                    icon: getNotificationIcon(n.type),
+                    iconColor: getNotificationIconColor(n.type),
+                    metadata: n.metadata,
+                  }))}
                   unreadCount={unreadNotifications}
+                  loading={loadingNotifications}
                   onNotificationClick={handleNotificationItemClick}
                   onMarkAllAsRead={markAllAsRead}
                   onViewAll={() => {
