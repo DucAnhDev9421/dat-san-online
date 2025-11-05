@@ -90,6 +90,11 @@ function Header() {
     navigate('/profile?tab=bookings')
   }
 
+  const handleTopUpClick = () => {
+    closeUserMenu()
+    alert('Chức năng nạp tiền sẽ được triển khai sớm')
+  }
+
   const markAllAsRead = () => {
     setUnreadNotifications(0)
   }
@@ -181,6 +186,7 @@ function Header() {
                 onLogout={handleLogout}
                 onSettingsClick={handleSettingsClick}
                 onBookingHistoryClick={handleBookingHistoryClick}
+                onTopUpClick={handleTopUpClick}
               />
             </div>
           ) : (
