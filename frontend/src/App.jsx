@@ -14,6 +14,7 @@ import Footer from "./components/footer/footer.jsx";
 import ProtectedRoute, { AdminRoute, OwnerRoute } from "./components/ProtectedRoute.jsx";
 import ChatButton from "./components/chat/ChatButton.jsx";
 import ScrollToTop from "./components/ScrollToTop.jsx";
+import PendingBookingNotification from "./components/PendingBookingNotification.jsx";
 
 // Admin Layout & Routes
 import AdminLayout from "./layouts/AdminLayout";
@@ -63,6 +64,7 @@ function App() {
           theme="colored"
         />
         <ChatButton />
+        <PendingBookingNotification />
         <Routes>
           {/* Auth callback routes-No layout */}
           <Route path="/auth/callback" element={<AuthCallback />} />
