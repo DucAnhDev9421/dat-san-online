@@ -103,6 +103,7 @@ function HomePage() {
         })
         
         if (result.success && result.data && result.data.facilities) {
+          // Ratings are already included in the response from backend
           const transformedFacilities = result.data.facilities.map(transformFacilityToVenue)
           setFacilities(transformedFacilities)
           
