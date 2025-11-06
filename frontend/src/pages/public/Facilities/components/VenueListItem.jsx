@@ -57,7 +57,7 @@ export default function VenueListItem({ facilities, loading, onBookVenue }) {
             
             <div className="venue-list-bottom">
               <div className="venue-list-price">
-                💰 {f.price.toLocaleString()} VND/giờ
+                💰 {typeof f.price === 'number' ? `${f.price.toLocaleString()} VND/giờ` : f.price || '0 VND/giờ'}
               </div>
               <button 
                 className="venue-list-book-btn"

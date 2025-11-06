@@ -121,7 +121,7 @@ export default function VenueCard({
             alignItems: 'center',
             gap: 6
           }}>
-            <AiFillStar /> {typeof rating === 'number' ? rating.toFixed(1) : rating}
+            <AiFillStar style={{ color: '#fbbf24' }} /> {typeof rating === 'number' ? rating.toFixed(1) : rating}
           </span>
         )}
       </div>

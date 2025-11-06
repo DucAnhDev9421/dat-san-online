@@ -25,7 +25,7 @@ export default function VenueGrid({ facilities, loading, onBookVenue }) {
           address={`${f.district}, ${f.city}`}
           rating={f.rating}
           open={f.open}
-          price={`${f.price.toLocaleString()} VND/giờ`}
+          price={typeof f.price === 'number' ? `${f.price.toLocaleString()} VND/giờ` : f.price}
           sport={f.sport}
           status={f.status}
           onBook={() => onBookVenue?.(f.id)}
