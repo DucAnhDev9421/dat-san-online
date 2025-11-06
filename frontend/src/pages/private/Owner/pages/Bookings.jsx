@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Download } from "lucide-react";
 import { courtData } from "../data/mockData";
 import { bookingApi } from "../../../../api/bookingApi";
 import { facilityApi } from "../../../../api/facilityApi";
 import { useAuth } from "../../../../contexts/AuthContext";
+import { useSocket } from "../../../../contexts/SocketContext";
 import { toast } from "react-toastify";
 import BookingDetailModal from "../modals/BookingDetailModal";
 import ConfirmBookingModal from "../modals/ConfirmBookingModal";
@@ -13,6 +14,7 @@ import BookingTable from "../components/Bookings/BookingTable";
 
 const Bookings = () => {
   const { user } = useAuth();
+  const { ownerSocket, defaultSocket, isConnected, joinFacility, leaveFacility } = useSocket();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -29,6 +31,9 @@ const Bookings = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
+
+  // Ref to track if we should show toast for new bookings
+  const showNewBookingToastRef = useRef(true);
 
   // Fetch owner's facilities on mount
   useEffect(() => {
@@ -119,6 +124,116 @@ const Bookings = () => {
 
     fetchBookings();
   }, [selectedFacilityId, page, pageSize, statusFilter, searchQuery, refreshKey]);
+
+  // Join facility room when facility is selected
+  useEffect(() => {
+    if (selectedFacilityId && isConnected) {
+      // Join facility room in owner namespace
+      if (ownerSocket) {
+        joinFacility(selectedFacilityId, 'owner');
+      }
+      // Also join in default namespace to catch all events
+      if (defaultSocket) {
+        joinFacility(selectedFacilityId, 'default');
+      }
+    }
+
+    return () => {
+      if (selectedFacilityId) {
+        if (ownerSocket) {
+          leaveFacility(selectedFacilityId, 'owner');
+        }
+        if (defaultSocket) {
+          leaveFacility(selectedFacilityId, 'default');
+        }
+      }
+    };
+  }, [selectedFacilityId, isConnected, ownerSocket, defaultSocket, joinFacility, leaveFacility]);
+
+  // Socket event listeners for real-time updates
+  useEffect(() => {
+    if ((!ownerSocket && !defaultSocket) || !isConnected || !selectedFacilityId) {
+      return;
+    }
+
+    // Listen for new bookings
+    const handleNewBooking = (data) => {
+      console.log('📥 New booking received:', data);
+      
+      // Check if booking has facilityId or extract from booking object
+      const facilityId = data.facilityId || data.booking?.facility?._id || data.booking?.facility;
+      
+      if (facilityId && facilityId.toString() === selectedFacilityId.toString()) {
+        // Show toast notification
+        toast.info('Có đơn đặt sân mới! Đang cập nhật...', {
+          position: 'top-right',
+          autoClose: 3000,
+        });
+        
+        // Refresh bookings list
+        setRefreshKey((prev) => prev + 1);
+      }
+    };
+
+    // Listen for booking status updates
+    const handleStatusUpdate = (data) => {
+      console.log('📥 Booking status updated:', data);
+      
+      // Only refresh if the booking is for the selected facility
+      if (data.facilityId && data.facilityId.toString() === selectedFacilityId.toString()) {
+        // Show toast notification
+        toast.info('Đơn đặt sân đã được cập nhật!', {
+          position: 'top-right',
+          autoClose: 2000,
+        });
+        
+        // Refresh bookings list
+        setRefreshKey((prev) => prev + 1);
+      }
+    };
+
+    // Listen for slot booked events (new booking) - this is emitted to facility room
+    const handleSlotBooked = (data) => {
+      console.log('📥 Slot booked:', data);
+      
+      // Check if this is for the selected facility
+      if (data.facilityId && data.facilityId.toString() === selectedFacilityId.toString()) {
+        // Show toast notification
+        toast.info('Có đơn đặt sân mới! Đang cập nhật...', {
+          position: 'top-right',
+          autoClose: 3000,
+        });
+        
+        // Refresh bookings list
+        setRefreshKey((prev) => prev + 1);
+      }
+    };
+
+    // Register event listeners on both sockets
+    if (ownerSocket) {
+      ownerSocket.on('booking:new', handleNewBooking);
+      ownerSocket.on('booking:slot:booked', handleSlotBooked);
+      ownerSocket.on('booking:status:updated', handleStatusUpdate);
+    }
+
+    if (defaultSocket) {
+      defaultSocket.on('booking:slot:booked', handleSlotBooked);
+      defaultSocket.on('booking:status:updated', handleStatusUpdate);
+    }
+
+    // Cleanup listeners on unmount or when dependencies change
+    return () => {
+      if (ownerSocket) {
+        ownerSocket.off('booking:new', handleNewBooking);
+        ownerSocket.off('booking:slot:booked', handleSlotBooked);
+        ownerSocket.off('booking:status:updated', handleStatusUpdate);
+      }
+      if (defaultSocket) {
+        defaultSocket.off('booking:slot:booked', handleSlotBooked);
+        defaultSocket.off('booking:status:updated', handleStatusUpdate);
+      }
+    };
+  }, [ownerSocket, defaultSocket, isConnected, selectedFacilityId]);
 
   // Client-side filtering for search (if backend doesn't support search)
   const filteredBookings = useMemo(

@@ -106,22 +106,24 @@ export default function VenueCard({
             }} 
           />
         ) : null}
-        <span style={{
-          position: 'absolute',
-          top: 12,
-          right: 12,
-          background: '#111827',
-          color: '#fff',
-          padding: '4px 10px',
-          borderRadius: 12,
-          fontSize: 12,
-          fontWeight: 700,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6
-        }}>
-          <AiFillStar /> {rating}
-        </span>
+        {rating > 0 && (
+          <span style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            background: '#111827',
+            color: '#fff',
+            padding: '4px 10px',
+            borderRadius: 12,
+            fontSize: 12,
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6
+          }}>
+            <AiFillStar style={{ color: '#fbbf24' }} /> {typeof rating === 'number' ? rating.toFixed(1) : rating}
+          </span>
+        )}
       </div>
       <div style={{ 
         padding: 16, 

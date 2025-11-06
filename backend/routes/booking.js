@@ -385,6 +385,7 @@ router.post("/", authenticateToken, async (req, res, next) => {
 
     // Notify all users in facility room about slot update
     emitToFacility(facilityId, 'booking:slot:booked', {
+      facilityId: facilityId.toString(),
       courtId,
       date,
       timeSlots,
@@ -550,11 +551,11 @@ router.get(
         }
       }
 
-      // Get bookings
+      // Get bookings - Sort by createdAt descending first (newest first), then by date
       const bookings = await Booking.find(filter)
         .populate("court", "name type price")
         .populate("user", "name email phone avatar")
-        .sort({ date: 1, createdAt: -1 })
+        .sort({ createdAt: -1, date: 1 })
         .skip(skip)
         .limit(limit);
 
@@ -745,6 +746,11 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
       booking.ownerNotes = notes;
     }
 
+    // If confirming booking and payment method is cash, mark payment as paid
+    if (status === "confirmed" && booking.paymentMethod === "cash") {
+      booking.paymentStatus = "paid";
+    }
+
     if (status === "cancelled") {
       booking.cancelledAt = new Date();
     }
@@ -802,6 +808,7 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
     const facilityId = booking.facility._id?.toString() || booking.facility.toString();
     emitToFacility(facilityId, 'booking:status:updated', {
       bookingId: booking._id,
+      facilityId,
       courtId: booking.court._id?.toString() || booking.court.toString(),
       status,
       date: booking.date,
