@@ -120,11 +120,20 @@ router.post("/", authenticateToken, async (req, res, next) => {
       });
     }
 
-    // Kiểm tra booking đã hoàn thành chưa
-    if (booking.status !== "completed") {
+    // Kiểm tra điều kiện để cho phép đánh giá:
+    // 1. Thanh toán tiền mặt: status = "confirmed" VÀ paymentStatus = "paid"
+    // 2. Thanh toán online: paymentStatus = "paid"
+    const paymentStatus = booking.paymentStatus || 'pending'
+    const paymentMethod = booking.paymentMethod || null
+    
+    const canReview = 
+      (paymentMethod === 'cash' && booking.status === 'confirmed' && paymentStatus === 'paid') ||
+      (paymentMethod !== 'cash' && paymentStatus === 'paid')
+    
+    if (!canReview) {
       return res.status(400).json({
         success: false,
-        message: "Chỉ có thể đánh giá booking đã hoàn thành",
+        message: "Chỉ có thể đánh giá booking đã thanh toán thành công. Đối với thanh toán tiền mặt, booking phải được owner xác nhận.",
       });
     }
 

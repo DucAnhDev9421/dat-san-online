@@ -187,10 +187,20 @@ export default function BookingsTab() {
               hasBookingEnded = false
             }
             
-            // Map status: 'pending' -> 'upcoming', 'confirmed' -> 'upcoming', 'completed' -> 'completed', 'cancelled' -> 'cancelled'
-            // If booking has ended and status is still pending/confirmed, treat as completed
+            // Map status dựa trên paymentStatus và paymentMethod
+            // Chỉ hiển thị "completed" khi:
+            // 1. Thanh toán tiền mặt: status = "confirmed" VÀ paymentStatus = "paid"
+            // 2. Thanh toán online: paymentStatus = "paid"
             let status = booking.status
-            if (hasBookingEnded && (status === 'pending' || status === 'confirmed')) {
+            const paymentStatus = booking.paymentStatus || 'pending'
+            const paymentMethod = booking.paymentMethod || null
+            
+            // Kiểm tra điều kiện để hiển thị "completed"
+            const canReview = 
+              (paymentMethod === 'cash' && status === 'confirmed' && paymentStatus === 'paid') ||
+              (paymentMethod !== 'cash' && paymentStatus === 'paid')
+            
+            if (canReview) {
               status = 'completed'
             } else if (status === 'pending' || status === 'confirmed') {
               status = 'upcoming'
@@ -205,7 +215,8 @@ export default function BookingsTab() {
               time: timeDisplay,
               location: booking.facility?.address || booking.facility?.location?.address || '',
               price: price,
-              paymentMethod: booking.paymentMethod || null,
+              paymentMethod: paymentMethod,
+              paymentStatus: paymentStatus, // Lưu paymentStatus để dùng cho validation
               status: status,
               imageUrl: imageUrl,
               isPastDate: hasBookingEnded, // Store flag to check if booking has ended
@@ -385,7 +396,15 @@ export default function BookingsTab() {
                       Hủy đặt
                     </button>
                   )}
-                  {booking.status === 'completed' && !bookingReviews[booking.id] && !bookingReviews[booking._original?._id?.toString()] && (
+                  {(() => {
+                    // Kiểm tra điều kiện để hiển thị nút đánh giá
+                    // 1. Thanh toán tiền mặt: status = "completed" (đã được set từ canReview) VÀ paymentStatus = "paid"
+                    // 2. Thanh toán online: status = "completed" VÀ paymentStatus = "paid"
+                    const canReview = booking.status === 'completed' && booking.paymentStatus === 'paid'
+                    const hasReview = bookingReviews[booking.id] || bookingReviews[booking._original?._id?.toString()]
+                    
+                    return canReview && !hasReview
+                  })() && (
                     <button 
                       className="btn small" 
                       onClick={() => {
@@ -408,7 +427,13 @@ export default function BookingsTab() {
                       Đánh giá
                     </button>
                   )}
-                  {booking.status === 'completed' && (bookingReviews[booking.id] || bookingReviews[booking._original?._id?.toString()]) && (
+                  {(() => {
+                    // Kiểm tra điều kiện để hiển thị badge "Đã đánh giá"
+                    const canReview = booking.status === 'completed' && booking.paymentStatus === 'paid'
+                    const hasReview = bookingReviews[booking.id] || bookingReviews[booking._original?._id?.toString()]
+                    
+                    return canReview && hasReview
+                  })() && (
                     <div style={{ 
                       display: 'flex', 
                       alignItems: 'center', 
