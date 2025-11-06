@@ -424,10 +424,34 @@ router.get("/my-bookings", authenticateToken, async (req, res, next) => {
     // Get bookings
     const bookings = await Booking.find(filter)
       .populate("court", "name type price")
-      .populate("facility", "name address location")
+      .populate("facility", "name address location images")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
+
+    // Auto-update status for past bookings
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const updatePromises = [];
+    for (const booking of bookings) {
+      const bookingDate = new Date(booking.date);
+      bookingDate.setHours(0, 0, 0, 0);
+      
+      // If booking date has passed and status is still pending/confirmed, update to completed
+      if (bookingDate < today && (booking.status === 'pending' || booking.status === 'confirmed')) {
+        booking.status = 'completed';
+        booking.completedAt = new Date();
+        updatePromises.push(booking.save());
+      }
+    }
+    
+    // Wait for all updates to complete (don't block response)
+    if (updatePromises.length > 0) {
+      Promise.all(updatePromises).catch(err => {
+        console.error('Error auto-updating booking statuses:', err);
+      });
+    }
 
     const total = await Booking.countDocuments(filter);
 
@@ -534,11 +558,33 @@ router.get(
         .skip(skip)
         .limit(limit);
 
-      const total = await Booking.countDocuments(filter);
-
-      // Get stats
+      // Auto-update status for past bookings
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      
+      const updatePromises = [];
+      for (const booking of bookings) {
+        const bookingDate = new Date(booking.date);
+        bookingDate.setHours(0, 0, 0, 0);
+        
+        // If booking date has passed and status is still pending/confirmed, update to completed
+        if (bookingDate < today && (booking.status === 'pending' || booking.status === 'confirmed')) {
+          booking.status = 'completed';
+          booking.completedAt = new Date();
+          updatePromises.push(booking.save());
+        }
+      }
+      
+      // Wait for all updates to complete (don't block response)
+      if (updatePromises.length > 0) {
+        Promise.all(updatePromises).catch(err => {
+          console.error('Error auto-updating booking statuses:', err);
+        });
+      }
+
+      const total = await Booking.countDocuments(filter);
+
+      // Get stats (reuse today variable from above)
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 

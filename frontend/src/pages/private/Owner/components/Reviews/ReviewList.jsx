@@ -12,6 +12,7 @@ const ReviewList = ({
   onPageSizeChange,
   onReply,
   onReport,
+  loading = false,
 }) => {
   const renderStars = (rating) => {
     return Array.from({ length: 5 }, (_, i) => (
@@ -28,7 +29,20 @@ const ReviewList = ({
       }}
     >
       <div style={{ padding: 16 }}>
-        {reviews.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: 32, textAlign: "center", color: "#6b7280" }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              border: '4px solid #e5e7eb',
+              borderTop: '4px solid #3b82f6',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 16px'
+            }} />
+            <p style={{ fontSize: '14px', margin: 0 }}>Đang tải đánh giá...</p>
+          </div>
+        ) : reviews.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center", color: "#6b7280" }}>
             <div style={{ fontSize: 16, marginBottom: 8 }}>⭐</div>
             Không có dữ liệu đánh giá
@@ -39,8 +53,14 @@ const ReviewList = ({
           ))
         )}
       </div>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
 
-      {reviews.length > 0 && (
+      {!loading && reviews.length > 0 && (
         <Pagination
           page={page}
           pageSize={pageSize}

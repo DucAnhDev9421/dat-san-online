@@ -33,7 +33,7 @@ export const bookingApi = {
    */
   getMyBookings: async (params = {}) => {
     try {
-      const response = await api.get('/bookings/my', { params });
+      const response = await api.get('/bookings/my-bookings', { params });
       return handleApiSuccess(response);
     } catch (error) {
       throw handleApiError(error);

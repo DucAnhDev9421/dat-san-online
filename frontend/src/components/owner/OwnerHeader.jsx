@@ -69,12 +69,12 @@ export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
 
   const handleSettingsClick = () => {
     setIsProfileOpen(false);
-    navigate("/profile?tab=settings");
+    navigate("/profile/settings");
   };
 
   const handleBookingHistoryClick = () => {
     setIsProfileOpen(false);
-    navigate("/profile?tab=bookings");
+    navigate("/profile/bookings");
   };
 
   const handleTopUpClick = () => {

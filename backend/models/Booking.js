@@ -147,12 +147,12 @@ const bookingSchema = new mongoose.Schema(
 
 // Indexes để tối ưu hóa tìm kiếm
 bookingSchema.index({ user: 1, createdAt: -1 });
-bookingSchema.index({ facility: 1, date: 1 });
-bookingSchema.index({ court: 1, date: 1 });
+bookingSchema.index({ facility: 1, date: 1 }); // Compound index cho facility và date (cũng hỗ trợ query theo date)
+bookingSchema.index({ court: 1, date: 1 }); // Compound index cho court và date (cũng hỗ trợ query theo date)
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ paymentStatus: 1 });
-bookingSchema.index({ date: 1 });
-bookingSchema.index({ bookingCode: 1 }); // Index cho booking code để tìm kiếm nhanh
+// Note: bookingCode index được tạo tự động bởi unique: true trong field definition
+// Note: date index không cần thiết vì đã có trong compound indexes ở trên
 
 // Pre-save hook để generate booking code
 bookingSchema.pre("save", async function (next) {

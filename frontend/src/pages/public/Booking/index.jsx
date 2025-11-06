@@ -14,10 +14,10 @@ import { facilityApi } from '../../../api/facilityApi'
 import { courtApi } from '../../../api/courtApi'
 import { categoryApi } from '../../../api/categoryApi'
 import { bookingApi } from '../../../api/bookingApi'
+import { reviewApi } from '../../../api/reviewApi'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useSocket } from '../../../contexts/SocketContext'
 import { toast } from 'react-toastify'
-import { reviews } from './mockData'
 import { formatDateToYYYYMMDD } from './utils/dateHelpers'
 
 function Booking() {
@@ -27,7 +27,7 @@ function Booking() {
   const { isMobile, isTablet, isDesktop } = useDeviceType()
   const { user, isAuthenticated } = useAuth()
   const { defaultSocket, isConnected, joinFacility, leaveFacility, joinCourt, leaveCourt } = useSocket()
-  
+
   // State management
   const [venueData, setVenueData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -49,6 +49,11 @@ function Booking() {
   const [timeSlotsData, setTimeSlotsData] = useState([])
   const [lockedSlots, setLockedSlots] = useState({}) // Track locked slots: { "courtId_date_timeSlot": { lockedBy, expiresAt, isLockedByMe, isLockedByOther } }
   const hasUnlockedRef = useRef(false) // Track if we've already unlocked on unmount
+  const [reviews, setReviews] = useState([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewsStats, setReviewsStats] = useState({ averageRating: 0, totalReviews: 0 })
+  const [reviewsPage, setReviewsPage] = useState(1)
+  const [reviewsTotal, setReviewsTotal] = useState(0)
 
   // Transform facility data to venue format for components
   const transformFacilityToVenue = (facility) => {
@@ -134,6 +139,63 @@ function Booking() {
 
         const transformedData = transformFacilityToVenue(facilityResult.data)
         setVenueData(transformedData)
+
+        // Fetch reviews for this facility
+        try {
+          const reviewsResult = await reviewApi.getFacilityReviews(venueId, {
+            page: 1,
+            limit: 10
+          })
+          
+          if (reviewsResult.reviews) {
+            // Transform API reviews to component format
+            const transformedReviews = reviewsResult.reviews.map(review => ({
+              id: review._id || review.id,
+              user: review.user?.name || 'Người dùng',
+              rating: review.rating,
+              date: review.createdAt || review.date,
+              comment: review.comment || '',
+              avatar: review.user?.avatar 
+                ? review.user.avatar 
+                : (review.user?.name?.charAt(0) || 'U').toUpperCase()
+            }))
+            
+            setReviews(transformedReviews)
+            
+            // Update stats if available
+            if (reviewsResult.stats) {
+              const avgRating = reviewsResult.stats.averageRating || 0
+              const totalRev = reviewsResult.stats.totalReviews || 0
+              
+              setReviewsStats({
+                averageRating: avgRating,
+                totalReviews: totalRev
+              })
+              setReviewsTotal(reviewsResult.pagination?.total || reviewsResult.reviews.length)
+              
+              // Update venueData rating from stats
+              transformedData.rating = avgRating
+              transformedData.reviewCount = totalRev
+              setVenueData(transformedData)
+            } else {
+              // Fallback: calculate from reviews if no stats
+              if (transformedReviews.length > 0) {
+                const calculatedAvg = transformedReviews.reduce((sum, r) => sum + r.rating, 0) / transformedReviews.length
+                console.log('No stats, calculating average:', calculatedAvg)
+                setReviewsStats({
+                  averageRating: calculatedAvg,
+                  totalReviews: transformedReviews.length
+                })
+                transformedData.rating = calculatedAvg
+                transformedData.reviewCount = transformedReviews.length
+                setVenueData(transformedData)
+              }
+            }
+          }
+        } catch (reviewsError) {
+          // Silently fail reviews fetch, just show empty state
+          console.error('Error fetching reviews:', reviewsError)
+        }
 
         // Courts will be fetched in separate useEffect when field type changes
         // This avoids duplicate fetches
@@ -633,25 +695,25 @@ function Booking() {
           setIsProcessing(false)
           return
         }
-
-        // Prepare booking data to pass to payment page
-        const bookingInfo = {
+    
+    // Prepare booking data to pass to payment page
+    const bookingInfo = {
           bookingId: bookingId,
-          venueId: venueData.id,
-          venueName: venueData.name,
-          sport: venueData.sport,
+      venueId: venueData.id,
+      venueName: venueData.name,
+      sport: venueData.sport,
           courtId: selectedCourt,
           courtNumber: courtName,
-          fieldType: selectedFieldType,
-          date: selectedDate.toLocaleDateString('vi-VN'),
+      fieldType: selectedFieldType,
+      date: selectedDate.toLocaleDateString('vi-VN'),
           time: formattedTimeSlots.join(', '),
-          duration: selectedSlots.length,
+      duration: selectedSlots.length,
           pricePerHour: selectedCourtData.price || venueData.pricePerHour,
-          subtotal: calculateTotalAmount(),
+      subtotal: calculateTotalAmount(),
           serviceFee: 0,
-          discount: 0,
+      discount: 0,
           total: calculateTotalAmount(),
-          selectedSlots: selectedSlots,
+      selectedSlots: selectedSlots,
           timeSlotsData: timeSlotsData,
           venueData: venueData,
           booking: booking
@@ -669,10 +731,10 @@ function Booking() {
 
         toast.success('Đặt sân thành công! Đang chuyển đến trang thanh toán...')
 
-        // Navigate to payment with booking data
-        navigate('/payment', {
-          state: { bookingData: bookingInfo }
-        })
+      // Navigate to payment with booking data
+      navigate('/payment', { 
+        state: { bookingData: bookingInfo } 
+      })
       } else {
         throw new Error(result.message || 'Có lỗi xảy ra khi đặt sân')
       }
@@ -915,7 +977,17 @@ function Booking() {
           borderRadius: '12px',
           boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
         }}>
-          <ReviewsSection reviews={reviews} venueRating={venueData.rating} />
+          <ReviewsSection 
+            reviews={reviews} 
+            venueRating={reviewsStats.averageRating || venueData.rating || 0}
+            totalReviews={reviewsStats.totalReviews || 0}
+            loading={reviewsLoading}
+            facilityId={venueId}
+            onPageChange={setReviewsPage}
+            onRatingFilterChange={(rating) => {
+              // Will be handled by ReviewsSection component
+            }}
+          />
         </div>
       </div>
 

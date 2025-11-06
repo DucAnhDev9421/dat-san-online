@@ -172,14 +172,14 @@ function Header() {
     
     // Navigate to relevant page based on notification type
     if (notification.metadata?.bookingId) {
-      navigate(`/profile?tab=bookings`)
+      navigate(`/profile/bookings`)
     } else {
       switch (notification.type) {
         case 'booking':
-          navigate('/profile?tab=bookings')
+          navigate('/profile/bookings')
           break
         case 'payment':
-          navigate('/profile?tab=payments')
+          navigate('/profile/bookings')
           break
         default:
           navigate('/notifications')
@@ -190,12 +190,12 @@ function Header() {
 
   const handleSettingsClick = () => {
     closeUserMenu()
-    navigate('/profile?tab=settings')
+    navigate('/profile/settings')
   }
 
   const handleBookingHistoryClick = () => {
     closeUserMenu()
-    navigate('/profile?tab=bookings')
+    navigate('/profile/bookings')
   }
 
   const handleTopUpClick = () => {
