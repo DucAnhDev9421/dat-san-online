@@ -9,6 +9,10 @@ const ReviewFilters = ({
   pageSize,
   onPageSizeChange,
   totalCount,
+  facilities = [],
+  selectedFacilityId = "all",
+  onFacilityChange,
+  loading = false,
 }) => {
   return (
     <div
@@ -50,6 +54,30 @@ const ReviewFilters = ({
           <span style={{ marginLeft: 8 }}>bản ghi</span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          {facilities.length > 0 && (
+            <select
+              style={{
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+                background: "#fff",
+                cursor: loading ? "not-allowed" : "pointer",
+                outline: "none",
+                opacity: loading ? 0.6 : 1,
+              }}
+              value={selectedFacilityId}
+              onChange={(e) => onFacilityChange && onFacilityChange(e.target.value)}
+              disabled={loading}
+            >
+              <option value="all">Tất cả cơ sở</option>
+              {facilities.map((facility) => (
+                <option key={facility._id || facility.id} value={facility._id || facility.id}>
+                  {facility.name}
+                </option>
+              ))}
+            </select>
+          )}
           <select
             style={{
               padding: "6px 12px",
@@ -57,11 +85,13 @@ const ReviewFilters = ({
               border: "1px solid #e5e7eb",
               fontSize: 14,
               background: "#fff",
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
               outline: "none",
+              opacity: loading ? 0.6 : 1,
             }}
             value={statusFilter}
             onChange={(e) => onStatusFilterChange(e.target.value)}
+            disabled={loading}
           >
             <option value="all">Tất cả trạng thái</option>
             <option value="approved">Đã duyệt</option>

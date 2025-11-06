@@ -120,10 +120,16 @@ reviewSchema.methods.canOwnerReply = function (ownerId) {
 
 // Static method để tính rating trung bình của facility
 reviewSchema.statics.getAverageRating = async function (facilityId) {
+  // Convert facilityId to ObjectId if it's a string
+  let facilityObjectId = facilityId;
+  if (typeof facilityId === 'string' && mongoose.Types.ObjectId.isValid(facilityId)) {
+    facilityObjectId = new mongoose.Types.ObjectId(facilityId);
+  }
+  
   const result = await this.aggregate([
     {
       $match: {
-        facility: facilityId,
+        facility: facilityObjectId,
         isDeleted: false,
       },
     },

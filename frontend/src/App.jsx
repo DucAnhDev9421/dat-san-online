@@ -28,6 +28,7 @@ import OwnerSetup from "./pages/private/Owner/OwnerSetup.jsx";
 // Public pages
 import HomePage from "./pages/public/HomePage.jsx";
 import ProfilePage from "./pages/public/ProfilePage";
+import ProfileRoutes from "./pages/public/ProfilePage/ProfileRoutes";
 import Booking from "./pages/public/Booking";
 import Payment from "./pages/public/Payment.jsx";
 import Partner from "./pages/public/Partner.jsx";
@@ -119,11 +120,13 @@ function App() {
               <Header />
               <Routes>
                 <Route path="/" element={<HomePage />} />
-                <Route path="/profile" element={
+                <Route path="/profile/*" element={
                   <ProtectedRoute>
                     <ProfilePage />
                   </ProtectedRoute>
-                } />
+                }>
+                  <Route path="*" element={<ProfileRoutes />} />
+                </Route>
 
                 <Route path="/notifications" element={
                   <ProtectedRoute>

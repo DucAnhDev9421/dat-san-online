@@ -237,7 +237,7 @@ router.get("/my-reviews", authenticateToken, async (req, res, next) => {
       isDeleted: false,
     })
       .populate("facility", "name address")
-      .populate("booking", "date timeSlots")
+      .populate("booking", "_id date timeSlots bookingCode")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);

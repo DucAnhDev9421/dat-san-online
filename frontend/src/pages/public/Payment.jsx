@@ -222,7 +222,7 @@ function Payment() {
           
           // Navigate to profile bookings after delay
           setTimeout(() => {
-            navigate('/profile?tab=bookings')
+            navigate('/profile/bookings')
           }, 2000)
         } else {
           throw new Error('Không thể cập nhật phương thức thanh toán')

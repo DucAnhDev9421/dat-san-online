@@ -22,8 +22,7 @@ const bookingSequenceSchema = new mongoose.Schema(
   }
 );
 
-// Index cho date để tìm kiếm nhanh
-bookingSequenceSchema.index({ date: 1 });
+// Note: date index được tạo tự động bởi unique: true trong field definition
 
 export default mongoose.model("BookingSequence", bookingSequenceSchema);
 
