@@ -10,11 +10,13 @@ import { scrollToElement, buildSearchParams } from './HomePage/utils/helpers'
 import { getProvinces } from '../../api/provinceApi'
 import { facilityApi } from '../../api/facilityApi'
 import { toast } from 'react-toastify'
+import useUserLocation from '../../hook/use-user-location'
 import '../../styles/HomePage.css'
 
 function HomePage() {
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
+  const { userLocation } = useUserLocation()
   const [provinces, setProvinces] = useState([])
   const [districts, setDistricts] = useState([])
   const [selectedProvince, setSelectedProvince] = useState('')
@@ -78,6 +80,7 @@ function HomePage() {
       name: facility.name,
       address: facility.address,
       rating: facility.averageRating || facility.rating || 0,
+      totalReviews: facility.totalReviews || 0,
       price: formatPrice(facility.pricePerHour),
       operatingHours: formatOperatingHours(facility.operatingHours),
       image: facility.images && facility.images.length > 0 
@@ -86,7 +89,9 @@ function HomePage() {
       images: facility.images?.map(img => img.url) || [],
       facilities: facility.types || [],
       sportCategory: facility.types?.[0] || null,
-      status: facility.status === 'opening' ? 'Còn trống' : 'Đóng cửa'
+      status: facility.status === 'opening' ? 'Còn trống' : 'Đóng cửa',
+      location: facility.location || null,
+      services: facility.services || []
     }
   }
 
@@ -209,6 +214,7 @@ function HomePage() {
         venues={featuredFacilities}
         loading={facilitiesLoading}
         onBookVenue={handleBookVenue}
+        userLocation={userLocation}
       />
 
       <VenuesSection
@@ -217,6 +223,7 @@ function HomePage() {
         venues={facilities}
         loading={facilitiesLoading}
         onBookVenue={handleBookVenue}
+        userLocation={userLocation}
       />
 
       <PopularLocationsSection />
