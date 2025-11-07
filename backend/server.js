@@ -29,6 +29,7 @@ import User from "./models/User.js";
 
 const app = express();
 
+app.set("trust proxy", 1);
 // Validate configuration
 validateConfig();
 

@@ -4,39 +4,37 @@ import { authenticateToken, authorize } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// Tất cả các route thanh toán đều cần đăng nhập
-router.use(authenticateToken);
+// === CÁC ROUTE WEBHOOK (PUBLIC) ===
+// Các route này PHẢI đặt ở đây (trước authenticateToken)
+// vì server của Momo/VNPay gọi vào mà không cần đăng nhập.
+router.get("/callback/vnpay", paymentController.vnpayCallback); //
+router.post("/callback/momo", paymentController.momoCallback); //
 
-// --- Giai đoạn 2 ---
+// === CÁC ROUTE CẦN ĐĂNG NHẬP ===
+// Tất cả các route bên dưới đây đều cần user đăng nhập
+router.use(authenticateToken); //
+
 // POST /api/payments/init - Khởi tạo payment (Momo, VNPay)
-router.post("/init", paymentController.initPayment);
+router.post("/init", paymentController.initPayment); //
 
-// --- Giai đoạn 2 ---
-// POST /api/payments/callback/vnpay - Webhook callback VNPay
-router.get("/callback/vnpay", paymentController.vnpayCallback); // VNPay dùng GET cho returnUrl
-
-// POST /api/payments/callback/momo - Webhook callback Momo
-router.post("/callback/momo", paymentController.momoCallback);
-
-// --- Giai đoạn 1 ---
 // POST /api/payments/cash - Thanh toán tiền mặt (owner/admin)
 router.post(
   "/cash",
   authorize("owner", "admin"),
   paymentController.paymentCash
-);
+); //
 
 // GET /api/payments/history - Lịch sử thanh toán (của tôi)
-router.get("/history", paymentController.getPaymentHistory);
+router.get("/history", paymentController.getPaymentHistory); //
 
 // GET /api/payments/:paymentId/status - Status thanh toán
-router.get("/:paymentId/status", paymentController.getPaymentStatus);
+router.get("/:paymentId/status", paymentController.getPaymentStatus); //
 
 // POST /api/payments/:paymentId/refund - Hoàn tiền (owner/admin)
 router.post(
   "/:paymentId/refund",
   authorize("owner", "admin"),
   paymentController.refundPayment
-);
+); //
 
 export default router;

@@ -62,7 +62,9 @@ export const config = {
     accessKey: process.env.MOMO_ACCESS_KEY || "YOUR_ACCESS_KEY",
     secretKey: process.env.MOMO_SECRET_KEY || "YOUR_SECRET_KEY",
     apiEndpoint: "https://test-payment.momo.vn/v2/gateway/api/create",
-    notifyUrl: "http://localhost:3000/api/payments/callback/momo", // Phải khớp
+    notifyUrl:
+      process.env.MOMO_NOTIFYURL ||
+      "http://localhost:3000/api/payments/callback/momo",
     redirectUrl: "http://localhost:5173/booking-success", // URL frontend
   },
 
