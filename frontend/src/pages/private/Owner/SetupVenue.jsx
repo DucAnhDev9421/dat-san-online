@@ -18,6 +18,8 @@ import {
   Loader,
 } from "lucide-react";
 import { facilityApi } from "../../../api/facilityApi";
+import { getProvinces } from "../../../api/provinceApi";
+import { categoryApi } from "../../../api/categoryApi";
 
 const SetupVenue = () => {
   const navigate = useNavigate();
@@ -27,7 +29,7 @@ const SetupVenue = () => {
     city: "", // Tỉnh/Thành phố
     district: "", // Quận/Huyện
     phoneNumber: "", // Số điện thoại
-    type: "", // Loại cơ sở (required)
+    types: [], // Mảng các loại cơ sở (required, ít nhất 1 loại)
     pricePerHour: "", // Giá mỗi giờ (required)
     description: "", // Mô tả
     services: [], // Tiện ích
@@ -46,20 +48,12 @@ const SetupVenue = () => {
   const [errors, setErrors] = useState({});
   const [provinces, setProvinces] = useState([]);
   const [districts, setDistricts] = useState([]);
+  const [sportCategories, setSportCategories] = useState([]); // Danh sách loại sân từ API
+  const [loadingSportCategories, setLoadingSportCategories] = useState(true);
   const [loading, setLoading] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [customService, setCustomService] = useState(""); // Input cho tiện ích tùy chỉnh
   const [customServices, setCustomServices] = useState([]); // Danh sách tiện ích custom đã thêm
-
-  const sportTypes = [
-    "Bóng đá",
-    "Bóng rổ",
-    "Cầu lông",
-    "Tennis",
-    "Bóng chuyền",
-    "Bóng bàn",
-    "Khác",
-  ];
 
   const facilities = [
     "Nhà tắm",
@@ -76,16 +70,51 @@ const SetupVenue = () => {
   useEffect(() => {
     const fetchProvinces = async () => {
       try {
-        const response = await fetch(
-          "https://provinces.open-api.vn/api/v1/?depth=2"
-        );
-        const data = await response.json();
-        setProvinces(data);
+        const result = await getProvinces();
+        
+        if (result.success && result.data && result.data.length > 0) {
+          setProvinces(result.data);
+        } else {
+          console.warn('No provinces data received');
+          setProvinces([]);
+          if (result.error) {
+            toast.error(result.error);
+          }
+        }
       } catch (error) {
         console.error("Error fetching provinces:", error);
+        setProvinces([]);
+        toast.error('Không thể tải danh sách tỉnh thành. Vui lòng thử lại sau.');
       }
     };
     fetchProvinces();
+  }, []);
+
+  // Fetch sport categories from API (do admin thêm vào)
+  useEffect(() => {
+    const fetchSportCategories = async () => {
+      setLoadingSportCategories(true);
+      try {
+        const result = await categoryApi.getSportCategories({ status: 'active' });
+        
+        if (result.success && result.data && result.data.length > 0) {
+          // Lấy tên của các sport categories
+          const categoryNames = result.data.map(cat => cat.name);
+          setSportCategories(categoryNames);
+        } else {
+          console.warn('No sport categories received');
+          setSportCategories([]);
+          toast.warning('Không có loại sân thể thao nào. Vui lòng liên hệ admin.');
+        }
+      } catch (error) {
+        console.error("Error fetching sport categories:", error);
+        setSportCategories([]);
+        toast.error('Không thể tải danh sách loại sân. Vui lòng thử lại sau.');
+      } finally {
+        setLoadingSportCategories(false);
+      }
+    };
+    fetchSportCategories();
   }, []);
 
   // Fetch districts when city/province changes
@@ -213,8 +242,8 @@ const SetupVenue = () => {
       newErrors.phoneNumber = "Vui lòng nhập số điện thoại";
     if (!/^[0-9]{10,11}$/.test(formData.phoneNumber))
       newErrors.phoneNumber = "Số điện thoại phải có 10-11 chữ số";
-    if (!formData.type.trim())
-      newErrors.type = "Vui lòng chọn loại cơ sở";
+    if (!formData.types || formData.types.length === 0)
+      newErrors.types = "Vui lòng chọn ít nhất một loại cơ sở";
     if (!formData.pricePerHour || Number(formData.pricePerHour) <= 0)
       newErrors.pricePerHour = "Vui lòng nhập giá mỗi giờ hợp lệ";
     if (!formData.description.trim())
@@ -261,7 +290,7 @@ const SetupVenue = () => {
       const facilityData = {
         name: formData.name.trim(),
         address: fullAddress,
-        type: formData.type,
+        types: formData.types, // Mảng các loại cơ sở
         pricePerHour: Number(formData.pricePerHour),
         phoneNumber: formData.phoneNumber.trim(),
         description: formData.description.trim(),
@@ -567,50 +596,120 @@ const SetupVenue = () => {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
-            <div>
-              <label
+          <div style={{ marginTop: 16 }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: 12,
+                fontWeight: 600,
+                color: errors.types ? "#ef4444" : "#374151",
+              }}
+            >
+              Loại cơ sở * (có thể chọn nhiều loại)
+            </label>
+            {loadingSportCategories ? (
+              <div
                 style={{
-                  display: "block",
-                  marginBottom: 8,
-                  fontWeight: 600,
-                  color: errors.type ? "#ef4444" : "#374151",
-                }}
-              >
-                Loại cơ sở *
-              </label>
-              <select
-                name="type"
-                value={formData.type}
-                onChange={handleChange}
-                required
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
+                  padding: "24px",
+                  textAlign: "center",
                   borderRadius: 10,
-                  border: `2px solid ${errors.type ? "#ef4444" : "#e5e7eb"}`,
-                  fontSize: 15,
-                  appearance: "none",
-                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 12px center",
-                  backgroundSize: "16px",
-                  paddingRight: "40px",
+                  border: "2px solid #e5e7eb",
+                  backgroundColor: "#f9fafb",
+                  color: "#6b7280",
                 }}
               >
-                <option value="">Chọn loại cơ sở</option>
-                {sportTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-              {errors.type && (
-                <div style={{ color: "#ef4444", fontSize: 13, marginTop: 4 }}>
-                  {errors.type}
+                <Loader size={20} style={{ animation: "spin 1s linear infinite", margin: "0 auto 8px" }} />
+                <div>Đang tải danh sách loại sân...</div>
+              </div>
+            ) : sportCategories.length === 0 ? (
+              <div
+                style={{
+                  padding: "24px",
+                  textAlign: "center",
+                  borderRadius: 10,
+                  border: "2px solid #fef3c7",
+                  backgroundColor: "#fef3c7",
+                  color: "#92400e",
+                }}
+              >
+                Không có loại sân thể thao nào. Vui lòng liên hệ admin để thêm loại sân.
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+                    gap: 12,
+                    padding: "16px",
+                    borderRadius: 10,
+                    border: `2px solid ${errors.types ? "#ef4444" : "#e5e7eb"}`,
+                    backgroundColor: "#f9fafb",
+                  }}
+                >
+                  {sportCategories.map((categoryName) => (
+                    <label
+                      key={categoryName}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        cursor: "pointer",
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        backgroundColor: formData.types.includes(categoryName) ? "#dbeafe" : "#fff",
+                        border: `2px solid ${formData.types.includes(categoryName) ? "#3b82f6" : "#e5e7eb"}`,
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!formData.types.includes(categoryName)) {
+                          e.currentTarget.style.borderColor = "#9ca3af";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!formData.types.includes(categoryName)) {
+                          e.currentTarget.style.borderColor = "#e5e7eb";
+                        }
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.types.includes(categoryName)}
+                        onChange={() => handleCheckbox("types", categoryName)}
+                        style={{
+                          width: 18,
+                          height: 18,
+                          cursor: "pointer",
+                          accentColor: "#3b82f6",
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: formData.types.includes(categoryName) ? 600 : 400,
+                          color: formData.types.includes(categoryName) ? "#1e40af" : "#374151",
+                        }}
+                      >
+                        {categoryName}
+                      </span>
+                    </label>
+                  ))}
                 </div>
-              )}
-            </div>
+                {errors.types && (
+                  <div style={{ color: "#ef4444", fontSize: 13, marginTop: 4 }}>
+                    {errors.types}
+                  </div>
+                )}
+                {formData.types.length > 0 && (
+                  <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+                    Đã chọn: {formData.types.join(", ")}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, marginTop: 16 }}>
 
             <div>
               <label

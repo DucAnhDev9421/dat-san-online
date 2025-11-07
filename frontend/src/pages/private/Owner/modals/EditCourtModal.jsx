@@ -1,347 +1,402 @@
 import React, { useState, useEffect } from "react";
-import { X, Save, Info, Settings, MessageSquare } from "lucide-react";
+import { X, Save, Loader } from "lucide-react";
+import { toast } from "react-toastify";
+import useClickOutside from "../../../../hook/use-click-outside";
+import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
+import useEscapeKey from "../../../../hook/use-escape-key";
 import { courtApi } from "../../../../api/courtApi";
 
-// 2. Component con cho Tiêu đề Card
-const CardHeader = ({ Icon, title }) => (
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      padding: "16px 20px",
-      borderBottom: "1px solid #e5e7eb",
-      color: "#374151",
-    }}
-  >
-    <Icon size={18} />
-    <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{title}</h3>
-  </div>
-);
-
-// 3. Component con cho Input
-const FormInput = ({ label, value, name, onChange, type = "text" }) => (
-  <div style={{ marginBottom: 16 }}>
-    <label
-      style={{
-        display: "block",
-        fontSize: 13,
-        color: "#374151",
-        fontWeight: 600,
-        marginBottom: 6,
-      }}
-    >
-      {label}
-    </label>
-    <input
-      type={type}
-      name={name}
-      value={value}
-      onChange={onChange}
-      style={{
-        width: "100%",
-        padding: "10px 12px",
-        borderRadius: 8,
-        border: "1px solid #d1d5db",
-        fontSize: 14,
-        background: "#fff",
-        boxSizing: "border-box",
-      }}
-    />
-  </div>
-);
-
-// 4. Component con cho Select
-const FormSelect = ({ label, value, name, onChange, options }) => (
-    <div style={{ marginBottom: 16 }}>
-      <label
-        style={{
-          display: "block",
-          fontSize: 13,
-          color: "#374151",
-          fontWeight: 600,
-          marginBottom: 6,
-        }}
-      >
-        {label}
-      </label>
-      <select
-        name={name}
-        value={value}
-        onChange={onChange}
-        style={{
-          width: "100%",
-          padding: "10px 12px",
-          borderRadius: 8,
-          border: "1px solid #d1d5db",
-          fontSize: 14,
-          background: "#fff",
-          boxSizing: "border-box",
-        }}
-      >
-        {options.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-        ))}
-      </select>
-    </div>
-  );
-
-// 5. Component con cho Textarea
-const FormTextarea = ({ label, value, name, onChange, rows = 4 }) => (
-    <div style={{ marginBottom: 16 }}>
-      <label
-        style={{
-          display: "block",
-          fontSize: 13,
-          color: "#374151",
-          fontWeight: 600,
-          marginBottom: 6,
-        }}
-      >
-        {label}
-      </label>
-      <textarea
-        name={name}
-        value={value}
-        onChange={onChange}
-        rows={rows}
-        style={{
-          width: "100%",
-          padding: "10px 12px",
-          borderRadius: 8,
-          border: "1px solid #d1d5db",
-          fontSize: 14,
-          background: "#fff",
-          boxSizing: "border-box",
-          fontFamily: "inherit"
-        }}
-      />
-    </div>
-)
 
 
 // Component Modal chính
 const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
-  // 6. Giữ nguyên logic state và các hàm xử lý
-  const [form, setForm] = useState({
-    id: "",
+  // Lock body scroll
+  useBodyScrollLock(isOpen)
+  
+  // Handle escape key
+  useEscapeKey(onClose, isOpen)
+  
+  // Handle click outside
+  const modalRef = useClickOutside(onClose, isOpen)
+
+  const [formData, setFormData] = useState({
     name: "",
     type: "",
     capacity: "",
-    price: 0,
-    status: "inactive",
-    description: "",
-    maintenance: "",
+    price: "",
+    status: "active",
   });
+  
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (initialData) {
-      setForm({
-        id: initialData._id || initialData.id || "",
+    if (isOpen && initialData) {
+      setFormData({
         name: initialData.name || "",
         type: initialData.type || "",
-        capacity: initialData.capacity || "",
-        price: initialData.price || 0,
-        status: initialData.status || "inactive",
-        description: initialData.description || "",
-        maintenance: initialData.maintenance || "",
+        capacity: initialData.capacity?.toString() || "",
+        price: initialData.price?.toString() || "",
+        status: initialData.status || "active",
       });
+      setErrors({});
     }
-  }, [initialData]);
+  }, [isOpen, initialData]);
 
   if (!isOpen) return null;
 
-  const handleChange = (key) => (e) => {
-    const value = e.target.value;
-    setForm((s) => ({ ...s, [key]: value }));
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    // Clear error for this field
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
   };
 
-  const handleSave = async () => {
-    if (!form.name) {
-      alert("Vui lòng nhập tên sân");
+  const validate = () => {
+    const newErrors = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = "Tên sân là bắt buộc";
+    }
+    
+    if (!formData.type) {
+      newErrors.type = "Loại sân là bắt buộc";
+    }
+    
+    if (!formData.capacity || Number(formData.capacity) < 1) {
+      newErrors.capacity = "Sức chứa phải lớn hơn 0";
+    }
+    
+    if (!formData.price || Number(formData.price) < 0) {
+      newErrors.price = "Giá thuê không hợp lệ";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validate()) {
+      toast.error("Vui lòng điền đầy đủ thông tin bắt buộc");
+      return;
+    }
+
+    const courtId = initialData._id || initialData.id;
+    if (!courtId) {
+      toast.error("Không tìm thấy ID sân");
       return;
     }
 
     setLoading(true);
+
     try {
-      const payload = {
-        ...form,
-        capacity: Number(form.capacity) || form.capacity,
-        price: Number(form.price) || 0,
-        _id: form.id, // Preserve ID for API call
+      // Chuẩn bị dữ liệu để gửi API
+      const courtData = {
+        name: formData.name.trim(),
+        type: formData.type,
+        capacity: Number(formData.capacity),
+        price: Number(formData.price),
+        status: formData.status || "active",
       };
+
+      console.log("Updating court with data:", courtData);
+
+      // Gọi API cập nhật court
+      const result = await courtApi.updateCourt(courtId, courtData);
+
+      console.log("Court update response:", result);
+
+      if (result.success && result.data) {
+        const court = result.data;
+        
+        console.log("Court updated successfully:", court);
+        toast.success(result.message || "Cập nhật sân thành công!");
+
+        // Call onSave callback if provided (to refresh list)
+        if (onSave && typeof onSave === 'function') {
+          onSave(court);
+        }
+
+        // Close modal
+        onClose();
+      } else {
+        throw new Error(result.message || "Có lỗi xảy ra khi cập nhật sân");
+      }
+    } catch (error) {
+      console.error("Error updating court:", error);
       
-      // Call onSave which will handle API call
-      await onSave?.(payload);
-      onClose?.();
-    } catch (err) {
-      console.error("Error saving court:", err);
-      alert(err.message || "Có lỗi xảy ra khi lưu sân");
+      // Xử lý lỗi từ handleApiError
+      let errorMessage = "Có lỗi xảy ra khi cập nhật sân";
+      
+      if (error.status === 0) {
+        // Network error
+        errorMessage = "Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.";
+      } else {
+        errorMessage = error.message || errorMessage;
+        
+        // Hiển thị lỗi validation nếu có
+        if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+          const validationErrors = error.errors.map(err => err.msg || err.message || err).join(", ");
+          errorMessage = validationErrors || errorMessage;
+        }
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  // 7. Xây dựng lại toàn bộ JSX
   return (
-    // Backdrop
     <div
-      onClick={onClose}
       style={{
         position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(0, 0, 0, 0.5)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: 20,
         zIndex: 1000,
+        padding: "20px",
       }}
+      onClick={onClose}
     >
-      {/* Modal Container */}
       <div
-        onClick={(e) => e.stopPropagation()}
+        ref={modalRef}
         style={{
-          width: "100%",
-          maxWidth: 600, // Thu hẹp lại một chút cho đẹp
-          maxHeight: "90vh",
           background: "#fff",
-          borderRadius: 12,
-          display: "flex",
-          flexDirection: "column",
+          borderRadius: 16,
+          width: "100%",
+          maxWidth: "600px",
+          maxHeight: "90vh",
+          overflow: "auto",
         }}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header (Nền trắng) */}
+        {/* Header */}
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "16px 24px",
+            padding: "24px",
             borderBottom: "1px solid #e5e7eb",
           }}
         >
-          <h2
-            style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#1f2937" }}
-          >
-            {form.id ? `Chỉnh sửa sân: ` : "Thêm sân mới"}
-            {form.id && <span style={{ color: "#3b82f6" }}>{form.name}</span>}
-          </h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700 }}>Chỉnh sửa sân</h2>
           <button
             onClick={onClose}
             style={{
-              background: "none",
+              background: "transparent",
               border: "none",
               cursor: "pointer",
-              padding: 4,
               color: "#6b7280",
+              padding: "4px",
             }}
           >
-            <X size={20} />
+            <X size={24} />
           </button>
         </div>
 
-        {/* Body (Nền xám) */}
-        <div
-          style={{
-            padding: 24,
-            background: "#f9fafb",
-            overflowY: "auto",
-            flex: 1,
-          }}
-        >
-          {/* Card 1: Thông tin cơ bản */}
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 16, overflow: "hidden" }}>
-            <CardHeader Icon={Info} title="Thông tin cơ bản" />
-            <div style={{ padding: 20 }}>
-                <FormInput label="Tên sân" name="name" value={form.name} onChange={handleChange("name")} />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
-                    <FormInput label="Loại (ví dụ: Sân 5, Sân 7)" name="type" value={form.type} onChange={handleChange("type")} />
-                    <FormInput label="Sức chứa (người)" name="capacity" value={form.capacity} onChange={handleChange("capacity")} type="number" />
-                </div>
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ padding: "24px" }}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+              Tên sân *
+            </label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              required
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                borderRadius: 10,
+                border: errors.name ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                fontSize: 15,
+              }}
+              placeholder="VD: Sân bóng đá A1"
+            />
+            {errors.name && (
+              <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.name}</p>
+            )}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+            <div>
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+                Loại sân *
+              </label>
+              <select
+                name="type"
+                value={formData.type}
+                onChange={handleChange}
+                required
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: 10,
+                  border: errors.type ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                  fontSize: 15,
+                }}
+              >
+                <option value="">Chọn loại</option>
+                <option value="5 người">5 người</option>
+                <option value="7 người">7 người</option>
+                <option value="11 người">11 người</option>
+                <option value="Tennis">Tennis</option>
+                <option value="Bóng rổ">Bóng rổ</option>
+                <option value="Cầu lông">Cầu lông</option>
+                <option value="Bóng chuyền">Bóng chuyền</option>
+              </select>
+              {errors.type && (
+                <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.type}</p>
+              )}
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+                Sức chứa *
+              </label>
+              <input
+                type="number"
+                name="capacity"
+                value={formData.capacity}
+                onChange={handleChange}
+                required
+                min="1"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: 10,
+                  border: errors.capacity ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                  fontSize: 15,
+                }}
+                placeholder="VD: 10"
+              />
+              {errors.capacity && (
+                <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.capacity}</p>
+              )}
             </div>
           </div>
 
-          {/* Card 2: Vận hành & Giá cả */}
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 16, overflow: "hidden" }}>
-            <CardHeader Icon={Settings} title="Vận hành & Giá cả" />
-            <div style={{ padding: 20 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
-                    <FormInput label="Giá/giờ (VNĐ)" name="price" value={form.price} onChange={handleChange("price")} type="number" />
-                    <FormSelect
-                        label="Trạng thái"
-                        name="status"
-                        value={form.status}
-                        onChange={handleChange("status")}
-                        options={[
-                            { value: "active", label: "Hoạt động" },
-                            { value: "maintenance", label: "Bảo trì" },
-                            { value: "inactive", label: "Tạm ngưng" },
-                        ]}
-                    />
-                </div>
-                <FormInput label="Lịch bảo trì (miêu tả)" name="maintenance" value={form.maintenance} onChange={handleChange("maintenance")} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+            <div>
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+                Giá/giờ (VNĐ) *
+              </label>
+              <input
+                type="number"
+                name="price"
+                value={formData.price}
+                onChange={handleChange}
+                required
+                min="0"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: 10,
+                  border: errors.price ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                  fontSize: 15,
+                }}
+                placeholder="VD: 150000"
+              />
+              {errors.price && (
+                <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.price}</p>
+              )}
             </div>
+            <div>
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+                Trạng thái *
+              </label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                required
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: 10,
+                  border: "2px solid #e5e7eb",
+                  fontSize: 15,
+                }}
+              >
+                <option value="active">Hoạt động</option>
+                <option value="maintenance">Bảo trì</option>
+                <option value="inactive">Tạm ngưng</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Buttons */}
+          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              style={{
+                padding: "12px 24px",
+                background: "#fff",
+                color: "#374151",
+                border: "2px solid #e5e7eb",
+                borderRadius: 10,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.5 : 1,
+              }}
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                padding: "12px 24px",
+                background: loading
+                  ? "#9ca3af"
+                  : "linear-gradient(135deg, #3b82f6, #2563eb)",
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: loading ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              {loading ? (
+                <>
+                  <Loader size={18} style={{ animation: "spin 1s linear infinite" }} />
+                  Đang lưu...
+                </>
+              ) : (
+                <>
+                  <Save size={18} />
+                  Lưu thay đổi
+                </>
+              )}
+            </button>
           </div>
           
-          {/* Card 3: Mô tả */}
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 16, overflow: "hidden" }}>
-            <CardHeader Icon={MessageSquare} title="Mô tả" />
-            <div style={{ padding: 20 }}>
-                <FormTextarea label="Mô tả chi tiết" name="description" value={form.description} onChange={handleChange("description")} />
-            </div>
-          </div>
-        </div>
-
-        {/* Footer (Nền trắng) */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 12,
-            padding: "16px 24px",
-            borderTop: "1px solid #e5e7eb",
-            background: "#fff",
-          }}
-        >
-          <button
-            onClick={onClose}
-            style={{
-              background: "#fff",
-              color: "#374151",
-              border: "1px solid #d1d5db",
-              borderRadius: 8,
-              padding: "8px 14px",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: 14,
-            }}
-          >
-            Hủy
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={loading}
-            style={{
-              background: loading ? "#9ca3af" : "rgb(59, 130, 246)",
-              color: "#fff",
-              border: 0,
-              borderRadius: 8,
-              padding: "8px 14px",
-              cursor: loading ? "not-allowed" : "pointer",
-              fontWeight: 600,
-              fontSize: 14,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            <Save size={16} />
-            {loading ? "Đang lưu..." : "Lưu"}
-          </button>
-        </div>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </form>
       </div>
     </div>
   );

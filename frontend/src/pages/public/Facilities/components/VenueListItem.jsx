@@ -1,9 +1,11 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { SkeletonVenueCardList } from '../../../../components/ui/Skeleton'
+import { calculateDistance, formatDistance } from '../../../../utils/distance'
+import { FiNavigation } from 'react-icons/fi'
 import '../../../../styles/Facilities.css'
 
-export default function VenueListItem({ facilities, loading, onBookVenue }) {
+export default function VenueListItem({ facilities, loading, onBookVenue, userLocation }) {
   const navigate = useNavigate()
 
   if (loading) {
@@ -46,8 +48,45 @@ export default function VenueListItem({ facilities, loading, onBookVenue }) {
                 {f.name}
               </h3>
               
-              <div className="venue-list-info">
-                📍 {f.district}, {f.city}
+              <div className="venue-list-info" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span>📍 {f.district}, {f.city}</span>
+                {(() => {
+                  if (!userLocation || !f.location) return null
+                  
+                  let lat2, lon2
+                  if (f.location.coordinates && Array.isArray(f.location.coordinates)) {
+                    [lon2, lat2] = f.location.coordinates
+                  } else if (f.location.latitude && f.location.longitude) {
+                    lat2 = f.location.latitude
+                    lon2 = f.location.longitude
+                  } else {
+                    return null
+                  }
+                  
+                  const dist = calculateDistance(
+                    userLocation.latitude,
+                    userLocation.longitude,
+                    lat2,
+                    lon2
+                  )
+                  
+                  const formattedDist = formatDistance(dist)
+                  if (!formattedDist) return null
+                  
+                  return (
+                    <span style={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      fontSize: 12,
+                      color: '#667eea',
+                      fontWeight: 600
+                    }}>
+                      <FiNavigation size={12} />
+                      {formattedDist}
+                    </span>
+                  )
+                })()}
               </div>
               
               <div className="venue-list-info">
@@ -57,7 +96,7 @@ export default function VenueListItem({ facilities, loading, onBookVenue }) {
             
             <div className="venue-list-bottom">
               <div className="venue-list-price">
-                💰 {f.price.toLocaleString()} VND/giờ
+                💰 {typeof f.price === 'number' ? `${f.price.toLocaleString()} VND/giờ` : f.price || '0 VND/giờ'}
               </div>
               <button 
                 className="venue-list-book-btn"

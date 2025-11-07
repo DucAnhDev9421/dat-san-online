@@ -2,6 +2,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import Facility from "../models/Facility.js";
+import Review from "../models/Review.js";
 import {
   authenticateToken,
   authorize,
@@ -179,8 +180,18 @@ router.get("/", async (req, res, next) => {
 
     // Filter
     const query = {};
-    if (req.query.type) {
-      query.type = req.query.type;
+    // Xử lý filter theo type/types
+    if (req.query.types) {
+      // Hỗ trợ filter theo nhiều types (types=a,b,c)
+      const typesArray = Array.isArray(req.query.types) 
+        ? req.query.types 
+        : req.query.types.split(',').map(t => t.trim()).filter(t => t);
+      if (typesArray.length > 0) {
+        query.types = { $in: typesArray };
+      }
+    } else if (req.query.type) {
+      // Tìm kiếm facilities có types chứa type được chỉ định
+      query.types = { $in: [req.query.type] };
     }
     if (req.query.address) {
       // Tìm kiếm address gần đúng
@@ -223,10 +234,51 @@ router.get("/", async (req, res, next) => {
 
     const total = await Facility.countDocuments(query);
 
+    // Get facility IDs
+    const facilityIds = facilities.map(f => f._id);
+
+    // Calculate average ratings for all facilities in one aggregation (only if there are facilities)
+    let ratingMap = new Map();
+    if (facilityIds.length > 0) {
+      const ratingResults = await Review.aggregate([
+        {
+          $match: {
+            facility: { $in: facilityIds },
+            isDeleted: false,
+          },
+        },
+        {
+          $group: {
+            _id: "$facility",
+            averageRating: { $avg: "$rating" },
+            totalReviews: { $sum: 1 },
+          },
+        },
+      ]);
+
+      // Create a map of facilityId -> rating stats
+      ratingResults.forEach((result) => {
+        ratingMap.set(result._id.toString(), {
+          averageRating: Math.round(result.averageRating * 10) / 10,
+          totalReviews: result.totalReviews,
+        });
+      });
+    }
+
+    // Add averageRating to each facility
+    const facilitiesWithRatings = facilities.map((facility) => {
+      const ratingData = ratingMap.get(facility._id.toString());
+      return {
+        ...facility.toObject(),
+        averageRating: ratingData?.averageRating || 0,
+        totalReviews: ratingData?.totalReviews || 0,
+      };
+    });
+
     res.json({
       success: true,
       data: {
-        facilities,
+        facilities: facilitiesWithRatings,
         pagination: {
           page,
           limit,

@@ -84,7 +84,7 @@ router.post(
   authorize("owner"), // Chỉ owner mới được tạo
   async (req, res, next) => {
     try {
-      const { facility, name, type, capacity, price, description, status, services, images, maintenance } =
+      const { facility, name, type, courtType, capacity, price, description, status, services, images, maintenance } =
         req.body;
 
       // Kiểm tra facility có tồn tại không
@@ -104,11 +104,20 @@ router.post(
         });
       }
 
+      // Validate courtType if provided
+      if (courtType && !mongoose.Types.ObjectId.isValid(courtType)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid courtType ID format",
+        });
+      }
+
       // Tạo sân mới
       const court = new Court({
         facility,
         name,
         type,
+        courtType: courtType || null, // Optional field
         capacity,
         price,
         description,
@@ -148,8 +157,36 @@ router.get("/", async (req, res, next) => {
     if (req.query.status) {
       query.status = req.query.status;
     }
-    if (req.query.type) {
-      query.type = req.query.type;
+    
+    // Filter by courtType ID (reference) - preferred method
+    if (req.query.typeId) {
+      // Validate ObjectId format
+      if (mongoose.Types.ObjectId.isValid(req.query.typeId)) {
+        query.courtType = req.query.typeId;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid courtType ID format",
+        });
+      }
+    } 
+    // Fallback: filter by type string (backward compatible)
+    else if (req.query.type) {
+      // Extract number from type name (e.g., "Sân 5" -> "5", "Sân 11" -> "11")
+      // Then match with court types like "5 người", "11 người", etc.
+      const typeString = req.query.type.toString().trim();
+      
+      // Extract number from type string (e.g., "Sân 5" -> "5", "Sân 11 người" -> "11")
+      const numberMatch = typeString.match(/\d+/);
+      
+      if (numberMatch) {
+        const number = numberMatch[0];
+        // Match any court type containing this number (e.g., "5 người", "Sân 5", "5v5")
+        query.type = { $regex: number, $options: "i" };
+      } else {
+        // Fallback: use original regex matching
+        query.type = { $regex: typeString, $options: "i" };
+      }
     }
     if (req.query.search) {
       query.$or = [
@@ -160,6 +197,7 @@ router.get("/", async (req, res, next) => {
 
     const courts = await Court.find(query)
       .populate("facility", "name address location")
+      .populate("courtType", "name description sportCategory") // Populate courtType info
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);

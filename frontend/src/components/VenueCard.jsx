@@ -1,20 +1,25 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiMapPin, FiClock, FiDollarSign } from 'react-icons/fi'
+import { FiMapPin, FiClock, FiDollarSign, FiNavigation } from 'react-icons/fi'
 import { AiFillStar } from 'react-icons/ai'
+import { calculateDistance, formatDistance } from '../utils/distance'
 
 export default function VenueCard({
   image,
   name,
   address,
   rating,
+  totalReviews = 0,
   open,
   price,
   sport,
   status = 'Còn trống',
+  services = [],
   onBook,
   chip,
   venueId,
+  userLocation = null, // { latitude, longitude }
+  facilityLocation = null, // { coordinates: [longitude, latitude] } hoặc { latitude, longitude }
 }) {
   const navigate = useNavigate()
   const [mousePosition, setMousePosition] = React.useState({ x: 0, y: 0 })
@@ -63,6 +68,32 @@ export default function VenueCard({
     }
   }
 
+  // Tính khoảng cách
+  const distance = React.useMemo(() => {
+    if (!userLocation || !facilityLocation) return null
+    
+    let lat2, lon2
+    
+    // Xử lý format tọa độ từ backend (GeoJSON: [longitude, latitude])
+    if (facilityLocation.coordinates && Array.isArray(facilityLocation.coordinates)) {
+      [lon2, lat2] = facilityLocation.coordinates
+    } else if (facilityLocation.latitude && facilityLocation.longitude) {
+      lat2 = facilityLocation.latitude
+      lon2 = facilityLocation.longitude
+    } else {
+      return null
+    }
+    
+    const dist = calculateDistance(
+      userLocation.latitude,
+      userLocation.longitude,
+      lat2,
+      lon2
+    )
+    
+    return formatDistance(dist)
+  }, [userLocation, facilityLocation])
+
   return (
     <div 
       ref={cardRef}
@@ -106,22 +137,30 @@ export default function VenueCard({
             }} 
           />
         ) : null}
-        <span style={{
-          position: 'absolute',
-          top: 12,
-          right: 12,
-          background: '#111827',
-          color: '#fff',
-          padding: '4px 10px',
-          borderRadius: 12,
-          fontSize: 12,
-          fontWeight: 700,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6
-        }}>
-          <AiFillStar /> {rating}
-        </span>
+        {rating > 0 && (
+          <span style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            background: '#111827',
+            color: '#fff',
+            padding: '4px 10px',
+            borderRadius: 12,
+            fontSize: 12,
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6
+          }}>
+            <AiFillStar style={{ color: '#fbbf24' }} /> 
+            <span>{typeof rating === 'number' ? rating.toFixed(1) : rating}</span>
+            {totalReviews > 0 && (
+              <span style={{ fontSize: 11, opacity: 0.9, marginLeft: 2 }}>
+                ({totalReviews})
+              </span>
+            )}
+          </span>
+        )}
       </div>
       <div style={{ 
         padding: 16, 
@@ -167,12 +206,52 @@ export default function VenueCard({
         </div>
         {address && (
           <div style={{ fontSize: 13, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <FiMapPin /> {address}
+            <FiMapPin /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{address}</span>
+          </div>
+        )}
+        {distance && (
+          <div style={{ fontSize: 13, color: '#667eea', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+            <FiNavigation size={14} />
+            <span>Khoảng cách: {distance}</span>
           </div>
         )}
         {open && (
           <div style={{ fontSize: 13, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
             <FiClock /> {open}
+          </div>
+        )}
+        {services && services.length > 0 && (
+          <div style={{ 
+            fontSize: 12, 
+            color: '#6b7280', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 6,
+            flexWrap: 'wrap'
+          }}>
+            <span style={{ color: '#667eea', fontWeight: 600 }}>Dịch vụ:</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+              {services.slice(0, 2).map((service, index) => (
+                <span 
+                  key={index}
+                  style={{
+                    fontSize: 11,
+                    color: '#475569',
+                    background: '#f1f5f9',
+                    padding: '2px 8px',
+                    borderRadius: 6,
+                    fontWeight: 500
+                  }}
+                >
+                  {service}
+                </span>
+              ))}
+              {services.length > 2 && (
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                  +{services.length - 2}
+                </span>
+              )}
+            </span>
           </div>
         )}
         {price && (

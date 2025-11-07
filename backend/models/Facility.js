@@ -40,10 +40,16 @@ const facilitySchema = new mongoose.Schema(
         }
       }
     },
-    // Ví dụ: 'Sân 5', 'Sân 7', 'Sân 11'
-    type: {
-      type: String,
+    // Mảng các loại sân thể thao (ví dụ: ['Bóng đá', 'Tennis', 'Cầu lông'])
+    types: {
+      type: [String],
       required: [true, "Loại cơ sở là bắt buộc"],
+      validate: {
+        validator: function(types) {
+          return Array.isArray(types) && types.length > 0;
+        },
+        message: "Phải chọn ít nhất một loại cơ sở"
+      },
       trim: true,
     },
     pricePerHour: {
@@ -126,8 +132,9 @@ const facilitySchema = new mongoose.Schema(
   }
 );
 
-// Pre-save hook: xóa location nếu không có coordinates hợp lệ
+// Pre-save hook: xóa location nếu không có coordinates hợp lệ và trim types
 facilitySchema.pre('save', function(next) {
+  // Xử lý location
   if (this.location && (!this.location.coordinates || !Array.isArray(this.location.coordinates) || this.location.coordinates.length !== 2)) {
     // Xóa location nếu không có coordinates hợp lệ
     this.location = undefined;
@@ -135,13 +142,23 @@ facilitySchema.pre('save', function(next) {
     // Đảm bảo type luôn là 'Point' nếu có coordinates
     this.location.type = 'Point';
   }
+  
+  // Trim các phần tử trong mảng types và loại bỏ trùng lặp
+  if (this.types && Array.isArray(this.types)) {
+    this.types = this.types
+      .map(type => typeof type === 'string' ? type.trim() : type)
+      .filter(type => type && type.length > 0);
+    // Loại bỏ trùng lặp
+    this.types = [...new Set(this.types)];
+  }
+  
   next();
 });
 
 // Indexes để tối ưu hóa tìm kiếm
 facilitySchema.index({ owner: 1 });
 facilitySchema.index({ address: "text", name: "text" }); // Hỗ trợ tìm kiếm text
-facilitySchema.index({ type: 1 });
+facilitySchema.index({ types: 1 }); // Index cho mảng types
 facilitySchema.index({ location: "2dsphere" }); // GeoSpatial index cho tìm kiếm theo khoảng cách
 
 export default mongoose.model("Facility", facilitySchema);

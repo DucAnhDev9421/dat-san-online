@@ -1,9 +1,11 @@
 import express from "express";
+import { createServer } from "http";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import passport from "passport";
+import { initializeSocket } from "./socket/index.js";
 
 // Import configurations
 import { config, validateConfig } from "./config/config.js";
@@ -25,6 +27,9 @@ import checkinRoutes from "./routes/checkin.js";
 import paymentRoutes from "./routes/payment.js";
 import sportCategoryRoutes from "./routes/sportCategory.js";
 import courtTypeRoutes from "./routes/courtType.js";
+import reviewRoutes from "./routes/review.js";
+import notificationRoutes from "./routes/notification.js";
+import provinceRoutes from "./routes/province.js";
 import User from "./models/User.js";
 
 const app = express();
@@ -97,6 +102,11 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Favicon handler - prevent 404 errors for browser favicon requests
+app.get("/favicon.ico", (req, res) => {
+  res.status(204).end();
+});
+
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
@@ -108,20 +118,29 @@ app.use("/api/checkin", checkinRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/sport-categories", sportCategoryRoutes);
 app.use("/api/court-types", courtTypeRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/provinces", provinceRoutes);
 // 404 handler
 app.use(notFound);
 
 // Error handler
 app.use(errorHandler);
 
-// Start server
+// Start server with Socket.IO
 const PORT = config.port;
-app.listen(PORT, () => {
+const httpServer = createServer(app);
+
+// Initialize Socket.IO
+initializeSocket(httpServer);
+
+httpServer.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`🌍 Environment: ${config.nodeEnv}`);
   console.log(`🔗 Frontend URL: ${config.frontendUrl}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Google OAuth: http://localhost:${PORT}/api/auth/google`);
+  console.log(`🔌 Socket.IO server initialized with namespaces`);
 });
 
 // Schedule cleanup job for unverified users every hour

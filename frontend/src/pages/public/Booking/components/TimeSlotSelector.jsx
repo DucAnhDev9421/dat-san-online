@@ -1,58 +1,169 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Clock, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import useDeviceType from '../../../../hook/use-device-type'
 import useClickOutside from '../../../../hook/use-click-outside'
 import useToggle from '../../../../hook/use-toggle'
-import { formatDate, generateCalendarDays } from '../utils/dateHelpers'
-import { getBookedSlots } from '../mockData'
+import { formatDate, generateCalendarDays, formatDateToYYYYMMDD } from '../utils/dateHelpers'
+import { bookingApi } from '../../../../api/bookingApi'
+import { toast } from 'react-toastify'
 
 export default function TimeSlotSelector({ 
   selectedDate, 
   onDateChange, 
   selectedSlots, 
   onSlotSelect,
-  venuePrice
+  selectedCourt,
+  venuePrice,
+  onTimeSlotsDataChange,
+  lockedSlots = {},
+  onSlotLock,
+  onSlotUnlock,
+  currentUserId
 }) {
   const { isMobile, isTablet } = useDeviceType()
   const [showDatePicker, { toggle: toggleDatePicker, setFalse: closeDatePicker }] = useToggle(false)
+  const [bookedTimes, setBookedTimes] = useState([])
+  const [timeSlots, setTimeSlots] = useState([])
+  const [loadingAvailability, setLoadingAvailability] = useState(false)
   
   const datePickerRef = useClickOutside(() => closeDatePicker(), showDatePicker)
-  
-  // Time slots 1 tiếng với giá tiền (hiển thị dạng range)
-  const timeSlots = [
-    { time: '06:00', endTime: '07:00', price: 200000 },
-    { time: '07:00', endTime: '08:00', price: 200000 },
-    { time: '08:00', endTime: '09:00', price: 200000 },
-    { time: '09:00', endTime: '10:00', price: 250000 },
-    { time: '10:00', endTime: '11:00', price: 250000 },
-    { time: '11:00', endTime: '12:00', price: 250000 },
-    { time: '12:00', endTime: '13:00', price: 250000 },
-    { time: '13:00', endTime: '14:00', price: 250000 },
-    { time: '14:00', endTime: '15:00', price: 300000 },
-    { time: '15:00', endTime: '16:00', price: 300000 },
-    { time: '16:00', endTime: '17:00', price: 300000 },
-    { time: '17:00', endTime: '18:00', price: 350000 },
-    { time: '18:00', endTime: '19:00', price: 350000 },
-    { time: '19:00', endTime: '20:00', price: 350000 },
-    { time: '20:00', endTime: '21:00', price: 350000 },
-    { time: '21:00', endTime: '22:00', price: 300000 }
-  ]
-  
-  // Mock booked slots - In real app, this would come from API
-  const bookedTimes = ['08:00', '11:00', '16:00', '20:00']
+
+  // Fetch availability from API when court or date changes
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      if (!selectedCourt || !selectedDate) {
+        // Reset to default if no court selected
+        const defaultSlots = [
+          { time: '06:00', endTime: '07:00', price: venuePrice || 200000 },
+          { time: '07:00', endTime: '08:00', price: venuePrice || 200000 },
+          { time: '08:00', endTime: '09:00', price: venuePrice || 200000 },
+          { time: '09:00', endTime: '10:00', price: venuePrice || 250000 },
+          { time: '10:00', endTime: '11:00', price: venuePrice || 250000 },
+          { time: '11:00', endTime: '12:00', price: venuePrice || 250000 },
+          { time: '12:00', endTime: '13:00', price: venuePrice || 250000 },
+          { time: '13:00', endTime: '14:00', price: venuePrice || 250000 },
+          { time: '14:00', endTime: '15:00', price: venuePrice || 300000 },
+          { time: '15:00', endTime: '16:00', price: venuePrice || 300000 },
+          { time: '16:00', endTime: '17:00', price: venuePrice || 300000 },
+          { time: '17:00', endTime: '18:00', price: venuePrice || 350000 },
+          { time: '18:00', endTime: '19:00', price: venuePrice || 350000 },
+          { time: '19:00', endTime: '20:00', price: venuePrice || 350000 },
+          { time: '20:00', endTime: '21:00', price: venuePrice || 350000 },
+          { time: '21:00', endTime: '22:00', price: venuePrice || 300000 }
+        ]
+        setTimeSlots(defaultSlots)
+        if (onTimeSlotsDataChange) {
+          onTimeSlotsDataChange(defaultSlots)
+        }
+        setBookedTimes([])
+        return
+      }
+
+      setLoadingAvailability(true)
+      try {
+        // Format date to YYYY-MM-DD in local timezone (not UTC)
+        const dateStr = formatDateToYYYYMMDD(selectedDate)
+        
+        const result = await bookingApi.getAvailability(selectedCourt, dateStr)
+        
+        if (result.success && result.data) {
+          const slots = result.data.slots || []
+          
+          // Transform API response to timeSlots format
+          const transformedSlots = slots.map(slot => {
+            const [startTime, endTime] = slot.slot.split('-')
+            return {
+              time: startTime,
+              endTime: endTime,
+              price: slot.price || venuePrice || 200000,
+              available: slot.available
+            }
+          })
+
+          setTimeSlots(transformedSlots)
+          
+          // Pass time slots data to parent component for price calculation
+          if (onTimeSlotsDataChange) {
+            onTimeSlotsDataChange(transformedSlots)
+          }
+          
+          // Get booked times (not available)
+          const booked = slots
+            .filter(slot => !slot.available)
+            .map(slot => slot.time)
+          setBookedTimes(booked)
+        }
+      } catch (error) {
+        console.error('Error fetching availability:', error)
+        // Fallback to default slots on error
+        const defaultSlots = [
+          { time: '06:00', endTime: '07:00', price: venuePrice || 200000 },
+          { time: '07:00', endTime: '08:00', price: venuePrice || 200000 },
+          { time: '08:00', endTime: '09:00', price: venuePrice || 200000 },
+          { time: '09:00', endTime: '10:00', price: venuePrice || 250000 },
+          { time: '10:00', endTime: '11:00', price: venuePrice || 250000 },
+          { time: '11:00', endTime: '12:00', price: venuePrice || 250000 },
+          { time: '12:00', endTime: '13:00', price: venuePrice || 250000 },
+          { time: '13:00', endTime: '14:00', price: venuePrice || 250000 },
+          { time: '14:00', endTime: '15:00', price: venuePrice || 300000 },
+          { time: '15:00', endTime: '16:00', price: venuePrice || 300000 },
+          { time: '16:00', endTime: '17:00', price: venuePrice || 300000 },
+          { time: '17:00', endTime: '18:00', price: venuePrice || 350000 },
+          { time: '18:00', endTime: '19:00', price: venuePrice || 350000 },
+          { time: '19:00', endTime: '20:00', price: venuePrice || 350000 },
+          { time: '20:00', endTime: '21:00', price: venuePrice || 350000 },
+          { time: '21:00', endTime: '22:00', price: venuePrice || 300000 }
+        ]
+        setTimeSlots(defaultSlots)
+        if (onTimeSlotsDataChange) {
+          onTimeSlotsDataChange(defaultSlots)
+        }
+        setBookedTimes([])
+      } finally {
+        setLoadingAvailability(false)
+      }
+    }
+
+    fetchAvailability()
+  }, [selectedCourt, selectedDate, venuePrice])
 
   const handleSlotClick = (timeSlot) => {
-    const slotKey = `${selectedDate.toISOString().split('T')[0]}-${timeSlot.time}`
+    // Require court to be selected before allowing slot selection
+    if (!selectedCourt) {
+      toast.warning('Vui lòng chọn sân trước khi chọn khung giờ')
+      return
+    }
+
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const slotKey = `${dateStr}-${timeSlot.time}`
+    const timeSlotStr = `${timeSlot.time}-${timeSlot.endTime}`
+    const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
+    const slotLock = lockedSlots[lockKey]
     
+    // Check if locked by another user
+    if (slotLock?.isLockedByOther) {
+      toast.warning('Slot này đang được người khác giữ chỗ')
+      return
+    }
+
     if (selectedSlots.includes(slotKey)) {
+      // Unlock slot when user deselects
+      if (onSlotUnlock && slotLock?.isLockedByMe) {
+        onSlotUnlock(timeSlotStr)
+      }
       onSlotSelect(selectedSlots.filter(slot => slot !== slotKey))
     } else {
+      // Lock slot when user selects
+      if (onSlotLock) {
+        onSlotLock(timeSlotStr)
+      }
       onSlotSelect([...selectedSlots, slotKey])
     }
   }
 
   const isSlotSelected = (timeSlot) => {
-    const slotKey = `${selectedDate.toISOString().split('T')[0]}-${timeSlot.time}`
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const slotKey = `${dateStr}-${timeSlot.time}`
     return selectedSlots.includes(slotKey)
   }
 
@@ -65,6 +176,10 @@ export default function TimeSlotSelector({
   }
 
   const isSlotBooked = (timeSlot) => {
+    // Use available property from API if available, otherwise fallback to bookedTimes
+    if (timeSlot.hasOwnProperty('available')) {
+      return !timeSlot.available
+    }
     return bookedTimes.includes(timeSlot.time)
   }
 
@@ -87,7 +202,13 @@ export default function TimeSlotSelector({
   }
   
   const getSlotStatus = (timeSlot) => {
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const timeSlotStr = `${timeSlot.time}-${timeSlot.endTime}`
+    const lockKey = selectedCourt ? `${selectedCourt}_${dateStr}_${timeSlotStr}` : null
+    const slotLock = lockKey ? lockedSlots[lockKey] : null
+    
     if (isPastTime(timeSlot) || isSlotBooked(timeSlot)) return 'booked'
+    if (slotLock?.isLockedByOther) return 'locked' // Locked by another user
     if (isSlotSelected(timeSlot)) return 'selected'
     return 'available'
   }
@@ -290,6 +411,17 @@ export default function TimeSlotSelector({
 
         {/* Time Slots Grid */}
         <div style={{ marginBottom: '20px' }}>
+          {loadingAvailability && (
+            <div style={{
+              textAlign: 'center',
+              padding: '20px',
+              color: '#6b7280',
+              fontSize: '14px'
+            }}>
+              Đang tải thông tin khung giờ...
+            </div>
+          )}
+          {!loadingAvailability && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)',
@@ -299,12 +431,14 @@ export default function TimeSlotSelector({
               const status = getSlotStatus(slot)
               const isSelected = status === 'selected'
               const isBooked = status === 'booked'
+              const isLockedByOther = status === 'locked'
+              const isDisabled = !selectedCourt || isBooked || isLockedByOther
               
               return (
                 <button
                   key={slot.time}
-                  onClick={() => !isBooked && handleSlotClick(slot)}
-                  disabled={isBooked}
+                  onClick={() => !isDisabled && handleSlotClick(slot)}
+                  disabled={isDisabled}
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -312,10 +446,15 @@ export default function TimeSlotSelector({
                     justifyContent: 'center',
                     gap: '8px',
                     padding: '16px 12px',
-                    border: isSelected ? '2px solid #000' : '1px solid #e5e7eb',
+                    border: isSelected ? '2px solid #000' : 
+                            isLockedByOther ? '2px solid #ffc107' : 
+                            '1px solid #e5e7eb',
                     borderRadius: '8px',
-                    background: isSelected ? '#000' : isBooked ? '#f5f5f5' : '#fff',
-                    cursor: isBooked ? 'not-allowed' : 'pointer',
+                    background: isSelected ? '#000' : 
+                               isBooked ? '#f5f5f5' : 
+                               isLockedByOther ? '#fff3cd' : '#fff',
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                    opacity: !selectedCourt ? 0.6 : 1,
                     transition: 'all 0.2s',
                     minHeight: '90px'
                   }}
@@ -333,7 +472,9 @@ export default function TimeSlotSelector({
                   <div style={{ 
                     fontSize: '16px',
                     fontWeight: '600',
-                    color: isSelected ? '#fff' : isBooked ? '#9ca3af' : '#1f2937'
+                    color: isSelected ? '#fff' : 
+                           isBooked ? '#9ca3af' : 
+                           isLockedByOther ? '#856404' : '#1f2937'
                   }}>
                     {slot.time} - {slot.endTime}
                   </div>
@@ -341,14 +482,20 @@ export default function TimeSlotSelector({
                   <div style={{ 
                     fontSize: '14px',
                     fontWeight: '500',
-                    color: isSelected ? '#fff' : isBooked ? '#9ca3af' : '#374151'
+                    color: isSelected ? '#fff' : 
+                           isBooked ? '#9ca3af' : 
+                           isLockedByOther ? '#856404' : '#374151'
                   }}>
-                    {isBooked ? 'Đã đặt' : `${slot.price.toLocaleString('vi-VN')} đ`}
+                    {!selectedCourt ? 'Chọn sân trước' :
+                     isBooked ? 'Đã đặt' : 
+                     isLockedByOther ? 'Đang giữ chỗ' : 
+                     `${slot.price.toLocaleString('vi-VN')} đ`}
                   </div>
                 </button>
               )
             })}
           </div>
+          )}
         </div>
         
         {/* Legend */}
@@ -390,6 +537,17 @@ export default function TimeSlotSelector({
               borderRadius: '4px'
             }}></div>
             <span style={{ fontSize: '14px', color: '#374151' }}>Đã đặt</span>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '16px',
+              height: '16px',
+              background: '#fff3cd',
+              border: '2px solid #ffc107',
+              borderRadius: '4px'
+            }}></div>
+            <span style={{ fontSize: '14px', color: '#374151' }}>Đang giữ chỗ</span>
           </div>
         </div>
 

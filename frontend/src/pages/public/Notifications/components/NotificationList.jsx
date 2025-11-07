@@ -41,7 +41,7 @@ export default function NotificationList({
     <div className="notification-list">
       {notifications.map((notification, index) => (
         <NotificationItem
-          key={notification.id}
+          key={notification.id || notification._id}
           notification={notification}
           index={index}
           total={notifications.length}

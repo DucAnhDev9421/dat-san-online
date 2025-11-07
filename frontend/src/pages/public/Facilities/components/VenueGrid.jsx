@@ -3,7 +3,7 @@ import VenueCard from '../../../../components/VenueCard'
 import { SkeletonVenueCard } from '../../../../components/ui/Skeleton'
 import '../../../../styles/Facilities.css'
 
-export default function VenueGrid({ facilities, loading, onBookVenue }) {
+export default function VenueGrid({ facilities, loading, onBookVenue, userLocation }) {
   if (loading) {
     return (
       <div className="venues-grid">
@@ -24,11 +24,15 @@ export default function VenueGrid({ facilities, loading, onBookVenue }) {
           name={f.name}
           address={`${f.district}, ${f.city}`}
           rating={f.rating}
+          totalReviews={f.totalReviews || 0}
           open={f.open}
-          price={`${f.price.toLocaleString()} VND/giờ`}
+          price={typeof f.price === 'number' ? `${f.price.toLocaleString()} VND/giờ` : f.price}
           sport={f.sport}
           status={f.status}
+          services={f.services || []}
           onBook={() => onBookVenue?.(f.id)}
+          userLocation={userLocation}
+          facilityLocation={f.location}
         />
       ))}
     </div>

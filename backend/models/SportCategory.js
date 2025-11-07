@@ -30,14 +30,14 @@ const sportCategorySchema = new mongoose.Schema(
 );
 
 // Indexes
-sportCategorySchema.index({ name: 1 });
+// sportCategorySchema.index({ name: 1 }); // Không cần vì unique: true đã tự tạo index
 sportCategorySchema.index({ status: 1 });
 sportCategorySchema.index({ order: 1 });
 
 // Method để đếm số cơ sở đang sử dụng danh mục này
 sportCategorySchema.methods.getFacilityCount = async function () {
   const Facility = mongoose.model("Facility");
-  return await Facility.countDocuments({ type: this.name });
+  return await Facility.countDocuments({ types: { $in: [this.name] } });
 };
 
 export default mongoose.model("SportCategory", sportCategorySchema);

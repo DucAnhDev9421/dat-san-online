@@ -1,16 +1,25 @@
-import React, { useState, useRef } from 'react'
-import { mockBookingHistory } from '../mockData'
+import React, { useState, useRef, useEffect } from 'react'
+import { bookingApi } from '../../../../api/bookingApi'
+import { reviewApi } from '../../../../api/reviewApi'
+import { toast } from 'react-toastify'
 import Dialog from '../../../../components/ui/Dialog'
+import CreateReviewModal from '../modals/CreateReviewModal'
 import { QRCodeSVG } from 'qrcode.react'
 import html2canvas from 'html2canvas'
-import { Download } from 'lucide-react'
+import { Download, Star, Loader } from 'lucide-react'
 
 export default function BookingsTab() {
+  const [bookings, setBookings] = useState([])
+  const [loading, setLoading] = useState(true)
   const [selectedBooking, setSelectedBooking] = useState(null)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showReviewModal, setShowReviewModal] = useState(false)
+  const [selectedReview, setSelectedReview] = useState(null) // Review đang được edit
   const [cancelReason, setCancelReason] = useState('')
   const [otherReason, setOtherReason] = useState('')
+  const [bookingReviews, setBookingReviews] = useState({}) // Map bookingId -> review
+  const [refreshKey, setRefreshKey] = useState(0)
   const ticketRef = useRef(null)
 
   const cancelReasons = [
@@ -39,11 +48,39 @@ export default function BookingsTab() {
     setShowDetailModal(true)
   }
 
-  const handleConfirmCancel = () => {
+  const openEditReviewModal = (booking) => {
+    const bookingId = booking._original?._id?.toString() || booking.id
+    const review = bookingReviews[bookingId]
+    if (review) {
+      setSelectedBooking(booking)
+      setSelectedReview(review)
+      setShowReviewModal(true)
+    }
+  }
+
+  const handleReviewSuccess = () => {
+    // Refresh reviews after create/update
+    setRefreshKey(prev => prev + 1)
+    setSelectedReview(null)
+  }
+
+  const handleConfirmCancel = async () => {
     const finalReason = cancelReason === 'other' ? otherReason.trim() : cancelReason
-    if (!finalReason) return
-    // TODO: Integrate API to cancel booking, e.g. cancelBooking(selectedBooking.id, finalReason)
-    setShowCancelModal(false)
+    if (!finalReason || !selectedBooking) return
+
+    try {
+      const bookingId = selectedBooking._original?._id || selectedBooking._original?.id || selectedBooking.id
+      await bookingApi.cancelBooking(bookingId)
+      toast.success('Hủy đặt sân thành công')
+      setRefreshKey(prev => prev + 1) // Refresh bookings
+      setShowCancelModal(false)
+      setSelectedBooking(null)
+      setCancelReason('')
+      setOtherReason('')
+    } catch (error) {
+      console.error('Error cancelling booking:', error)
+      toast.error(error.message || 'Không thể hủy đặt sân')
+    }
   }
 
   const handleDownloadTicket = async () => {
@@ -77,35 +114,219 @@ export default function BookingsTab() {
     // Generate QR code with booking information
     return JSON.stringify({
       id: booking.id,
+      bookingCode: booking.bookingCode || booking.id,
       venue: booking.venue,
       date: booking.date,
       time: booking.time,
       sport: booking.sport
     })
   }
+  // Fetch bookings from API
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        setLoading(true)
+        const result = await bookingApi.getMyBookings({ limit: 100 })
+        
+        if (result.success && result.data?.bookings) {
+          // Transform API bookings to component format
+          const transformedBookings = result.data.bookings.map(booking => {
+            // Format time slots
+            const timeSlots = booking.timeSlots || []
+            const timeDisplay = timeSlots.length > 0 
+              ? timeSlots.join(', ')
+              : 'N/A'
+            
+            // Format price
+            const price = booking.totalAmount 
+              ? new Intl.NumberFormat('vi-VN', {
+                  style: 'currency',
+                  currency: 'VND',
+                  minimumFractionDigits: 0
+                }).format(booking.totalAmount)
+              : '0 VNĐ'
+            
+            // Get facility image
+            const imageUrl = booking.facility?.images?.[0]?.url || null
+            
+            // Check if booking has ended (date + time slots)
+            const now = new Date()
+            const today = new Date(now)
+            today.setHours(0, 0, 0, 0)
+            
+            const bookingDate = new Date(booking.date)
+            bookingDate.setHours(0, 0, 0, 0)
+            
+            let hasBookingEnded = false
+            
+            // If booking date is in the past, it has ended
+            if (bookingDate < today) {
+              hasBookingEnded = true
+            } 
+            // If booking date is today, check if the last time slot has ended
+            else if (bookingDate.getTime() === today.getTime()) {
+              if (timeSlots.length > 0) {
+                // Get the last time slot (usually the one with latest end time)
+                const lastSlot = timeSlots[timeSlots.length - 1]
+                const [startTime, endTime] = lastSlot.split('-')
+                const [endHour, endMinute] = endTime.split(':').map(Number)
+                
+                // Create date object for booking end time
+                const bookingEndTime = new Date(bookingDate)
+                bookingEndTime.setHours(endHour, endMinute, 0, 0)
+                
+                // Check if current time has passed the end time
+                hasBookingEnded = now >= bookingEndTime
+              } else {
+                // If no time slots, consider it ended if date is today and current time is past noon
+                hasBookingEnded = now.getHours() >= 12
+              }
+            }
+            // If booking date is in the future, it hasn't ended
+            else {
+              hasBookingEnded = false
+            }
+            
+            // Map status dựa trên paymentStatus và paymentMethod
+            // Chỉ hiển thị "completed" khi:
+            // 1. Thanh toán tiền mặt: status = "confirmed" VÀ paymentStatus = "paid"
+            // 2. Thanh toán online: paymentStatus = "paid"
+            let status = booking.status
+            const paymentStatus = booking.paymentStatus || 'pending'
+            const paymentMethod = booking.paymentMethod || null
+            
+            // Kiểm tra điều kiện để hiển thị "completed"
+            const canReview = 
+              (paymentMethod === 'cash' && status === 'confirmed' && paymentStatus === 'paid') ||
+              (paymentMethod !== 'cash' && paymentStatus === 'paid')
+            
+            if (canReview) {
+              status = 'completed'
+            } else if (status === 'pending' || status === 'confirmed') {
+              status = 'upcoming'
+            }
+            
+            return {
+              id: booking._id || booking.id,
+              bookingCode: booking.bookingCode,
+              venue: booking.facility?.name || 'Chưa có tên',
+              sport: booking.court?.type?.name || booking.court?.type || 'Chưa xác định',
+              date: booking.date,
+              time: timeDisplay,
+              location: booking.facility?.address || booking.facility?.location?.address || '',
+              price: price,
+              paymentMethod: paymentMethod,
+              paymentStatus: paymentStatus, // Lưu paymentStatus để dùng cho validation
+              status: status,
+              imageUrl: imageUrl,
+              isPastDate: hasBookingEnded, // Store flag to check if booking has ended
+              bookingDate: bookingDate, // Store booking date for comparison
+              _original: booking // Store original for API calls
+            }
+          })
+          
+          setBookings(transformedBookings)
+        }
+      } catch (error) {
+        console.error('Error fetching bookings:', error)
+        toast.error('Không thể tải danh sách đặt sân')
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchBookings()
+  }, [refreshKey])
+
+  // Fetch reviews to check which bookings have been reviewed
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        const result = await reviewApi.getMyReviews({ limit: 100 })
+        if (result.reviews) {
+          const reviewsMap = {}
+          result.reviews.forEach(review => {
+            // Handle both populated and non-populated booking field
+            const bookingId = review.booking?._id 
+              ? review.booking._id.toString()
+              : review.booking?.id?.toString()
+              ? review.booking.id.toString()
+              : typeof review.booking === 'string' 
+              ? review.booking
+              : null
+            
+            if (bookingId) {
+              reviewsMap[bookingId] = review
+            }
+          })
+          setBookingReviews(reviewsMap)
+        }
+      } catch (error) {
+        console.error('Error fetching reviews:', error)
+      }
+    }
+    fetchReviews()
+  }, [refreshKey])
+
   const getStatusBadge = (status) => {
     const statusClasses = {
       completed: 'status-completed',
       upcoming: 'status-upcoming',
-      cancelled: 'status-cancelled'
+      cancelled: 'status-cancelled',
+      pending: 'status-upcoming',
+      confirmed: 'status-upcoming'
     }
     const statusText = {
       completed: 'Hoàn thành',
       upcoming: 'Sắp tới',
-      cancelled: 'Đã hủy'
+      cancelled: 'Đã hủy',
+      pending: 'Chờ xác nhận',
+      confirmed: 'Đã xác nhận'
     }
-    return <span className={`status-badge ${statusClasses[status]}`}>{statusText[status]}</span>
+    return <span className={`status-badge ${statusClasses[status] || 'status-upcoming'}`}>
+      {statusText[status] || status}
+    </span>
   }
 
   return (
     <div className="bookings-section">
       <div className="section-header">
         <h3>Lịch sử đặt sân</h3>
-        <span className="total-bookings">Tổng cộng: {mockBookingHistory.length} lần đặt</span>
+        <span className="total-bookings">Tổng cộng: {bookings.length} lần đặt</span>
       </div>
       
-      <div className="bookings-list">
-        {mockBookingHistory.map(booking => (
+      {loading ? (
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          padding: '60px 20px',
+          flexDirection: 'column',
+          gap: '16px'
+        }}>
+          <Loader 
+            size={32} 
+            style={{ 
+              color: '#3b82f6',
+              animation: 'spin 1s linear infinite'
+            }} 
+          />
+          <p style={{ color: '#6b7280', fontSize: '14px' }}>Đang tải danh sách đặt sân...</p>
+        </div>
+      ) : bookings.length === 0 ? (
+        <div style={{ 
+          textAlign: 'center', 
+          padding: '60px 20px',
+          color: '#6b7280'
+        }}>
+          <p style={{ fontSize: '16px', margin: 0 }}>Chưa có lịch sử đặt sân</p>
+          <p style={{ fontSize: '14px', margin: '8px 0 0 0', color: '#9ca3af' }}>
+            Đặt sân ngay để bắt đầu trải nghiệm
+          </p>
+        </div>
+      ) : (
+        <div className="bookings-list">
+        {bookings.map(booking => (
           <div key={booking.id} className="booking-card" style={{ display: 'flex', gap: '16px', alignItems: 'stretch' }}>
             {/* Thumbnail */}
             <div style={{ width: '120px', minWidth: '120px', height: '90px', borderRadius: '8px', overflow: 'hidden', background: '#f3f4f6' }}>
@@ -143,21 +364,118 @@ export default function BookingsTab() {
                 </div>
               </div>
 
-              <div className="booking-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', minWidth: '160px' }}>
+              <div className="booking-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', minWidth: '160px', gap: '8px' }}>
                 <div>
                   {getStatusBadge(booking.status)}
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="btn btn-outline small" onClick={() => openDetailModal(booking)}>Chi tiết</button>
-                  {booking.status === 'upcoming' && (
-                    <button className="btn btn-outline small" onClick={() => openCancelModal(booking)}>Hủy đặt</button>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+                  <button 
+                    className="btn btn-outline small" 
+                    onClick={() => openDetailModal(booking)}
+                    style={{ 
+                      minHeight: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    Chi tiết
+                  </button>
+                  {/* Only show cancel button if booking is upcoming/pending/confirmed AND date hasn't passed */}
+                  {(booking.status === 'upcoming' || booking.status === 'pending' || booking.status === 'confirmed') && !booking.isPastDate && (
+                    <button 
+                      className="btn btn-outline small" 
+                      onClick={() => openCancelModal(booking)}
+                      style={{ 
+                        minHeight: '32px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      Hủy đặt
+                    </button>
+                  )}
+                  {(() => {
+                    // Kiểm tra điều kiện để hiển thị nút đánh giá
+                    // 1. Thanh toán tiền mặt: status = "completed" (đã được set từ canReview) VÀ paymentStatus = "paid"
+                    // 2. Thanh toán online: status = "completed" VÀ paymentStatus = "paid"
+                    const canReview = booking.status === 'completed' && booking.paymentStatus === 'paid'
+                    const hasReview = bookingReviews[booking.id] || bookingReviews[booking._original?._id?.toString()]
+                    
+                    return canReview && !hasReview
+                  })() && (
+                    <button 
+                      className="btn small" 
+                      onClick={() => {
+                        setSelectedBooking(booking)
+                        setSelectedReview(null) // Đảm bảo không có review khi tạo mới
+                        setShowReviewModal(true)
+                      }}
+                      style={{ 
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: '#fff',
+                        border: 'none',
+                        minHeight: '32px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Star size={14} fill="#fff" />
+                      Đánh giá
+                    </button>
+                  )}
+                  {(() => {
+                    // Kiểm tra điều kiện để hiển thị badge "Đã đánh giá"
+                    const canReview = booking.status === 'completed' && booking.paymentStatus === 'paid'
+                    const hasReview = bookingReviews[booking.id] || bookingReviews[booking._original?._id?.toString()]
+                    
+                    return canReview && hasReview
+                  })() && (
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px'
+                    }}>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        gap: '4px',
+                        padding: '6px 10px',
+                        minHeight: '32px',
+                        background: '#f0f9ff',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        color: '#3b82f6',
+                        border: '1px solid #bae6fd'
+                      }}>
+                        <Star size={14} fill="#fbbf24" color="#fbbf24" />
+                        <span>Đã đánh giá</span>
+                      </div>
+                      <button 
+                        className="btn btn-outline small" 
+                        onClick={() => openEditReviewModal(booking)}
+                        style={{ 
+                          minHeight: '32px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        Chỉnh sửa
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
       {/* Cancel Booking Modal */}
       <Dialog
@@ -376,7 +694,7 @@ export default function BookingsTab() {
                   />
                 </div>
                 <div style={{ fontSize: '12px', color: '#6b7280', textAlign: 'center' }}>
-                  Mã đặt sân: #{selectedBooking.id}
+                  Mã đặt sân: {selectedBooking.bookingCode || `#${selectedBooking.id}`}
                 </div>
               </div>
             </div>
@@ -393,6 +711,48 @@ export default function BookingsTab() {
           </div>
         </div>
       )}
+
+      {/* Create/Edit Review Modal */}
+      <CreateReviewModal
+        isOpen={showReviewModal}
+        onClose={() => {
+          setShowReviewModal(false)
+          setSelectedBooking(null)
+          setSelectedReview(null)
+        }}
+        booking={selectedReview ? null : (selectedBooking ? {
+          ...selectedBooking,
+          _id: selectedBooking._original?._id || selectedBooking._original?.id || selectedBooking.id,
+          id: selectedBooking._original?._id || selectedBooking._original?.id || selectedBooking.id
+        } : null)}
+        review={selectedReview ? {
+          ...selectedReview,
+          _id: selectedReview._id || selectedReview.id,
+          id: selectedReview._id || selectedReview.id
+        } : null}
+        onSuccess={(review) => {
+          // Update state to hide "Đánh giá" button or update review
+          if (selectedBooking) {
+            const bookingId = selectedBooking._original?._id?.toString() || selectedBooking._original?.id?.toString() || selectedBooking.id
+            if (bookingId) {
+              setBookingReviews(prev => ({
+                ...prev,
+                [bookingId]: review
+              }))
+            }
+          }
+          handleReviewSuccess()
+          setShowReviewModal(false)
+          setSelectedBooking(null)
+          setSelectedReview(null)
+        }}
+      />
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }

@@ -1,344 +1,439 @@
 import React, { useState, useEffect } from "react";
-import { X, Save, User, Briefcase, Settings } from "lucide-react";
+import { X, User, Mail, Phone, Briefcase, DollarSign } from "lucide-react";
+import useClickOutside from "../../../../hook/use-click-outside";
+import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
+import useEscapeKey from "../../../../hook/use-escape-key";
 
-const PRIMARY_COLOR = "#3b82f6"; 
-const DANGER_COLOR = "#ef4444"; 
-const SUCCESS_COLOR = "#059669"; 
-const BORDER_COLOR = "#e5e7eb";
-const TEXT_COLOR = "#1f2937";
-const MUTED_TEXT_COLOR = "#6b7280";
-const BG_HEADER = "#eef2ff"; 
+const StaffEditModal = ({ isOpen, onClose, item: staff = {}, onSave }) => {
+  useBodyScrollLock(isOpen);
+  useEscapeKey(onClose, isOpen);
+  const modalRef = useClickOutside(onClose, isOpen);
 
-const overlayStyle = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.4)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 9999,
-};
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    position: "",
+    salary: "",
+    performance: "Tốt",
+  });
 
-const modalBoxStyle = {
-  width: 700,
-  background: "#fff",
-  borderRadius: 12,
-  boxShadow: "0 10px 40px rgba(2,6,23,0.2)",
-  maxHeight: "90vh",
-  overflowY: "auto",
-};
-
-const headerStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "16px 24px",
-  borderBottom: `1px solid ${BORDER_COLOR}`,
-  background: BG_HEADER, 
-  borderTopLeftRadius: 12,
-  borderTopRightRadius: 12,
-};
-
-const formSectionStyle = {
-  padding: 24,
-  display: "flex",
-  flexDirection: "column",
-  gap: 20, // Khoảng cách giữa các Card
-};
-
-const CardStyle = {
-    background: "#fff",
-    border: `1px solid ${BORDER_COLOR}`,
-    borderRadius: 8,
-    padding: 20,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-};
-
-const CardHeaderStyle = {
-    display: "flex",
-    alignItems: "center",
-    marginBottom: 16,
-    paddingBottom: 8,
-    borderBottom: `1px solid ${BORDER_COLOR}`,
-};
-
-const GridContainerStyle = {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr", // Chia form thành 2 cột
-    gap: "16px 20px",
-};
-
-const fullWidth = {
-  gridColumn: "span 2",
-};
-
-// Component cho từng trường nhập liệu
-const FormField = ({ label, name, value, onChange, type = "text", disabled = false, options = [], error = null }) => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-    <label style={{ fontSize: 13, color: MUTED_TEXT_COLOR, fontWeight: 600 }}>
-      {label}
-    </label>
-    {type === "select" ? (
-      <select
-        name={name}
-        value={value}
-        onChange={onChange}
-        style={{
-          padding: "10px 12px",
-          borderRadius: 8,
-          border: `1px solid ${error ? DANGER_COLOR : BORDER_COLOR}`,
-          fontSize: 15,
-          color: TEXT_COLOR,
-          background: disabled ? '#f3f4f6' : '#fff',
-          cursor: disabled ? 'not-allowed' : 'auto',
-          appearance: 'none', // Tắt mũi tên mặc định trên select
-        }}
-        disabled={disabled}
-      >
-        {options.map(option => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    ) : (
-      <input
-        type={type}
-        name={name}
-        value={value}
-        onChange={onChange}
-        style={{
-          padding: "10px 12px",
-          borderRadius: 8,
-          border: `1px solid ${error ? DANGER_COLOR : BORDER_COLOR}`,
-          fontSize: 15,
-          color: TEXT_COLOR,
-          background: disabled ? '#f3f4f6' : '#fff',
-          cursor: disabled ? 'not-allowed' : 'auto',
-        }}
-        disabled={disabled}
-      />
-    )}
-    {error && <div style={{ fontSize: 12, color: DANGER_COLOR, marginTop: 2 }}>{error}</div>}
-  </div>
-);
-
-// Component Badge cho Trạng thái
-const StatusBadge = ({ status }) => {
-    const isSuccess = status === 'active';
-    const bgColor = isSuccess ? "#e6f9f0" : "#f3f4f6"; 
-    const color = isSuccess ? SUCCESS_COLOR : MUTED_TEXT_COLOR; 
-
-    return (
-        <span
-            style={{
-                background: bgColor,
-                color: color,
-                padding: "6px 10px",
-                borderRadius: 999,
-                fontSize: 14,
-                fontWeight: 700,
-                display: 'inline-block',
-                minWidth: 100,
-                textAlign: 'center'
-            }}
-        >
-            {status === 'active' ? "Hoạt động" : "Tạm ngưng"}
-        </span>
-    );
-};
-
-const StaffEditModal = ({ isOpen, item, onClose, onSave }) => {
-  const [formData, setFormData] = useState(item || {});
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (item) {
+    if (isOpen && staff) {
       setFormData({
-        ...item,
-        salary: item.salary.toString(), // Chuyển lương sang chuỗi để input type="number" không lỗi
-        permissions: Array.isArray(item.permissions) ? item.permissions.join(', ') : item.permissions,
+        name: staff.name || "",
+        email: staff.email || "",
+        phone: staff.phone || "",
+        position: staff.position || "",
+        salary: staff.salary || "",
+        performance: staff.performance || "Tốt",
       });
       setErrors({});
     }
-  }, [item]);
+  }, [isOpen, staff]);
 
-  if (!isOpen || !item) return null;
-    
-  const validateField = (name, value) => {
-    let error = null;
-    if (name === 'phone' && value && !/^\d{10,11}$/.test(value)) {
-      error = "SĐT phải có 10-11 chữ số.";
+  if (!isOpen) return null;
+
+  const validate = () => {
+    const newErrors = {};
+    if (!formData.name.trim()) newErrors.name = "Tên không được để trống";
+    if (!formData.email.trim()) newErrors.email = "Email không được để trống";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = "Email không hợp lệ";
     }
-    setErrors(prev => ({ ...prev, [name]: error }));
+    if (!formData.phone.trim()) newErrors.phone = "Số điện thoại không được để trống";
+    if (!formData.position.trim()) newErrors.position = "Chức vụ không được để trống";
+    if (!formData.salary || formData.salary <= 0) newErrors.salary = "Lương phải lớn hơn 0";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    validateField(name, value);
+  const handleChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }));
+    }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Kiểm tra tất cả các lỗi trước khi lưu
-    const hasErrors = Object.values(errors).some(err => err !== null);
-    if (hasErrors) {
-        alert("Vui lòng sửa các lỗi nhập liệu trước khi lưu.");
-        return;
-    }
+    if (!validate()) return;
 
-    const dataToSave = {
+    setLoading(true);
+    try {
+      const updatedStaff = {
+        ...staff,
         ...formData,
-        salary: Number(formData.salary), // Đảm bảo lương là số
-        permissions: formData.permissions.split(',').map(p => p.trim()).filter(p => p),
-    };
-
-    onSave(dataToSave); // Gọi hàm lưu từ component cha
-    // Không đóng modal ở đây, để hàm onSave trong Staff.jsx xử lý toast và đóng
+        salary: Number(formData.salary),
+      };
+      if (onSave) {
+        await onSave(updatedStaff);
+      }
+      if (onClose) onClose();
+    } catch (error) {
+      console.error("Error saving staff:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div style={overlayStyle}>
-      <div style={modalBoxStyle}>
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: "20px",
+      }}
+      onClick={onClose}
+    >
+      <div
+        ref={modalRef}
+        style={{
+          background: "#fff",
+          borderRadius: 16,
+          width: "100%",
+          maxWidth: "600px",
+          maxHeight: "90vh",
+          overflow: "auto",
+          display: "flex",
+          flexDirection: "column",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div style={headerStyle}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: TEXT_COLOR }}>
-            <span style={{fontSize: 20, marginRight: 8}}></span> Chỉnh sửa Nhân viên: <span style={{color: PRIMARY_COLOR}}>{item.name || "N/A"}</span>
-          </h3>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "24px",
+            borderBottom: "1px solid #e5e7eb",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <User size={20} color="#22c55e" />
+            <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#111827" }}>
+              Chỉnh sửa nhân viên
+            </h3>
+          </div>
           <button
             onClick={onClose}
             style={{
-              background: "none",
-              border: 0,
+              background: "transparent",
+              border: "none",
               cursor: "pointer",
-              color: MUTED_TEXT_COLOR,
-              padding: 4,
-              borderRadius: 4,
+              color: "#6b7280",
+              padding: "4px",
             }}
           >
-            <X size={20} />
+            <X size={24} />
           </button>
         </div>
 
-        {/* Form Content */}
+        {/* Body */}
         <form onSubmit={handleSubmit}>
-          <div style={formSectionStyle}>
-            
-            {/* 1. Thông tin cá nhân */}
-            <div style={CardStyle}>
-                <div style={CardHeaderStyle}>
-                    <User size={18} style={{marginRight: 8}}/>
-                    <h4 style={{margin: 0, fontSize: 16, fontWeight: 700}}>Thông tin cá nhân</h4>
+          <div style={{ padding: "24px" }}>
+            <div style={{ marginBottom: 20 }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                <User size={16} />
+                Họ tên <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => handleChange("name", e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: errors.name ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#3b82f6";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = errors.name ? "#ef4444" : "#e5e7eb";
+                }}
+              />
+              {errors.name && (
+                <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>
+                  {errors.name}
                 </div>
-                <div style={GridContainerStyle}>
-                    <FormField 
-                        label="Mã" 
-                        name="id" 
-                        value={formData.id || ''} 
-                        onChange={handleChange} 
-                        disabled={true} 
-                    />
-                    <FormField 
-                        label="Họ tên" 
-                        name="name" 
-                        value={formData.name || ''} 
-                        onChange={handleChange} 
-                    />
-                    <FormField 
-                        label="Liên hệ (SĐT)" 
-                        name="phone" 
-                        value={formData.phone || ''} 
-                        onChange={handleChange} 
-                        error={errors.phone} // Thêm feedback
-                    />
-                </div>
+              )}
             </div>
 
-            {/* 2. Thông tin công việc */}
-            <div style={CardStyle}>
-                <div style={CardHeaderStyle}>
-                    <Briefcase size={18} style={{marginRight: 8}}/>
-                    <h4 style={{margin: 0, fontSize: 16, fontWeight: 700}}>Thông tin công việc</h4>
+            <div style={{ marginBottom: 20 }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                <Mail size={16} />
+                Email <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleChange("email", e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: errors.email ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#3b82f6";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = errors.email ? "#ef4444" : "#e5e7eb";
+                }}
+              />
+              {errors.email && (
+                <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>
+                  {errors.email}
                 </div>
-                <div style={GridContainerStyle}>
-                    <FormField 
-                        label="Chức vụ" 
-                        name="position" 
-                        value={formData.position || ''} 
-                        onChange={handleChange} 
-                    />
-                    <FormField 
-                        label="Lương (VNĐ)" 
-                        name="salary" 
-                        value={formData.salary || ''} 
-                        onChange={handleChange} 
-                        type="number"
-                    />
-                    <FormField 
-                        label="Ngày vào làm" 
-                        name="joinDate" 
-                        value={formData.joinDate || ''} 
-                        onChange={handleChange} 
-                        type="date"
-                    />
-                    <FormField 
-                        label="Trạng thái" 
-                        name="status" 
-                        value={formData.status || 'active'} 
-                        onChange={handleChange} 
-                        type="select"
-                        options={[
-                            { value: 'active', label: 'Hoạt động' },
-                            { value: 'inactive', label: 'Tạm ngưng' },
-                        ]}
-                    />
-                </div>
-                
+              )}
             </div>
 
-            {/* Footer / Nút hành động */}
-            <div style={{...fullWidth, display: 'flex', justifyContent: 'flex-end', paddingTop: 10, gap: 12}}>
-                {/* Nút Hủy (nhỏ, xám) */}
-                <button
-                    type="button"
-                    onClick={onClose}
-                    style={{
-                        background: '#e5e7eb',
-                        color: TEXT_COLOR,
-                        border: 0,
-                        borderRadius: 10,
-                        padding: "10px 20px",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                        fontSize: 16,
-                    }}
-                >
-                    Hủy bỏ
-                </button>
-
-                {/* Nút Lưu (lớn, primary) */}
-                <button
-                    type="submit"
-                    style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 8,
-                        background: PRIMARY_COLOR,
-                        color: "#fff",
-                        border: 0,
-                        borderRadius: 10,
-                        padding: "10px 20px",
-                        cursor: "pointer",
-                        fontWeight: 700,
-                        fontSize: 16,
-                        boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)',
-                    }}
-                >
-                    <Save size={18} /> Lưu thay đổi
-                </button>
+            <div style={{ marginBottom: 20 }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                <Phone size={16} />
+                Số điện thoại <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <input
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => handleChange("phone", e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: errors.phone ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#3b82f6";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = errors.phone ? "#ef4444" : "#e5e7eb";
+                }}
+              />
+              {errors.phone && (
+                <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>
+                  {errors.phone}
+                </div>
+              )}
             </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                <Briefcase size={16} />
+                Chức vụ <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.position}
+                onChange={(e) => handleChange("position", e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: errors.position ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#3b82f6";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = errors.position ? "#ef4444" : "#e5e7eb";
+                }}
+              />
+              {errors.position && (
+                <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>
+                  {errors.position}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                <DollarSign size={16} />
+                Lương (VNĐ) <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <input
+                type="number"
+                value={formData.salary}
+                onChange={(e) => handleChange("salary", e.target.value)}
+                min="0"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: errors.salary ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#3b82f6";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = errors.salary ? "#ef4444" : "#e5e7eb";
+                }}
+              />
+              {errors.salary && (
+                <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>
+                  {errors.salary}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                Hiệu suất
+              </label>
+              <select
+                value={formData.performance}
+                onChange={(e) => handleChange("performance", e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "2px solid #e5e7eb",
+                  fontSize: 14,
+                  outline: "none",
+                  cursor: "pointer",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "#3b82f6";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "#e5e7eb";
+                }}
+              >
+                <option value="Tốt">Tốt</option>
+                <option value="Trung bình">Trung bình</option>
+                <option value="Yếu">Yếu</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: 12,
+              padding: "20px 24px",
+              borderTop: "1px solid #e5e7eb",
+              background: "#f9fafb",
+            }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              style={{
+                padding: "10px 24px",
+                background: "#fff",
+                color: "#374151",
+                border: "2px solid #e5e7eb",
+                borderRadius: 10,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.6 : 1,
+              }}
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                padding: "10px 24px",
+                background: loading ? "#9ca3af" : "#22c55e",
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: loading ? "not-allowed" : "pointer",
+              }}
+            >
+              {loading ? "Đang lưu..." : "Lưu thay đổi"}
+            </button>
           </div>
         </form>
       </div>
@@ -347,3 +442,4 @@ const StaffEditModal = ({ isOpen, item, onClose, onSave }) => {
 };
 
 export default StaffEditModal;
+
