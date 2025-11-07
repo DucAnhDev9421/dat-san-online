@@ -8,10 +8,12 @@ import VenueListItem from "./Facilities/components/VenueListItem"
 import { facilityApi } from "../../api/facilityApi"
 import { getProvinces } from "../../api/provinceApi"
 import { toast } from "react-toastify"
+import useUserLocation from "../../hook/use-user-location"
 import "../../styles/Facilities.css"
 
 export default function Facilities() {
   const navigate = useNavigate()
+  const { userLocation } = useUserLocation()
   const [query, setQuery] = useState("")
   const [sport, setSport] = useState("Tất cả")
   const [view, setView] = useState("grid")
@@ -112,11 +114,14 @@ export default function Facilities() {
       open: formatOperatingHours(facility.operatingHours),
       price: formatPrice(facility.pricePerHour),
       rating: facility.averageRating || 0,
+      totalReviews: facility.totalReviews || 0,
       status: facility.status === 'opening' ? 'Còn trống' : 'Đóng cửa',
       image: facility.images && facility.images.length > 0 
         ? facility.images[0].url 
         : null,
-      _original: facility // Keep original for navigation
+      _original: facility, // Keep original for navigation
+      location: facility.location || null,
+      services: facility.services || []
     }
   }
 
@@ -268,12 +273,14 @@ export default function Facilities() {
             facilities={facilities}
             loading={facilitiesLoading || isPageLoading}
             onBookVenue={handleBookVenue}
+            userLocation={userLocation}
           />
         ) : (
           <VenueListItem
             facilities={facilities}
             loading={facilitiesLoading || isPageLoading}
             onBookVenue={handleBookVenue}
+            userLocation={userLocation}
           />
         )}
 

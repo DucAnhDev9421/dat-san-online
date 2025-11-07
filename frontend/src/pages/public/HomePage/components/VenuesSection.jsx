@@ -17,7 +17,8 @@ export default function VenuesSection({
   title, 
   venues, 
   loading, 
-  onBookVenue 
+  onBookVenue,
+  userLocation
 }) {
   const [selectedSport, setSelectedSport] = useState('all')
 
@@ -42,8 +43,29 @@ export default function VenuesSection({
     <section id={id} className="venues-section">
       <div className="container">
         <div className="section-head">
-          <h3>{title}</h3>
-          <a href="#">Xem tất cả →</a>
+          <div>
+            <h3>{title}</h3>
+            {id === 'featured' && (
+              <p style={{ 
+                fontSize: '14px', 
+                color: '#6b7280', 
+                fontWeight: '400', 
+                margin: '4px 0 0 0' 
+              }}>
+                Sân tập tốt nhất được lựa chọn
+              </p>
+            )}
+            {id === 'recent' && (
+              <p style={{ 
+                fontSize: '14px', 
+                color: '#6b7280', 
+                fontWeight: '400', 
+                margin: '4px 0 0 0' 
+              }}>
+                Khu vực được đề xuất gần vị trí của bạn
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="sport-filters">
@@ -79,10 +101,14 @@ export default function VenuesSection({
                 name={venue.name}
                 address={venue.address}
                 rating={venue.rating || venue.averageRating}
+                totalReviews={venue.totalReviews || 0}
                 open={venue.operatingHours || venue.hours}
                 price={venue.price || venue.pricePerHour}
                 chip={venue.facilities?.[0] || venue.sportCategory}
+                services={venue.services || []}
                 onBook={() => onBookVenue(venue.id)}
+                userLocation={userLocation}
+                facilityLocation={venue.location}
               />
             ))}
           </div>

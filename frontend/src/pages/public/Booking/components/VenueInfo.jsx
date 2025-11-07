@@ -43,39 +43,41 @@ export default function VenueInfo({ venueData }) {
         </div>
       </div>
 
-      <div style={{ marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: '0 0 8px 0' }}>
-          Tiện ích
-        </h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-          {venueData.facilities.map((facility, index) => {
-            const getIcon = (facility) => {
-              if (facility.includes('WiFi') || facility.includes('Internet')) return <Wifi size={12} />
-              if (facility.includes('Parking') || facility.includes('Bãi đỗ')) return <Car size={12} />
-              if (facility.includes('Cafe') || facility.includes('Đồ uống')) return <Coffee size={12} />
-              if (facility.includes('Bảo vệ') || facility.includes('An ninh')) return <Shield size={12} />
-              return null
-            }
-            
-            return (
-              <span key={index} style={{
-                background: '#ecfdf5',
-                color: '#059669',
-                padding: '6px 12px',
-                borderRadius: '20px',
-                fontSize: '12px',
-                fontWeight: '500',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}>
-                {getIcon(facility)}
-                {facility}
-              </span>
-            )
-          })}
+      {venueData.services && venueData.services.length > 0 && (
+        <div style={{ marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: '0 0 8px 0' }}>
+            Tiện ích
+          </h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {venueData.services.map((service, index) => {
+              const getIcon = (service) => {
+                if (service.includes('WiFi') || service.includes('Internet') || service.includes('Wifi')) return <Wifi size={12} />
+                if (service.includes('Parking') || service.includes('Bãi đỗ') || service.includes('Gửi xe')) return <Car size={12} />
+                if (service.includes('Cafe') || service.includes('Đồ uống') || service.includes('Quán nước')) return <Coffee size={12} />
+                if (service.includes('Bảo vệ') || service.includes('An ninh') || service.includes('Security')) return <Shield size={12} />
+                return null
+              }
+              
+              return (
+                <span key={index} style={{
+                  background: '#ecfdf5',
+                  color: '#059669',
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  {getIcon(service)}
+                  {service}
+                </span>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
       
       <div>
         <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', margin: '0 0 8px 0' }}>
