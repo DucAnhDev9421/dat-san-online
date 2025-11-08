@@ -30,6 +30,7 @@ import courtTypeRoutes from "./routes/courtType.js";
 import reviewRoutes from "./routes/review.js";
 import notificationRoutes from "./routes/notification.js";
 import provinceRoutes from "./routes/province.js";
+import analyticsRoutes from "./routes/analytics.js";
 import User from "./models/User.js";
 
 const app = express();
@@ -121,6 +122,7 @@ app.use("/api/court-types", courtTypeRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/provinces", provinceRoutes);
+app.use("/api/analytics", analyticsRoutes);
 // 404 handler
 app.use(notFound);
 
