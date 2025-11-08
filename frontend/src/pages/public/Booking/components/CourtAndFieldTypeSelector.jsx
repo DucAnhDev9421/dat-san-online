@@ -1,5 +1,5 @@
 import React from 'react'
-import { MapPin, Grid3x3 } from 'lucide-react'
+import { MapPin, Grid3x3, Activity } from 'lucide-react'
 import useDeviceType from '../../../../hook/use-device-type'
 import useClickOutside from '../../../../hook/use-click-outside'
 import useToggle from '../../../../hook/use-toggle'
@@ -7,6 +7,9 @@ import useToggle from '../../../../hook/use-toggle'
 export default function CourtAndFieldTypeSelector({ 
   courts = [],
   courtTypes = [],
+  sportCategories = [],
+  selectedSportCategory,
+  onSportCategoryChange,
   selectedCourt,
   onCourtChange,
   selectedFieldType,
@@ -32,6 +35,13 @@ export default function CourtAndFieldTypeSelector({
     return court ? court.name : 'Chọn sân'
   }
 
+  // Get sport category name from ID
+  const getSportCategoryName = (categoryId) => {
+    if (!categoryId) return 'Chọn môn thể thao'
+    const category = sportCategories.find(c => c.id === categoryId || c._id === categoryId)
+    return category ? category.name : 'Chọn môn thể thao'
+  }
+
   return (
     <div style={{ 
       background: '#fff', 
@@ -42,6 +52,125 @@ export default function CourtAndFieldTypeSelector({
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         
+        {/* Section 0: Chọn môn thể thao */}
+        <div style={{ 
+          marginBottom: isMobile ? '24px' : '28px',
+          paddingBottom: isMobile ? '20px' : '24px',
+          borderBottom: '1px solid #e5e7eb'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px',
+            marginBottom: isMobile ? '12px' : '16px' 
+          }}>
+            <Activity size={18} color="#8b5cf6" />
+            <h3 style={{ 
+              margin: 0, 
+              fontSize: isMobile ? '16px' : isTablet ? '17px' : '18px', 
+              fontWeight: '600', 
+              color: '#1f2937' 
+            }}>
+              Chọn môn thể thao
+            </h3>
+          </div>
+
+          {/* Sport Category Picker */}
+          {loading ? (
+            <div style={{ 
+              padding: '20px', 
+              textAlign: 'center', 
+              color: '#6b7280',
+              fontSize: '14px'
+            }}>
+              Đang tải môn thể thao...
+            </div>
+          ) : sportCategories.length > 0 ? (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile 
+                ? 'repeat(auto-fill, minmax(120px, 1fr))' 
+                : isTablet 
+                ? 'repeat(auto-fill, minmax(140px, 1fr))' 
+                : 'repeat(auto-fill, minmax(150px, 1fr))',
+              gap: '12px'
+            }}>
+              {sportCategories.map((category) => {
+                const categoryId = category.id || category._id
+                const isSelected = selectedSportCategory === categoryId
+                return (
+                  <button
+                    key={categoryId}
+                    onClick={() => onSportCategoryChange(categoryId)}
+                    style={{
+                      padding: isMobile ? '12px 8px' : '14px 12px',
+                      borderRadius: '10px',
+                      border: `2px solid ${isSelected ? '#8b5cf6' : '#e5e7eb'}`,
+                      background: isSelected ? '#f3e8ff' : '#fff',
+                      cursor: 'pointer',
+                      fontSize: isMobile ? '13px' : '14px',
+                      fontWeight: isSelected ? '600' : '400',
+                      color: isSelected ? '#6b21a8' : '#374151',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                      minHeight: isMobile ? '48px' : '52px'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.borderColor = '#9ca3af'
+                        e.currentTarget.style.background = '#f9fafb'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.borderColor = '#e5e7eb'
+                        e.currentTarget.style.background = '#fff'
+                      }
+                    }}
+                  >
+                    {category.name}
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div style={{ 
+              padding: '20px', 
+              textAlign: 'center', 
+              color: '#6b7280',
+              fontSize: '14px'
+            }}>
+              Không có môn thể thao nào
+            </div>
+          )}
+          
+          {/* Selected sport category indicator */}
+          {selectedSportCategory && (
+            <div style={{ 
+              marginTop: '12px', 
+              fontSize: '13px', 
+              color: '#6b7280',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <span>Đã chọn:</span>
+              <span style={{ 
+                fontWeight: '600', 
+                color: '#6b21a8',
+                padding: '4px 8px',
+                background: '#f3e8ff',
+                borderRadius: '6px'
+              }}>
+                {getSportCategoryName(selectedSportCategory)}
+              </span>
+            </div>
+          )}
+        </div>
+
         {/* Section 1: Chọn loại sân */}
         <div style={{ 
           marginBottom: isMobile ? '24px' : '28px',
@@ -66,7 +195,16 @@ export default function CourtAndFieldTypeSelector({
           </div>
 
           {/* Field Type Picker - Grid Layout */}
-          {loading ? (
+          {!selectedSportCategory ? (
+            <div style={{ 
+              padding: '20px', 
+              textAlign: 'center', 
+              color: '#6b7280',
+              fontSize: '14px'
+            }}>
+              Vui lòng chọn môn thể thao trước
+            </div>
+          ) : loading ? (
             <div style={{ 
               padding: '20px', 
               textAlign: 'center', 
@@ -298,7 +436,11 @@ export default function CourtAndFieldTypeSelector({
                     color: '#6b7280',
                     fontSize: '14px'
                   }}>
-                    {selectedFieldType ? 'Không có sân nào thuộc loại này' : 'Không có sân nào'}
+                    {!selectedSportCategory 
+                      ? 'Vui lòng chọn môn thể thao trước' 
+                      : selectedFieldType 
+                        ? 'Không có sân nào thuộc loại này' 
+                        : 'Vui lòng chọn loại sân'}
                   </div>
                 )}
               </div>

@@ -5,6 +5,7 @@ import { config } from "../config/config.js";
 import Payment from "../models/Payment.js";
 import Booking from "../models/Booking.js";
 import { format } from "date-fns";
+import { credit } from "../utils/walletService.js";
 
 // Hàm helper sắp xếp object (cho VNPay)
 function sortObject(obj) {
@@ -382,7 +383,16 @@ export const getPaymentHistory = asyncHandler(async (req, res, next) => {
 // Status thanh toán
 export const getPaymentStatus = asyncHandler(async (req, res, next) => {
   const { paymentId } = req.params;
-  const payment = await Payment.findOne({ paymentId });
+
+  // Populate booking và facility owner để kiểm tra quyền owner
+  const payment = await Payment.findOne({ paymentId }).populate({
+    path: "booking",
+    select: "facility",
+    populate: {
+      path: "facility",
+      select: "owner",
+    },
+  });
 
   if (!payment) {
     return res
@@ -390,11 +400,15 @@ export const getPaymentStatus = asyncHandler(async (req, res, next) => {
       .json({ success: false, message: "Không tìm thấy giao dịch" });
   }
 
-  // (Bảo mật) Chỉ chủ sở hữu hoặc admin mới được xem
-  if (
-    payment.user.toString() !== req.user._id.toString() &&
-    req.user.role !== "admin"
-  ) {
+  // --- LOGIC PHÂN QUYỀN MỚI ---
+  const isUserOwner = payment.user.toString() === req.user._id.toString();
+  const isAdmin = req.user.role === "admin";
+
+  // Kiểm tra xem user có phải là chủ của facility liên quan không
+  const facilityOwnerId = payment.booking?.facility?.owner?.toString();
+  const isFacilityOwner = facilityOwnerId === req.user._id.toString();
+
+  if (!isUserOwner && !isAdmin && !isFacilityOwner) {
     return res
       .status(403)
       .json({ success: false, message: "Không có quyền truy cập" });
@@ -429,27 +443,49 @@ export const refundPayment = asyncHandler(async (req, res, next) => {
       message: "Chỉ hoàn tiền cho giao dịch đã thành công",
     });
   }
+  if (payment.status === "refunded") {
+    return res.status(400).json({
+      success: false,
+      message: "Giao dịch này đã được hoàn tiền trước đó",
+    });
+  }
 
-  // TODO: Gọi API hoàn tiền của VNPay/Momo (nếu là giao dịch online)
-  // Đây là một API riêng biệt và phức tạp, cần IPN riêng.
+  const refundAmount = amount || payment.amount;
+  const refundReason = reason || "Hoàn tiền theo yêu cầu của admin/owner";
 
-  // Giả lập hoàn tiền thành công (cho cả online và cash)
-  payment.status = "refunded";
-  payment.refundInfo = {
-    refundAmount: amount || payment.amount,
-    refundDate: new Date(),
-    refundReason: reason || "Hoàn tiền theo yêu cầu của admin",
-    refundTransactionId: `REFUND_${new Date().getTime()}`,
-  };
-  await payment.save();
+  // Hoàn tiền vào ví người dùng
 
-  // Cập nhật lại booking (ví dụ: chuyển về 'cancelled')
-  await Booking.findByIdAndUpdate(payment.booking, {
-    status: "cancelled",
-    paymentStatus: "refunded",
-  });
+  try {
+    // 1. Cộng tiền vào ví của user
+    await credit(payment.user, refundAmount, "refund", {
+      bookingId: payment.booking,
+      paymentId: payment._id,
+      reason: refundReason,
+    });
 
-  res
-    .status(200)
-    .json({ success: true, message: "Hoàn tiền thành công", data: payment });
+    // 2. Cập nhật trạng thái Payment
+    payment.status = "refunded";
+    payment.refundInfo = {
+      refundAmount: refundAmount,
+      refundDate: new Date(),
+      refundReason: refundReason,
+      refundTransactionId: `REFUND_WALLET_${new Date().getTime()}`,
+    };
+    await payment.save();
+
+    // 3. Cập nhật lại booking (chuyển về 'cancelled')
+    await Booking.findByIdAndUpdate(payment.booking, {
+      status: "cancelled",
+      paymentStatus: "refunded",
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Hoàn tiền ${refundAmount} vào ví người dùng thành công`,
+      data: payment,
+    });
+  } catch (error) {
+    console.error("Lỗi khi hoàn tiền vào ví:", error);
+    next(error);
+  }
 });

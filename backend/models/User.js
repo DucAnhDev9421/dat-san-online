@@ -57,6 +57,13 @@ const userSchema = new mongoose.Schema(
       default: "vi", // hoặc 'en'
     },
 
+    // Ví điện tử
+    walletBalance: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
     // Trạng thái tài khoản
     isActive: {
       type: Boolean,
@@ -229,7 +236,9 @@ userSchema.methods.removeRefreshTokenById = async function (tokenId) {
     if (!this.refreshTokens || !Array.isArray(this.refreshTokens)) {
       this.refreshTokens = [];
     }
-    this.refreshTokens = this.refreshTokens.filter((rt) => rt._id.toString() !== tokenId);
+    this.refreshTokens = this.refreshTokens.filter(
+      (rt) => rt._id.toString() !== tokenId
+    );
     return await this.save();
   } catch (error) {
     if (error.name === "VersionError") {
@@ -267,7 +276,7 @@ userSchema.statics.cleanupUnverifiedUsers = function () {
   const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
   return this.deleteMany({
     isEmailVerified: false,
-    createdAt: { $lt: new Date(fifteenMinutesAgo) }
+    createdAt: { $lt: new Date(fifteenMinutesAgo) },
   });
 };
 

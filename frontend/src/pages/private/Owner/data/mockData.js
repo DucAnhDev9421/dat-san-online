@@ -514,3 +514,14 @@ export const activityLogData = [
     status: "success"
   }
 ];
+
+export const drinksMenu = [
+  { id: 'drink001', name: 'Nước suối Aquafina', price: 10000 },
+  { id: 'drink002', name: 'Sting Dâu', price: 15000 },
+  { id: 'drink003', name: 'Coca-Cola', price: 15000 },
+  { id: 'drink004', name: 'Pepsi', price: 15000 },
+  { id: 'drink005', name: 'Nước tăng lực Red Bull', price: 20000 },
+  { id: 'drink006', name: 'Nước chanh muối', price: 12000 },
+  { id: 'drink007', name: 'Trà ô long', price: 15000 },
+];
+
