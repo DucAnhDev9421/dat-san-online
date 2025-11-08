@@ -17,12 +17,8 @@ router.use(authenticateToken); //
 // POST /api/payments/init - Khởi tạo payment (Momo, VNPay)
 router.post("/init", paymentController.initPayment); //
 
-// POST /api/payments/cash - Thanh toán tiền mặt (owner/admin)
-router.post(
-  "/cash",
-  authorize("owner", "admin"),
-  paymentController.paymentCash
-); //
+// POST /api/payments/cash - Thanh toán tiền mặt (owner)
+router.post("/cash", authorize("owner"), paymentController.paymentCash); //
 
 // GET /api/payments/history - Lịch sử thanh toán (của tôi)
 router.get("/history", paymentController.getPaymentHistory); //
@@ -30,10 +26,10 @@ router.get("/history", paymentController.getPaymentHistory); //
 // GET /api/payments/:paymentId/status - Status thanh toán
 router.get("/:paymentId/status", paymentController.getPaymentStatus); //
 
-// POST /api/payments/:paymentId/refund - Hoàn tiền (owner/admin)
+// POST /api/payments/:paymentId/refund - Hoàn tiền (owner)
 router.post(
   "/:paymentId/refund",
-  authorize("owner", "admin"),
+  authorize("owner", "admin "),
   paymentController.refundPayment
 ); //
 

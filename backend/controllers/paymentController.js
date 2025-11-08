@@ -382,7 +382,16 @@ export const getPaymentHistory = asyncHandler(async (req, res, next) => {
 // Status thanh toán
 export const getPaymentStatus = asyncHandler(async (req, res, next) => {
   const { paymentId } = req.params;
-  const payment = await Payment.findOne({ paymentId });
+
+  // Populate booking và facility owner để kiểm tra quyền owner
+  const payment = await Payment.findOne({ paymentId }).populate({
+    path: "booking",
+    select: "facility",
+    populate: {
+      path: "facility",
+      select: "owner",
+    },
+  });
 
   if (!payment) {
     return res
@@ -390,11 +399,15 @@ export const getPaymentStatus = asyncHandler(async (req, res, next) => {
       .json({ success: false, message: "Không tìm thấy giao dịch" });
   }
 
-  // (Bảo mật) Chỉ chủ sở hữu hoặc admin mới được xem
-  if (
-    payment.user.toString() !== req.user._id.toString() &&
-    req.user.role !== "admin"
-  ) {
+  // --- LOGIC PHÂN QUYỀN MỚI ---
+  const isUserOwner = payment.user.toString() === req.user._id.toString();
+  const isAdmin = req.user.role === "admin";
+
+  // Kiểm tra xem user có phải là chủ của facility liên quan không
+  const facilityOwnerId = payment.booking?.facility?.owner?.toString();
+  const isFacilityOwner = facilityOwnerId === req.user._id.toString();
+
+  if (!isUserOwner && !isAdmin && !isFacilityOwner) {
     return res
       .status(403)
       .json({ success: false, message: "Không có quyền truy cập" });
