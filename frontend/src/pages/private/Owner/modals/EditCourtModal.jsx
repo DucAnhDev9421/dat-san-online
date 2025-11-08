@@ -7,16 +7,12 @@ import useEscapeKey from "../../../../hook/use-escape-key";
 import { courtApi } from "../../../../api/courtApi";
 
 
-
-// Component Modal chính
 const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
-  // Lock body scroll
+
   useBodyScrollLock(isOpen)
-  
-  // Handle escape key
+
   useEscapeKey(onClose, isOpen)
   
-  // Handle click outside
   const modalRef = useClickOutside(onClose, isOpen)
 
   const [formData, setFormData] = useState({
@@ -48,7 +44,6 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear error for this field
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
@@ -94,7 +89,6 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
     setLoading(true);
 
     try {
-      // Chuẩn bị dữ liệu để gửi API
       const courtData = {
         name: formData.name.trim(),
         type: formData.type,
@@ -103,25 +97,16 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
         status: formData.status || "active",
       };
 
-      console.log("Updating court with data:", courtData);
-
-      // Gọi API cập nhật court
       const result = await courtApi.updateCourt(courtId, courtData);
-
-      console.log("Court update response:", result);
 
       if (result.success && result.data) {
         const court = result.data;
-        
-        console.log("Court updated successfully:", court);
         toast.success(result.message || "Cập nhật sân thành công!");
 
-        // Call onSave callback if provided (to refresh list)
         if (onSave && typeof onSave === 'function') {
           onSave(court);
         }
 
-        // Close modal
         onClose();
       } else {
         throw new Error(result.message || "Có lỗi xảy ra khi cập nhật sân");
@@ -129,16 +114,13 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
     } catch (error) {
       console.error("Error updating court:", error);
       
-      // Xử lý lỗi từ handleApiError
       let errorMessage = "Có lỗi xảy ra khi cập nhật sân";
       
       if (error.status === 0) {
-        // Network error
         errorMessage = "Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.";
       } else {
         errorMessage = error.message || errorMessage;
         
-        // Hiển thị lỗi validation nếu có
         if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
           const validationErrors = error.errors.map(err => err.msg || err.message || err).join(", ");
           errorMessage = validationErrors || errorMessage;
@@ -205,7 +187,6 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} style={{ padding: "24px" }}>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
@@ -234,7 +215,7 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
             <div>
               <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
-                Loại sân *
+                Loại sân (Môn thể thao) *
               </label>
               <select
                 name="type"
@@ -250,9 +231,7 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
                 }}
               >
                 <option value="">Chọn loại</option>
-                <option value="5 người">5 người</option>
-                <option value="7 người">7 người</option>
-                <option value="11 người">11 người</option>
+                <option value="Bóng đá">Bóng đá</option>
                 <option value="Tennis">Tennis</option>
                 <option value="Bóng rổ">Bóng rổ</option>
                 <option value="Cầu lông">Cầu lông</option>
@@ -264,7 +243,7 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
             </div>
             <div>
               <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
-                Sức chứa *
+                Sức chứa (Số người) *
               </label>
               <input
                 type="number"
@@ -280,7 +259,7 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
                   border: errors.capacity ? "2px solid #ef4444" : "2px solid #e5e7eb",
                   fontSize: 15,
                 }}
-                placeholder="VD: 10"
+                placeholder="VD: 5"
               />
               {errors.capacity && (
                 <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.capacity}</p>
@@ -336,8 +315,6 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
               </select>
             </div>
           </div>
-
-          {/* Buttons */}
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
             <button
               type="button"

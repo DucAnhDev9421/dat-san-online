@@ -25,17 +25,14 @@ const Bookings = () => {
   const [loading, setLoading] = useState(true);
   const [facilities, setFacilities] = useState([]);
   const [selectedFacilityId, setSelectedFacilityId] = useState(null);
-  const [refreshKey, setRefreshKey] = useState(0); // For forcing refresh
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
 
-  // Ref to track if we should show toast for new bookings
   const showNewBookingToastRef = useRef(true);
 
-  // Fetch owner's facilities on mount
   useEffect(() => {
     const fetchFacilities = async () => {
       if (!user?._id) return;
@@ -46,7 +43,6 @@ const Bookings = () => {
           const facilitiesList = result.data.facilities;
           setFacilities(facilitiesList);
           
-          // Auto-select first facility if available and no facility is selected
           if (facilitiesList.length > 0 && !selectedFacilityId) {
             setSelectedFacilityId(facilitiesList[0]._id || facilitiesList[0].id);
           }
@@ -58,10 +54,9 @@ const Bookings = () => {
     };
 
     fetchFacilities();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [user?._id]);
 
-  // Fetch bookings when facility is selected
   useEffect(() => {
     const fetchBookings = async () => {
       if (!selectedFacilityId) {
@@ -81,7 +76,6 @@ const Bookings = () => {
           params.status = statusFilter;
         }
 
-        // Search functionality - backend will search in user name, email, phone, etc.
         if (searchQuery) {
           params.search = searchQuery;
         }
@@ -89,10 +83,9 @@ const Bookings = () => {
         const result = await bookingApi.getFacilityBookings(selectedFacilityId, params);
         
         if (result.success && result.data) {
-          // Transform API data to match component format
           const transformedBookings = result.data.bookings.map(booking => ({
-            id: booking.bookingCode || booking._id || booking.id, // Ưu tiên bookingCode
-            bookingId: booking._id || booking.id, // Giữ _id cho API calls
+            id: booking.bookingCode || booking._id || booking.id, 
+            bookingId: booking._id || booking.id,
             customer: booking.user?.name || booking.contactInfo?.name || 'N/A',
             phone: booking.user?.phone || booking.contactInfo?.phone || 'N/A',
             email: booking.user?.email || booking.contactInfo?.email || 'N/A',
@@ -105,7 +98,6 @@ const Bookings = () => {
             pay: booking.paymentStatus || 'pending',
             bookingDate: booking.createdAt ? new Date(booking.createdAt).toLocaleDateString('vi-VN') : 'N/A',
             notes: booking.contactInfo?.notes || booking.ownerNotes || '',
-            // Keep original booking data for API calls
             _original: booking
           }));
 
@@ -125,14 +117,11 @@ const Bookings = () => {
     fetchBookings();
   }, [selectedFacilityId, page, pageSize, statusFilter, searchQuery, refreshKey]);
 
-  // Join facility room when facility is selected
   useEffect(() => {
     if (selectedFacilityId && isConnected) {
-      // Join facility room in owner namespace
       if (ownerSocket) {
         joinFacility(selectedFacilityId, 'owner');
       }
-      // Also join in default namespace to catch all events
       if (defaultSocket) {
         joinFacility(selectedFacilityId, 'default');
       }
@@ -150,66 +139,51 @@ const Bookings = () => {
     };
   }, [selectedFacilityId, isConnected, ownerSocket, defaultSocket, joinFacility, leaveFacility]);
 
-  // Socket event listeners for real-time updates
   useEffect(() => {
     if ((!ownerSocket && !defaultSocket) || !isConnected || !selectedFacilityId) {
       return;
     }
-
-    // Listen for new bookings
     const handleNewBooking = (data) => {
-      console.log('📥 New booking received:', data);
-      
-      // Check if booking has facilityId or extract from booking object
       const facilityId = data.facilityId || data.booking?.facility?._id || data.booking?.facility;
       
       if (facilityId && facilityId.toString() === selectedFacilityId.toString()) {
-        // Show toast notification
         toast.info('Có đơn đặt sân mới! Đang cập nhật...', {
           position: 'top-right',
           autoClose: 3000,
         });
-        
-        // Refresh bookings list
+      
         setRefreshKey((prev) => prev + 1);
       }
     };
 
-    // Listen for booking status updates
     const handleStatusUpdate = (data) => {
       console.log('📥 Booking status updated:', data);
       
-      // Only refresh if the booking is for the selected facility
       if (data.facilityId && data.facilityId.toString() === selectedFacilityId.toString()) {
-        // Show toast notification
+
         toast.info('Đơn đặt sân đã được cập nhật!', {
           position: 'top-right',
           autoClose: 2000,
         });
-        
-        // Refresh bookings list
+
         setRefreshKey((prev) => prev + 1);
       }
     };
 
-    // Listen for slot booked events (new booking) - this is emitted to facility room
     const handleSlotBooked = (data) => {
       console.log('📥 Slot booked:', data);
       
-      // Check if this is for the selected facility
       if (data.facilityId && data.facilityId.toString() === selectedFacilityId.toString()) {
-        // Show toast notification
+
         toast.info('Có đơn đặt sân mới! Đang cập nhật...', {
           position: 'top-right',
           autoClose: 3000,
         });
         
-        // Refresh bookings list
         setRefreshKey((prev) => prev + 1);
       }
     };
 
-    // Register event listeners on both sockets
     if (ownerSocket) {
       ownerSocket.on('booking:new', handleNewBooking);
       ownerSocket.on('booking:slot:booked', handleSlotBooked);
@@ -221,7 +195,6 @@ const Bookings = () => {
       defaultSocket.on('booking:status:updated', handleStatusUpdate);
     }
 
-    // Cleanup listeners on unmount or when dependencies change
     return () => {
       if (ownerSocket) {
         ownerSocket.off('booking:new', handleNewBooking);
@@ -235,16 +208,14 @@ const Bookings = () => {
     };
   }, [ownerSocket, defaultSocket, isConnected, selectedFacilityId]);
 
-  // Client-side filtering for search (if backend doesn't support search)
   const filteredBookings = useMemo(
     () => {
-      // If backend supports search, no need to filter again
+
       if (searchQuery) {
         return bookings;
       }
       
       return bookings.filter((r) => {
-        // Status filter is already handled by backend
         return true;
       });
     },
@@ -252,12 +223,8 @@ const Bookings = () => {
   );
 
   const bookingSlice = filteredBookings;
-
-  // when a booking is selected, find the court info (images, etc.) from mock data
-  // Note: This might need to be updated to fetch from API if court images are needed
   const courtInfo = selectedBooking ? courtData.find((c) => c.name === selectedBooking.court) : null;
 
-  // Handlers
   const handlers = {
     onView: (booking) => {
       setSelectedBooking(booking);
