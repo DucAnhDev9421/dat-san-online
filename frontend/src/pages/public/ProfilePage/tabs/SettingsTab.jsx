@@ -92,26 +92,49 @@ export default function SettingsTab({ notifications, setNotifications }) {
         {/* Bảo mật */}
         <div>
           <h4 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600' }}>Bảo mật</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ 
+            display: 'flex', 
+            flexWrap: 'wrap',
+            gap: '12px' 
+          }}>
             <button 
-              className="btn btn-outline" 
-              style={{ 
-                justifyContent: 'flex-start',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}
               onClick={() => setShowChangePasswordModal(true)}
+              style={{ 
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 20px',
+                background: '#fff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
             >
-              🔒 Đổi mật khẩu
+              <span style={{ fontSize: '18px' }}>🔒</span>
+              <span>Đổi mật khẩu</span>
             </button>
-            <button className="btn btn-outline" style={{ 
-              justifyContent: 'flex-start',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}>
-              🔐 Xác thực 2 bước
+            <button 
+              style={{ 
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 20px',
+                background: '#fff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+            >
+              <span style={{ fontSize: '18px' }}>🔐</span>
+              <span>Xác thực 2 bước</span>
             </button>
           </div>
         </div>
