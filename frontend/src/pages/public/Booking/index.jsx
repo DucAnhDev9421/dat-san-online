@@ -34,6 +34,8 @@ function Booking() {
   const [error, setError] = useState(null)
   const [courts, setCourts] = useState([])
   const [courtTypes, setCourtTypes] = useState([])
+  const [sportCategories, setSportCategories] = useState([])
+  const [selectedSportCategory, setSelectedSportCategory] = useState(null)
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -197,33 +199,41 @@ function Booking() {
           console.error('Error fetching reviews:', reviewsError)
         }
 
-        // Courts will be fetched in separate useEffect when field type changes
-        // This avoids duplicate fetches
-
-        // Fetch court types
+        // Fetch sport categories and filter by facility types
         try {
-          const courtTypesResult = await categoryApi.getCourtTypes({
+          const categoriesResult = await categoryApi.getSportCategories({
             status: 'active'
           })
           
-          if (courtTypesResult.success && courtTypesResult.data) {
-            const typesList = Array.isArray(courtTypesResult.data)
-              ? courtTypesResult.data
-              : courtTypesResult.data.courtTypes || []
+          if (categoriesResult.success && categoriesResult.data) {
+            const categoriesList = Array.isArray(categoriesResult.data)
+              ? categoriesResult.data
+              : []
             
-            const types = typesList.map(type => ({
-              id: type._id || type.id,
-              name: type.name,
-              description: type.description
-            }))
-            setCourtTypes(types)
+            // Get facility types (array of sport names)
+            const facilityTypes = facilityResult.data.types || []
             
-            // Don't auto-select field type - let user choose
-            // This prevents filtering issues when courts haven't loaded yet
+            // Filter categories to only include those that match facility types
+            const matchingCategories = categoriesList
+              .filter(cat => {
+                const categoryName = cat.name || ''
+                // Check if category name matches any facility type (case-insensitive)
+                return facilityTypes.some(facilityType => 
+                  categoryName.toLowerCase() === facilityType.toLowerCase()
+                )
+              })
+              .map(cat => ({
+                id: cat._id || cat.id,
+                name: cat.name
+              }))
+            
+            setSportCategories(matchingCategories)
           }
-        } catch (typesError) {
-          // Don't show error toast for court types
+        } catch (categoriesError) {
+          console.error('Error fetching sport categories:', categoriesError)
         }
+
+        // Courts and court types will be fetched when sport category is selected
 
       } catch (error) {
         setError('Không thể tải thông tin cơ sở')
@@ -241,15 +251,58 @@ function Booking() {
     window.scrollTo(0, 0)
   }, [venueId, venueData])
 
-  // Fetch courts when field type changes (using API filter)
+  // Fetch court types when sport category is selected
   useEffect(() => {
-    if (!venueId) return
+    const fetchCourtTypes = async () => {
+      if (!selectedSportCategory) {
+        setCourtTypes([])
+        return
+      }
+
+      try {
+        const courtTypesResult = await categoryApi.getCourtTypes({
+          sportCategory: selectedSportCategory,
+          status: 'active'
+        })
+        
+        if (courtTypesResult.success && courtTypesResult.data) {
+          const typesList = Array.isArray(courtTypesResult.data)
+            ? courtTypesResult.data
+            : courtTypesResult.data.courtTypes || []
+          
+          const types = typesList.map(type => ({
+            id: type._id || type.id,
+            name: type.name,
+            description: type.description
+          }))
+          setCourtTypes(types)
+          
+          // Reset field type when sport category changes
+          setSelectedFieldType(null)
+        }
+      } catch (typesError) {
+        console.error('Error fetching court types:', typesError)
+        setCourtTypes([])
+      }
+    }
+
+    fetchCourtTypes()
+  }, [selectedSportCategory])
+
+  // Fetch courts when sport category or field type changes (using API filter)
+  useEffect(() => {
+    if (!venueId || !selectedSportCategory) {
+      setCourts([])
+      setSelectedCourt(null)
+      return
+    }
 
     const fetchCourtsByType = async () => {
       try {
         // Build query params
         const params = {
           facility: venueId,
+          sportCategory: selectedSportCategory,
           status: 'active',
           limit: 100
         }
@@ -296,46 +349,21 @@ function Booking() {
           } else {
             // Clear selection if no courts available
             setSelectedCourt(null)
-            
-            // Fallback: fetch all courts to see what types are available
-            if (selectedFieldType) {
-              try {
-                const allCourtsResult = await courtApi.getCourts({
-                  facility: venueId,
-                  status: 'active',
-                  limit: 100
-                })
-                if (allCourtsResult.success && allCourtsResult.data && allCourtsResult.data.courts) {
-                  const allCourtsList = allCourtsResult.data.courts.map(court => ({
-                    id: court._id || court.id,
-                    name: court.name,
-                    type: court.type,
-                    price: court.price,
-                    capacity: court.capacity,
-                    status: court.status
-                  }))
-                  
-                  // Show all courts as fallback so user can still see available courts
-                  setCourts(allCourtsList)
-                  if (allCourtsList.length > 0) {
-                    setSelectedCourt(allCourtsList[0].id || allCourtsList[0]._id)
-                  }
-                }
-              } catch (fallbackError) {
-                // Silently fail fallback fetch
-              }
-            }
+            setCourts([])
           }
+        } else {
+          setCourts([])
+          setSelectedCourt(null)
         }
       } catch (error) {
-        // Don't show toast for court fetch errors
+        console.error('Error fetching courts:', error)
+        setCourts([])
+        setSelectedCourt(null)
       }
     }
 
-    // Always fetch when field type changes
-    // If selectedFieldType is null, fetch all courts (no filter)
     fetchCourtsByType()
-  }, [selectedFieldType, venueId, courtTypes])
+  }, [selectedFieldType, selectedSportCategory, venueId, courtTypes])
 
   // Socket.IO: Join facility and court rooms, listen for slot lock events
   useEffect(() => {
@@ -899,6 +927,9 @@ function Booking() {
           <CourtAndFieldTypeSelector 
             courts={courts}
             courtTypes={courtTypes}
+            sportCategories={sportCategories}
+            selectedSportCategory={selectedSportCategory}
+            onSportCategoryChange={setSelectedSportCategory}
             selectedCourt={selectedCourt}
             onCourtChange={setSelectedCourt}
             selectedFieldType={selectedFieldType}

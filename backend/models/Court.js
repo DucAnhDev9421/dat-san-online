@@ -25,6 +25,12 @@ const courtSchema = new mongoose.Schema(
       ref: "CourtType",
       required: false, // Optional để backward compatible với dữ liệu cũ
     },
+    // Tham chiếu đến SportCategory (môn thể thao) - để lọc nhanh
+    sportCategory: {
+      type: Schema.Types.ObjectId,
+      ref: "SportCategory",
+      required: false, // Optional để backward compatible với dữ liệu cũ
+    },
     capacity: {
       type: Number,
       required: [true, "Sức chứa là bắt buộc"],
@@ -73,6 +79,7 @@ courtSchema.index({ facility: 1 });
 courtSchema.index({ status: 1 });
 courtSchema.index({ type: 1 });
 courtSchema.index({ courtType: 1 }); // Index cho courtType reference
+courtSchema.index({ sportCategory: 1 }); // Index cho sportCategory để lọc nhanh
 courtSchema.index({ name: "text" }); // Hỗ trợ tìm kiếm text
 
 export default mongoose.model("Court", courtSchema);

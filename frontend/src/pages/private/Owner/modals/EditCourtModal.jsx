@@ -5,6 +5,7 @@ import useClickOutside from "../../../../hook/use-click-outside";
 import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
 import useEscapeKey from "../../../../hook/use-escape-key";
 import { courtApi } from "../../../../api/courtApi";
+import { categoryApi } from "../../../../api/categoryApi";
 
 
 const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
@@ -17,33 +18,132 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
 
   const [formData, setFormData] = useState({
     name: "",
-    type: "",
+    sportCategory: "",
+    courtType: "",
     capacity: "",
     price: "",
     status: "active",
   });
   
+  const [sportCategories, setSportCategories] = useState([]);
+  const [courtTypes, setCourtTypes] = useState([]);
+  const [loadingCourtTypes, setLoadingCourtTypes] = useState(false);
+  const [loadingInitialData, setLoadingInitialData] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
+  // Fetch sport categories when modal opens
   useEffect(() => {
-    if (isOpen && initialData) {
-      setFormData({
-        name: initialData.name || "",
-        type: initialData.type || "",
-        capacity: initialData.capacity?.toString() || "",
-        price: initialData.price?.toString() || "",
-        status: initialData.status || "active",
-      });
-      setErrors({});
-    }
+    const fetchSportCategories = async () => {
+      if (!isOpen) return;
+      
+      try {
+        const result = await categoryApi.getSportCategories({ status: "active" });
+        if (result.success && result.data) {
+          setSportCategories(Array.isArray(result.data) ? result.data : []);
+        }
+      } catch (error) {
+        console.error("Error fetching sport categories:", error);
+      }
+    };
+
+    fetchSportCategories();
+  }, [isOpen]);
+
+  // Load initial data and set sport category and court type
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (!isOpen || !initialData) return;
+
+      setLoadingInitialData(true);
+      try {
+        // Get courtType from initialData (could be populated or just ID)
+        const courtTypeId = initialData.courtType?._id || initialData.courtType || null;
+        let sportCategoryId = null;
+
+        // If courtType is populated with sportCategory
+        if (initialData.courtType?.sportCategory) {
+          sportCategoryId = initialData.courtType.sportCategory._id || initialData.courtType.sportCategory;
+        } else if (courtTypeId) {
+          // Fetch court type to get sport category
+          try {
+            const courtTypeResult = await categoryApi.getCourtTypeById(courtTypeId);
+            if (courtTypeResult.success && courtTypeResult.data) {
+              const courtType = courtTypeResult.data;
+              sportCategoryId = courtType.sportCategory?._id || courtType.sportCategory;
+            }
+          } catch (error) {
+            console.error("Error fetching court type:", error);
+          }
+        }
+
+        // Set form data
+        setFormData({
+          name: initialData.name || "",
+          sportCategory: sportCategoryId || "",
+          courtType: courtTypeId || "",
+          capacity: initialData.capacity?.toString() || "",
+          price: initialData.price?.toString() || "",
+          status: initialData.status || "active",
+        });
+        setErrors({});
+      } catch (error) {
+        console.error("Error loading initial data:", error);
+      } finally {
+        setLoadingInitialData(false);
+      }
+    };
+
+    loadInitialData();
   }, [isOpen, initialData]);
+
+  // Fetch court types when sport category is selected
+  useEffect(() => {
+    const fetchCourtTypes = async () => {
+      if (!formData.sportCategory) {
+        setCourtTypes([]);
+        return;
+      }
+
+      setLoadingCourtTypes(true);
+      try {
+        const result = await categoryApi.getCourtTypes({ 
+          sportCategory: formData.sportCategory,
+          status: "active" 
+        });
+        
+        if (result.success && result.data) {
+          setCourtTypes(Array.isArray(result.data) ? result.data : []);
+        } else {
+          setCourtTypes([]);
+        }
+      } catch (error) {
+        console.error("Error fetching court types:", error);
+        setCourtTypes([]);
+      } finally {
+        setLoadingCourtTypes(false);
+      }
+    };
+
+    fetchCourtTypes();
+  }, [formData.sportCategory]);
 
   if (!isOpen) return null;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    // If sport category changes, reset court type
+    if (name === "sportCategory") {
+      setFormData((prev) => ({ 
+        ...prev, 
+        [name]: value,
+        courtType: "" // Reset court type when sport category changes
+      }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
+    
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
@@ -56,8 +156,12 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
       newErrors.name = "Tên sân là bắt buộc";
     }
     
-    if (!formData.type) {
-      newErrors.type = "Loại sân là bắt buộc";
+    if (!formData.sportCategory) {
+      newErrors.sportCategory = "Môn thể thao là bắt buộc";
+    }
+    
+    if (!formData.courtType) {
+      newErrors.courtType = "Loại sân là bắt buộc";
     }
     
     if (!formData.capacity || Number(formData.capacity) < 1) {
@@ -89,9 +193,15 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
     setLoading(true);
 
     try {
+      // Get court type name for backward compatibility
+      const selectedCourtType = courtTypes.find(ct => ct._id === formData.courtType);
+      const courtTypeName = selectedCourtType?.name || "";
+
       const courtData = {
         name: formData.name.trim(),
-        type: formData.type,
+        type: courtTypeName, // Keep for backward compatibility
+        courtType: formData.courtType, // New field
+        sportCategory: formData.sportCategory, // Sport category for filtering
         capacity: Number(formData.capacity),
         price: Number(formData.price),
         status: formData.status || "active",
@@ -188,111 +298,163 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
         </div>
 
         <form onSubmit={handleSubmit} style={{ padding: "24px" }}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
-              Tên sân *
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              style={{
-                width: "100%",
-                padding: "12px 16px",
-                borderRadius: 10,
-                border: errors.name ? "2px solid #ef4444" : "2px solid #e5e7eb",
-                fontSize: 15,
-              }}
-              placeholder="VD: Sân bóng đá A1"
-            />
-            {errors.name && (
-              <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.name}</p>
-            )}
-          </div>
+          {loadingInitialData && (
+            <div style={{ padding: "24px", textAlign: "center" }}>
+              <Loader size={24} style={{ animation: "spin 1s linear infinite", marginBottom: 12 }} />
+              <p style={{ color: "#6b7280", fontSize: 14 }}>Đang tải thông tin...</p>
+            </div>
+          )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-            <div>
-              <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
-                Loại sân (Môn thể thao) *
-              </label>
-              <select
-                name="type"
-                value={formData.type}
-                onChange={handleChange}
-                required
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
-                  borderRadius: 10,
-                  border: errors.type ? "2px solid #ef4444" : "2px solid #e5e7eb",
-                  fontSize: 15,
-                }}
-              >
-                <option value="">Chọn loại</option>
-                <option value="Bóng đá">Bóng đá</option>
-                <option value="Tennis">Tennis</option>
-                <option value="Bóng rổ">Bóng rổ</option>
-                <option value="Cầu lông">Cầu lông</option>
-                <option value="Bóng chuyền">Bóng chuyền</option>
-              </select>
-              {errors.type && (
-                <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.type}</p>
-              )}
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
-                Sức chứa (Số người) *
-              </label>
-              <input
-                type="number"
-                name="capacity"
-                value={formData.capacity}
-                onChange={handleChange}
-                required
-                min="1"
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
-                  borderRadius: 10,
-                  border: errors.capacity ? "2px solid #ef4444" : "2px solid #e5e7eb",
-                  fontSize: 15,
-                }}
-                placeholder="VD: 5"
-              />
-              {errors.capacity && (
-                <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.capacity}</p>
-              )}
-            </div>
-          </div>
+          {!loadingInitialData && (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+                  Tên sân *
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    borderRadius: 10,
+                    border: errors.name ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                    fontSize: 15,
+                  }}
+                  placeholder="VD: Sân bóng đá A1"
+                />
+                {errors.name && (
+                  <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.name}</p>
+                )}
+              </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-            <div>
-              <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
-                Giá/giờ (VNĐ) *
-              </label>
-              <input
-                type="number"
-                name="price"
-                value={formData.price}
-                onChange={handleChange}
-                required
-                min="0"
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
-                  borderRadius: 10,
-                  border: errors.price ? "2px solid #ef4444" : "2px solid #e5e7eb",
-                  fontSize: 15,
-                }}
-                placeholder="VD: 150000"
-              />
-              {errors.price && (
-                <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.price}</p>
-              )}
-            </div>
-            <div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+                  Môn thể thao *
+                </label>
+                <select
+                  name="sportCategory"
+                  value={formData.sportCategory}
+                  onChange={handleChange}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    borderRadius: 10,
+                    border: errors.sportCategory ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                    fontSize: 15,
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="">Chọn môn thể thao</option>
+                  {sportCategories.map((category) => (
+                    <option key={category._id || category.id} value={category._id || category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.sportCategory && (
+                  <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.sportCategory}</p>
+                )}
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+                  Loại sân *
+                </label>
+                <select
+                  name="courtType"
+                  value={formData.courtType}
+                  onChange={handleChange}
+                  required
+                  disabled={!formData.sportCategory || loadingCourtTypes}
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    borderRadius: 10,
+                    border: errors.courtType ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                    fontSize: 15,
+                    cursor: !formData.sportCategory || loadingCourtTypes ? "not-allowed" : "pointer",
+                    opacity: !formData.sportCategory || loadingCourtTypes ? 0.6 : 1,
+                    background: !formData.sportCategory || loadingCourtTypes ? "#f3f4f6" : "#fff",
+                  }}
+                >
+                  <option value="">
+                    {loadingCourtTypes 
+                      ? "Đang tải loại sân..." 
+                      : !formData.sportCategory 
+                        ? "Vui lòng chọn môn thể thao trước" 
+                        : "Chọn loại sân"}
+                  </option>
+                  {courtTypes.map((courtType) => (
+                    <option key={courtType._id || courtType.id} value={courtType._id || courtType.id}>
+                      {courtType.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.courtType && (
+                  <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.courtType}</p>
+                )}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+                    Sức chứa (Số người) *
+                  </label>
+                  <input
+                    type="number"
+                    name="capacity"
+                    value={formData.capacity}
+                    onChange={handleChange}
+                    required
+                    min="1"
+                    style={{
+                      width: "100%",
+                      padding: "12px 16px",
+                      borderRadius: 10,
+                      border: errors.capacity ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                      fontSize: 15,
+                    }}
+                    placeholder="VD: 5"
+                  />
+                  {errors.capacity && (
+                    <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.capacity}</p>
+                  )}
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+                    Giá/giờ (VNĐ) *
+                  </label>
+                  <input
+                    type="number"
+                    name="price"
+                    value={formData.price}
+                    onChange={handleChange}
+                    required
+                    min="0"
+                    style={{
+                      width: "100%",
+                      padding: "12px 16px",
+                      borderRadius: 10,
+                      border: errors.price ? "2px solid #ef4444" : "2px solid #e5e7eb",
+                      fontSize: 15,
+                    }}
+                    placeholder="VD: 150000"
+                  />
+                  {errors.price && (
+                    <p style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>{errors.price}</p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {!loadingInitialData && (
+            <div style={{ marginBottom: 24 }}>
               <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
                 Trạng thái *
               </label>
@@ -307,6 +469,7 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
                   borderRadius: 10,
                   border: "2px solid #e5e7eb",
                   fontSize: 15,
+                  cursor: "pointer",
                 }}
               >
                 <option value="active">Hoạt động</option>
@@ -314,12 +477,12 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
                 <option value="inactive">Tạm ngưng</option>
               </select>
             </div>
-          </div>
+          )}
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
             <button
               type="button"
               onClick={onClose}
-              disabled={loading}
+              disabled={loading || loadingInitialData}
               style={{
                 padding: "12px 24px",
                 background: "#fff",
@@ -328,18 +491,18 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
                 borderRadius: 10,
                 fontSize: 15,
                 fontWeight: 600,
-                cursor: loading ? "not-allowed" : "pointer",
-                opacity: loading ? 0.5 : 1,
+                cursor: loading || loadingInitialData ? "not-allowed" : "pointer",
+                opacity: loading || loadingInitialData ? 0.5 : 1,
               }}
             >
               Hủy
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || loadingInitialData}
               style={{
                 padding: "12px 24px",
-                background: loading
+                background: loading || loadingInitialData
                   ? "#9ca3af"
                   : "linear-gradient(135deg, #3b82f6, #2563eb)",
                 color: "#fff",
@@ -347,7 +510,7 @@ const EditCourtModal = ({ isOpen, onClose, initialData = {}, onSave }) => {
                 borderRadius: 10,
                 fontSize: 15,
                 fontWeight: 600,
-                cursor: loading ? "not-allowed" : "pointer",
+                cursor: loading || loadingInitialData ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
