@@ -1,18 +1,50 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Plus } from "lucide-react";
-import { promotionsData } from "../data/mockData";
-import { facilityData } from "../data/mockData";
+import { toast } from "react-toastify";
+import { promotionApi } from "../../../../api/promotionApi";
+import { facilityApi } from "../../../../api/facilityApi";
 import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 import PromotionFilters from "../components/Promotions/PromotionFilters";
 import PromotionTable from "../components/Promotions/PromotionTable";
 import PromotionAddEditModal from "../components/Promotions/PromotionAddEditModal";
 
+// Transform promotion from API format to component format (moved outside to prevent re-creation)
+const transformPromotionFromAPI = (promo) => {
+    const applicableFacilities = promo.isAllFacilities
+      ? ["Tất cả sân"]
+      : promo.applicableFacilities && Array.isArray(promo.applicableFacilities)
+      ? promo.applicableFacilities.map((f) => (typeof f === "object" ? f.name : f))
+      : [];
+
+    return {
+      id: promo._id,
+      _id: promo._id,
+      code: promo.code,
+      name: promo.name,
+      description: promo.description,
+      discountType: promo.discountType,
+      discountValue: promo.discountValue,
+      startDate: promo.startDate ? new Date(promo.startDate).toISOString().split("T")[0] : "",
+      endDate: promo.endDate ? new Date(promo.endDate).toISOString().split("T")[0] : "",
+      applicableFacilities,
+      applicableAreas: promo.applicableAreas || [],
+      status: promo.computedStatus || promo.status,
+      usageCount: promo.usageCount || 0,
+      maxUsage: promo.maxUsage,
+      createdAt: promo.createdAt ? new Date(promo.createdAt).toISOString().split("T")[0] : "",
+      _original: promo, // Keep original for API calls
+    };
+};
+
 const Promotions = () => {
-  const [promotions, setPromotions] = useState(promotionsData);
+  const [promotions, setPromotions] = useState([]);
+  const [facilities, setFacilities] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -21,10 +53,70 @@ const Promotions = () => {
   const [selectedPromotion, setSelectedPromotion] = useState(null);
   const [selectedFacilities, setSelectedFacilities] = useState(["Tất cả sân"]);
 
+  // Transform promotion to API format
+  const transformPromotionToAPI = useCallback((promo) => {
+    const applicableFacilities =
+      promo.applicableFacilities && promo.applicableFacilities.includes("Tất cả sân")
+        ? []
+        : promo.applicableFacilities
+            ?.map((name) => {
+              const facility = facilities.find((f) => f.name === name);
+              return facility?._id || facility?.id;
+            })
+            .filter((id) => id) || [];
+
+    return {
+      code: promo.code,
+      name: promo.name,
+      description: promo.description,
+      discountType: promo.discountType,
+      discountValue: promo.discountValue,
+      startDate: promo.startDate,
+      endDate: promo.endDate,
+      applicableFacilities,
+      applicableAreas: promo.applicableAreas || [],
+      maxUsage: promo.maxUsage || null,
+    };
+  }, [facilities]);
+
+  // Fetch promotions and facilities
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [promotionsResult, facilitiesResult] = await Promise.all([
+          promotionApi.getPromotions({
+            page,
+            limit: pageSize,
+            status: statusFilter !== "all" ? statusFilter : undefined,
+          }),
+          facilityApi.getFacilities({ limit: 1000 }), // Get all facilities for dropdown
+        ]);
+
+        if (promotionsResult.success) {
+          const transformedPromotions = promotionsResult.data.promotions.map(transformPromotionFromAPI);
+          setPromotions(transformedPromotions);
+          setTotal(promotionsResult.data.pagination.total);
+        }
+
+        if (facilitiesResult.success) {
+          setFacilities(facilitiesResult.data.facilities || []);
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        toast.error(error.message || "Có lỗi xảy ra khi tải dữ liệu");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [page, pageSize, statusFilter]);
+
   // Get unique facilities
   const uniqueFacilities = useMemo(() => {
-    return ["Tất cả sân", ...facilityData.map((f) => f.name)].sort();
-  }, []);
+    return ["Tất cả sân", ...facilities.map((f) => f.name)].sort();
+  }, [facilities]);
 
   // Check status based on dates
   const getStatus = (promotion) => {
@@ -35,36 +127,22 @@ const Promotions = () => {
     return "active";
   };
 
-  // Filter data
+  // Filter data (client-side search)
   const filteredPromotions = useMemo(() => {
+    if (!searchQuery) return promotions;
+    
     return promotions.filter((promotion) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        [
-          promotion.code,
-          promotion.name,
-          promotion.applicableFacilities.join(" "),
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
-
-      const currentStatus = getStatus(promotion);
-      const matchesStatus =
-        statusFilter === "all" || currentStatus === statusFilter;
-
-      return matchesSearch && matchesStatus;
+      const searchLower = searchQuery.toLowerCase();
+      return (
+        promotion.code.toLowerCase().includes(searchLower) ||
+        promotion.name.toLowerCase().includes(searchLower) ||
+        promotion.applicableFacilities.join(" ").toLowerCase().includes(searchLower)
+      );
     });
-  }, [promotions, searchQuery, statusFilter]);
+  }, [promotions, searchQuery]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredPromotions.length / pageSize)
-  );
-  const promotionSlice = filteredPromotions.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const promotionSlice = filteredPromotions;
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat("vi-VN").format(price);
@@ -92,7 +170,10 @@ const Promotions = () => {
 
   const handleEdit = (promotion) => {
     setSelectedPromotion(promotion);
-    setSelectedFacilities(promotion.applicableFacilities || ["Tất cả sân"]);
+    const facilities = promotion.applicableFacilities && promotion.applicableFacilities.length > 0
+      ? promotion.applicableFacilities
+      : ["Tất cả sân"];
+    setSelectedFacilities(facilities);
     setIsEditModalOpen(true);
   };
 
@@ -101,41 +182,70 @@ const Promotions = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const handleConfirmDelete = () => {
-    if (selectedPromotion) {
-      setPromotions((current) =>
-        current.filter((p) => p.id !== selectedPromotion.id)
-      );
+  const handleConfirmDelete = async () => {
+    if (!selectedPromotion) return;
+
+    try {
+      const promotionId = selectedPromotion._id || selectedPromotion.id;
+      await promotionApi.deletePromotion(promotionId);
+      
+      toast.success("Xóa khuyến mãi thành công");
+      setPromotions((current) => current.filter((p) => p.id !== selectedPromotion.id));
+      setIsDeleteModalOpen(false);
+      setSelectedPromotion(null);
+      
+      // Refresh data
+      const result = await promotionApi.getPromotions({
+        page,
+        limit: pageSize,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+      });
+      if (result.success) {
+        const transformed = result.data.promotions.map(transformPromotionFromAPI);
+        setPromotions(transformed);
+        setTotal(result.data.pagination.total);
+      }
+    } catch (error) {
+      console.error("Error deleting promotion:", error);
+      toast.error(error.message || "Có lỗi xảy ra khi xóa khuyến mãi");
     }
-    setIsDeleteModalOpen(false);
-    setSelectedPromotion(null);
   };
 
-  const handleSave = (promotionData) => {
-    if (selectedPromotion) {
-      // Edit
-      setPromotions((current) =>
-        current.map((p) =>
-          p.id === selectedPromotion.id
-            ? { ...promotionData, id: selectedPromotion.id }
-            : p
-        )
-      );
-      setIsEditModalOpen(false);
-    } else {
-      // Add
-      const newPromotion = {
-        ...promotionData,
-        id: `PR${String(promotions.length + 1).padStart(3, "0")}`,
-        usageCount: 0,
-        createdAt: new Date().toISOString().split("T")[0],
-        status: "active",
-      };
-      setPromotions((current) => [newPromotion, ...current]);
-      setIsAddModalOpen(false);
+  const handleSave = async (promotionData) => {
+    try {
+      const apiData = transformPromotionToAPI(promotionData);
+
+      if (selectedPromotion) {
+        // Edit
+        const promotionId = selectedPromotion._id || selectedPromotion.id;
+        await promotionApi.updatePromotion(promotionId, apiData);
+        toast.success("Cập nhật khuyến mãi thành công");
+        setIsEditModalOpen(false);
+      } else {
+        // Add
+        await promotionApi.createPromotion(apiData);
+        toast.success("Tạo khuyến mãi thành công");
+        setIsAddModalOpen(false);
+      }
+
+      setSelectedPromotion(null);
+      setSelectedFacilities(["Tất cả sân"]);
+
+      // Refresh data
+      const result = await promotionApi.getPromotions({
+        page,
+        limit: pageSize,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+      });
+      if (result.success) {
+        const transformed = result.data.promotions.map(transformPromotionFromAPI);
+        setPromotions(transformed);
+        setTotal(result.data.pagination.total);
+      }
+    } catch (error) {
+      console.error("Error saving promotion:", error);
+      toast.error(error.message || "Có lỗi xảy ra khi lưu khuyến mãi");
     }
-    setSelectedPromotion(null);
-    setSelectedFacilities(["Tất cả sân"]);
   };
 
   const resetFilters = () => {
@@ -188,22 +298,28 @@ const Promotions = () => {
         onReset={resetFilters}
       />
 
-      <PromotionTable
-        promotions={promotionSlice}
-        page={page}
-        pageSize={pageSize}
-        totalItems={filteredPromotions.length}
-        statusMap={statusMap}
-        getStatus={getStatus}
-        formatDiscount={formatDiscount}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setPage(1);
-        }}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
+      {loading ? (
+        <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>
+          Đang tải...
+        </div>
+      ) : (
+        <PromotionTable
+          promotions={promotionSlice}
+          page={page}
+          pageSize={pageSize}
+          totalItems={total}
+          statusMap={statusMap}
+          getStatus={getStatus}
+          formatDiscount={formatDiscount}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      )}
 
       <PromotionAddEditModal
         isOpen={isAddModalOpen}

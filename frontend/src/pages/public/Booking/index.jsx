@@ -56,6 +56,7 @@ function Booking() {
   const [reviewsStats, setReviewsStats] = useState({ averageRating: 0, totalReviews: 0 })
   const [reviewsPage, setReviewsPage] = useState(1)
   const [reviewsTotal, setReviewsTotal] = useState(0)
+  const [promotionData, setPromotionData] = useState(null) // { code, promotion, discountAmount }
 
   // Transform facility data to venue format for components
   const transformFacilityToVenue = (facility) => {
@@ -693,6 +694,10 @@ function Booking() {
       const formattedTimeSlots = formatTimeSlots(selectedSlots)
 
       // Prepare booking data for API
+      const subtotal = calculateTotalAmount()
+      const discount = promotionData?.discountAmount || 0
+      const finalTotal = Math.max(0, subtotal - discount)
+
       const bookingPayload = {
         courtId: selectedCourt,
         facilityId: venueId,
@@ -704,7 +709,9 @@ function Booking() {
           email: user?.email || '',
           notes: ''
         },
-        totalAmount: calculateTotalAmount()
+        totalAmount: subtotal, // Subtotal before discount
+        promotionCode: promotionData?.code || null,
+        discountAmount: discount
       }
 
       // Create booking via API
@@ -739,8 +746,10 @@ function Booking() {
           pricePerHour: selectedCourtData.price || venueData.pricePerHour,
       subtotal: calculateTotalAmount(),
           serviceFee: 0,
-      discount: 0,
-          total: calculateTotalAmount(),
+      discount: promotionData?.discountAmount || 0,
+      promotionCode: promotionData?.code || null,
+      promotion: promotionData?.promotion || null,
+          total: Math.max(0, calculateTotalAmount() - (promotionData?.discountAmount || 0)),
       selectedSlots: selectedSlots,
           timeSlotsData: timeSlotsData,
           venueData: venueData,
@@ -968,6 +977,8 @@ function Booking() {
             courts={courts}
             timeSlotsData={timeSlotsData}
             onBookNow={handleBookNow}
+            venueId={venueId}
+            onPromotionChange={setPromotionData}
           />
         </div>
       </div>
@@ -1038,6 +1049,7 @@ function Booking() {
           selectedFieldType={selectedFieldType}
           venueData={venueData}
           courts={courts}
+          promotionData={promotionData}
           onClose={() => {
             setShowBookingModal(false)
             setContactInfo(null)

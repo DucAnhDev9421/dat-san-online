@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import { getProvinces } from "../../../../../api/provinceApi";
 
 const PromotionAddEditModal = ({
   isOpen,
@@ -11,6 +12,76 @@ const PromotionAddEditModal = ({
   onSave,
   onClose,
 }) => {
+  const [provinces, setProvinces] = useState([]);
+  const [selectedProvince, setSelectedProvince] = useState("");
+  const [districts, setDistricts] = useState([]);
+  const [selectedDistricts, setSelectedDistricts] = useState([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
+
+  // Fetch provinces when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const fetchProvinces = async () => {
+        try {
+          setLoadingProvinces(true);
+          const result = await getProvinces();
+          if (result.success && result.data) {
+            setProvinces(result.data);
+          }
+        } catch (error) {
+          console.error("Error fetching provinces:", error);
+        } finally {
+          setLoadingProvinces(false);
+        }
+      };
+      fetchProvinces();
+    }
+  }, [isOpen]);
+
+  // Initialize selected areas from promotion data
+  useEffect(() => {
+    if (isOpen && promotion?.applicableAreas && promotion.applicableAreas.length > 0) {
+      // Parse existing areas (format: "Quận 1", "Quận 2", etc.)
+      setSelectedDistricts(promotion.applicableAreas);
+    } else if (isOpen) {
+      setSelectedDistricts([]);
+      setSelectedProvince("");
+    }
+  }, [isOpen, promotion]);
+
+  // Update districts when province changes
+  useEffect(() => {
+    if (selectedProvince) {
+      const province = provinces.find((p) => p.name === selectedProvince);
+      if (province && province.districts) {
+        setDistricts(province.districts);
+      } else {
+        setDistricts([]);
+      }
+    } else {
+      setDistricts([]);
+    }
+  }, [selectedProvince, provinces]);
+
+  const handleProvinceChange = (e) => {
+    setSelectedProvince(e.target.value);
+    setSelectedDistricts([]); // Reset selected districts when province changes
+  };
+
+  const handleDistrictToggle = (districtName) => {
+    setSelectedDistricts((prev) => {
+      if (prev.includes(districtName)) {
+        return prev.filter((d) => d !== districtName);
+      } else {
+        return [...prev, districtName];
+      }
+    });
+  };
+
+  const handleRemoveDistrict = (districtName) => {
+    setSelectedDistricts((prev) => prev.filter((d) => d !== districtName));
+  };
+
   if (!isOpen) return null;
 
   const handleSubmit = (e) => {
@@ -26,11 +97,7 @@ const PromotionAddEditModal = ({
       endDate: formData.get("endDate"),
       applicableFacilities:
         selectedFacilities.length > 0 ? selectedFacilities : ["Tất cả sân"],
-      applicableAreas: formData
-        .get("applicableAreas")
-        ?.split(",")
-        .map((a) => a.trim())
-        .filter((a) => a) || [],
+      applicableAreas: selectedDistricts,
       maxUsage: formData.get("maxUsage")
         ? Number(formData.get("maxUsage"))
         : null,
@@ -324,18 +391,176 @@ const PromotionAddEditModal = ({
               >
                 Áp dụng cho khu vực (tùy chọn)
               </label>
-              <input
-                name="applicableAreas"
-                defaultValue={promotion?.applicableAreas?.join(", ") || ""}
-                placeholder="VD: Quận 1, Quận 2 (phân cách bằng dấu phẩy)"
+              
+              {/* Province Select */}
+              <select
+                value={selectedProvince}
+                onChange={handleProvinceChange}
                 style={{
                   width: "100%",
                   padding: 10,
                   borderRadius: 8,
                   border: "1px solid #e5e7eb",
                   fontSize: 14,
+                  marginBottom: 12,
                 }}
-              />
+                disabled={loadingProvinces}
+              >
+                <option value="">Chọn tỉnh/thành phố</option>
+                {provinces.map((province) => (
+                  <option key={province.code} value={province.name}>
+                    {province.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Districts Multi-select */}
+              {selectedProvince && districts.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#6b7280",
+                      marginBottom: 8,
+                      fontWeight: 500,
+                    }}
+                  >
+                    Chọn quận/huyện (có thể chọn nhiều):
+                  </div>
+                  <div
+                    style={{
+                      maxHeight: "150px",
+                      overflowY: "auto",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 8,
+                      padding: 8,
+                      background: "#f9fafb",
+                    }}
+                  >
+                    {districts.map((district) => (
+                      <label
+                        key={district.code}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          padding: "6px 8px",
+                          cursor: "pointer",
+                          borderRadius: 4,
+                          marginBottom: 4,
+                          background: selectedDistricts.includes(district.name)
+                            ? "#e0f2fe"
+                            : "transparent",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!selectedDistricts.includes(district.name)) {
+                            e.currentTarget.style.background = "#f3f4f6";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!selectedDistricts.includes(district.name)) {
+                            e.currentTarget.style.background = "transparent";
+                          }
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedDistricts.includes(district.name)}
+                          onChange={() => handleDistrictToggle(district.name)}
+                          style={{
+                            marginRight: 8,
+                            cursor: "pointer",
+                          }}
+                        />
+                        <span style={{ fontSize: 13, color: "#374151" }}>
+                          {district.name}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Selected Districts Display */}
+              {selectedDistricts.length > 0 && (
+                <div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#6b7280",
+                      marginBottom: 8,
+                      fontWeight: 500,
+                    }}
+                  >
+                    Đã chọn ({selectedDistricts.length}):
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                      padding: 8,
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 8,
+                      background: "#f9fafb",
+                      minHeight: 40,
+                    }}
+                  >
+                    {selectedDistricts.map((district) => (
+                      <span
+                        key={district}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "4px 10px",
+                          background: "#10b981",
+                          color: "#fff",
+                          borderRadius: 16,
+                          fontSize: 12,
+                          fontWeight: 500,
+                        }}
+                      >
+                        {district}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDistrict(district)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "#fff",
+                            cursor: "pointer",
+                            padding: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            fontSize: 14,
+                            lineHeight: 1,
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.opacity = "0.7";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.opacity = "1";
+                          }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!selectedProvince && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#9ca3af",
+                    fontStyle: "italic",
+                  }}
+                >
+                  Chọn tỉnh/thành phố để hiển thị danh sách quận/huyện
+                </div>
+              )}
             </div>
             <div>
               <label

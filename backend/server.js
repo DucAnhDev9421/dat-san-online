@@ -30,6 +30,7 @@ import courtTypeRoutes from "./routes/courtType.js";
 import reviewRoutes from "./routes/review.js";
 import notificationRoutes from "./routes/notification.js";
 import provinceRoutes from "./routes/province.js";
+import promotionRoutes from "./routes/promotion.js";
 import analyticsRoutes from "./routes/analytics.js";
 import walletRouters from "./routes/wallet.js";
 import User from "./models/User.js";
@@ -123,6 +124,7 @@ app.use("/api/court-types", courtTypeRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/provinces", provinceRoutes);
+app.use("/api/promotions", promotionRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/wallet", walletRouters);
 // 404 handler
