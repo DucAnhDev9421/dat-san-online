@@ -25,21 +25,50 @@ export const createPaymentLink = async ({
   cancelUrl,
 }) => {
   try {
+    // Tự động rút ngắn description nếu quá 25 ký tự
+    const maxDescriptionLength = 25;
+    const truncatedDescription = description.length > maxDescriptionLength
+      ? description.substring(0, maxDescriptionLength)
+      : description;
+
     const paymentData = {
       orderCode,
       amount,
-      description,
+      description: truncatedDescription,
       returnUrl,
       cancelUrl,
-      expiredAt: Math.floor((Date.now() + 15 * 60 * 1000) / 1000), // Hết hạn sau 15 phút
+      expiredAt: Math.floor((Date.now() + 15 * 60 * 1000) / 1000),
     };
 
-    // SỬA 3: Hàm đúng là "paymentRequests.create", không phải "createPaymentLink"
     const paymentLink = await payOS.paymentRequests.create(paymentData);
     return paymentLink;
   } catch (error) {
     console.error("Lỗi khi tạo link PayOS:", error);
-    throw new Error("Không thể tạo link thanh toán PayOS");
+    
+    // Hiển thị chi tiết lỗi từ PayOS
+    if (error.code) {
+      console.error(`PayOS Error Code: ${error.code}`);
+      console.error(`PayOS Error Desc: ${error.desc}`);
+      
+      // Xử lý các lỗi cụ thể
+      if (error.code === '214') {
+        throw new Error(
+          'Cổng thanh toán PayOS chưa được kích hoạt. ' +
+          'Vui lòng kích hoạt cổng thanh toán trong PayOS Dashboard.'
+        );
+      }
+      
+      if (error.code === '20') {
+        throw new Error(
+          'Mô tả thanh toán quá dài (tối đa 25 ký tự). ' +
+          `Độ dài hiện tại: ${description?.length || 0} ký tự.`
+        );
+      }
+    }
+    
+    throw new Error(
+      error.message || "Không thể tạo link thanh toán PayOS"
+    );
   }
 };
 

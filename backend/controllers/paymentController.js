@@ -75,7 +75,10 @@ export const initPayment = asyncHandler(async (req, res, next) => {
     booking._id
   }_${new Date().getTime()}`;
   const amount = booking.totalAmount;
-  const orderInfo = `Thanh toan don dat san ${booking._id}`;
+  // Rút ngắn description cho PayOS (tối đa 25 ký tự)
+  const orderInfo = method === "payos" 
+    ? `Dat san ${booking._id.toString().slice(-8)}` // Lấy 8 ký tự cuối của booking ID
+    : `Thanh toan don dat san ${booking._id}`;
 
   // 3. Tạo/Cập nhật bản ghi Payment
   // (Tìm hoặc tạo mới để tránh tạo thừa khi user thử lại)
@@ -225,10 +228,13 @@ export const initPayment = asyncHandler(async (req, res, next) => {
 
     // 3. Tạo link thanh toán
     try {
+      // Rút ngắn description cho PayOS (tối đa 25 ký tự)
+      const payosDescription = `Dat san ${booking._id.toString().slice(-8)}`.substring(0, 25);
+      
       const paymentLinkData = await createPayOSLink({
         orderCode,
         amount: amount,
-        description: orderInfo,
+        description: payosDescription,
         returnUrl: `${config.frontendUrl}/booking-success`,
         cancelUrl: `${config.frontendUrl}/booking-failed`,
       });

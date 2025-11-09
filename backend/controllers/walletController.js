@@ -107,7 +107,10 @@ export const initTopUp = asyncHandler(async (req, res) => {
 
   // 2. Sử dụng _id của transaction làm mã giao dịch (paymentId)
   const paymentId = `WALLET_${transaction._id.toString()}`;
-  const orderInfo = `Nap tien vao vi ${user.email} - ${transaction._id}`;
+  // Rút ngắn description cho PayOS (tối đa 25 ký tự)
+  const orderInfo = method === "payos"
+    ? `Nap tien ${transaction._id.toString().slice(-8)}`
+    : `Nap tien vao vi ${user.email} - ${transaction._id}`;
 
   // 3. Xử lý logic cổng thanh toán (tương tự paymentController)
 
@@ -203,10 +206,13 @@ export const initTopUp = asyncHandler(async (req, res) => {
     await transaction.save();
 
     try {
+      // Rút ngắn description cho PayOS (tối đa 25 ký tự)
+      const payosDescription = `Nap tien ${transaction._id.toString().slice(-8)}`.substring(0, 25);
+      
       const paymentLinkData = await createPayOSLink({
         orderCode,
         amount: amount,
-        description: orderInfo,
+        description: payosDescription,
         returnUrl: `${config.frontendUrl}/wallet-success`,
         cancelUrl: `${config.frontendUrl}/wallet-failed`,
       });

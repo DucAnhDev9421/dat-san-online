@@ -57,7 +57,7 @@ const bookingSchema = new mongoose.Schema(
     // Phương thức thanh toán
     paymentMethod: {
       type: String,
-      enum: ["momo", "vnpay", "cash", " payos"],
+      enum: ["momo", "vnpay", "cash", "payos"],
       default: null,
     },
 

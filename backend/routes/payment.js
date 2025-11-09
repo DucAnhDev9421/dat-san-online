@@ -9,6 +9,11 @@ const router = express.Router();
 // vì server của Momo/VNPay gọi vào mà không cần đăng nhập.
 router.get("/callback/vnpay", paymentController.vnpayCallback); //
 router.post("/callback/momo", paymentController.momoCallback); //
+// Thêm route GET này để PayOS xác thực webhook
+router.get("/callback/payos", (req, res) => {
+  console.log("PayOS Webhook: Nhận được yêu cầu GET (xác thực).");
+  res.status(200).json({ success: true, message: "Webhook URL is active." });
+});
 router.post("/callback/payos", paymentController.payosBookingCallback); //
 
 // === CÁC ROUTE CẦN ĐĂNG NHẬP ===
