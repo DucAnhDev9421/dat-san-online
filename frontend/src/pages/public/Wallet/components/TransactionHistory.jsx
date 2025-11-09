@@ -21,9 +21,21 @@ export default function TransactionHistory() {
         limit: 10
       })
       
+      console.log('Transaction History API Response:', result)
+      
       if (result.success) {
-        setTransactions(result.data.transactions || [])
-        setTotalPages(result.data.pagination?.pages || 1)
+        // Kiểm tra cấu trúc data
+        if (result.data && result.data.transactions) {
+          setTransactions(result.data.transactions || [])
+          setTotalPages(result.data.pagination?.pages || 1)
+        } else if (Array.isArray(result.data)) {
+          // Fallback: nếu data là array trực tiếp
+          setTransactions(result.data || [])
+          setTotalPages(1)
+        } else {
+          console.warn('Unexpected data structure:', result.data)
+          setTransactions([])
+        }
       }
     } catch (error) {
       console.error('Error fetching transactions:', error)
