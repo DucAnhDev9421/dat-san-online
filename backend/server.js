@@ -113,6 +113,10 @@ app.get("/health", (req, res) => {
   });
 });
 
+app.get("/", (req, res) => {
+  res.send("✅ Backend is live and healthy!");
+});
+
 // Favicon handler - prevent 404 errors for browser favicon requests
 app.get("/favicon.ico", (req, res) => {
   res.status(204).end();
