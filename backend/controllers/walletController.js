@@ -62,12 +62,14 @@ export const getHistory = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    data: transactions,
-    pagination: {
-      page,
-      limit,
-      total,
-      pages: Math.ceil(total / limit),
+    data: {
+      transactions: transactions,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
     },
   });
 });
