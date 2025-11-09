@@ -204,11 +204,16 @@ router.get("/", async (req, res, next) => {
     query.status = "opening"; // Mặc định chỉ lấy sân đang mở
 
     // Tìm kiếm theo khoảng cách nếu có tọa độ
+    let hasLocationFilter = false;
+    let locationQuery = {};
     if (req.query.lat && req.query.lng) {
       const lat = parseFloat(req.query.lat);
       const lng = parseFloat(req.query.lng);
-      const maxDistance = parseFloat(req.query.maxDistance) || 10000; // mặc định 10km (met)
+      const maxDistance = parseFloat(req.query.maxDistance) || 10000; // mặc định 10km (meters)
 
+      hasLocationFilter = true;
+      
+      // For find() - use $near (automatically sorts by distance)
       query.location = {
         $near: {
           $geometry: {
@@ -218,13 +223,25 @@ router.get("/", async (req, res, next) => {
           $maxDistance: maxDistance
         }
       };
+
+      // For countDocuments() - use $geoWithin (doesn't require sorting)
+      // Create a bounding circle using $centerSphere
+      const radiusInRadians = maxDistance / 6378100; // Earth radius in meters
+      locationQuery = {
+        location: {
+          $geoWithin: {
+            $centerSphere: [[lng, lat], radiusInRadians]
+          }
+        }
+      };
     }
 
     let queryBuilder = Facility.find(query)
       .populate("owner", "name email avatar");
 
     // Sort theo khoảng cách nếu tìm theo vị trí, không thì sort theo createdAt
-    if (!(req.query.lat && req.query.lng)) {
+    // Note: $near automatically sorts by distance, so we don't need to add sort
+    if (!hasLocationFilter) {
       queryBuilder.sort({ createdAt: -1 });
     }
 
@@ -232,7 +249,15 @@ router.get("/", async (req, res, next) => {
       .skip(skip)
       .limit(limit);
 
-    const total = await Facility.countDocuments(query);
+    // For count, use locationQuery if we have location filter, otherwise use the same query
+    // Note: countDocuments doesn't support $near, so we use $geoWithin instead
+    let countQuery = { ...query };
+    if (hasLocationFilter) {
+      // Remove $near from query and use $geoWithin for count
+      delete countQuery.location;
+      countQuery = { ...countQuery, ...locationQuery };
+    }
+    const total = await Facility.countDocuments(countQuery);
 
     // Get facility IDs
     const facilityIds = facilities.map(f => f._id);

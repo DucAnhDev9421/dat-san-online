@@ -17,11 +17,13 @@ export default function Facilities() {
   const [query, setQuery] = useState("")
   const [sport, setSport] = useState("Tất cả")
   const [view, setView] = useState("grid")
-  const [quick, setQuick] = useState("recent") // recent | cheap | top
+  const [quick, setQuick] = useState("recent") // recent | cheap | top | nearby
   const [provinces, setProvinces] = useState([])
   const [districts, setDistricts] = useState([])
   const [selectedProvince, setSelectedProvince] = useState("")
   const [selectedDistrict, setSelectedDistrict] = useState("")
+  const [filterNearby, setFilterNearby] = useState(false) // Filter by location
+  const [maxDistance, setMaxDistance] = useState(10) // km
   const [isPageLoading, setIsPageLoading] = useState(true)
   const [facilities, setFacilities] = useState([])
   const [facilitiesLoading, setFacilitiesLoading] = useState(true)
@@ -128,7 +130,7 @@ export default function Facilities() {
   // Reset page to 1 when filters change
   useEffect(() => {
     setPage(1)
-  }, [query, sport, selectedProvince, selectedDistrict, quick])
+  }, [query, sport, selectedProvince, selectedDistrict, quick, filterNearby, maxDistance])
 
   // Fetch facilities from API
   useEffect(() => {
@@ -178,6 +180,13 @@ export default function Facilities() {
           }
         }
 
+        // Add location-based filter if enabled and user location is available
+        if (filterNearby && userLocation && userLocation.latitude && userLocation.longitude) {
+          params.lat = userLocation.latitude
+          params.lng = userLocation.longitude
+          params.maxDistance = maxDistance * 1000 // Convert km to meters
+        }
+
         // Fetch data and wait for minimum loading time
         const [result] = await Promise.all([
           facilityApi.getFacilities(params),
@@ -193,14 +202,17 @@ export default function Facilities() {
         if (result.success && result.data?.facilities) {
           const transformed = result.data.facilities.map(transformFacilityToVenue)
           
-          // Apply quick sort
+          // Apply quick sort (only if not filtering by nearby, as backend already sorts by distance)
           let sorted = [...transformed]
-          if (quick === "top") {
+          if (filterNearby && userLocation) {
+            // When filtering by nearby, backend already sorts by distance, so keep the order
+            sorted = transformed
+          } else if (quick === "top") {
             sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0))
           } else if (quick === "cheap") {
             sorted.sort((a, b) => (a.price || 0) - (b.price || 0))
           } else {
-            // recent - sort by createdAt descending
+            // Default - sort by createdAt descending (newest first)
             sorted.sort((a, b) => {
               const aDate = new Date(a._original?.createdAt || 0)
               const bDate = new Date(b._original?.createdAt || 0)
@@ -226,7 +238,7 @@ export default function Facilities() {
     }
 
     fetchFacilities()
-  }, [query, sport, selectedProvince, selectedDistrict, quick, page, provinces])
+  }, [query, sport, selectedProvince, selectedDistrict, quick, page, provinces, filterNearby, maxDistance, userLocation])
 
   const handleBookVenue = (venueId) => {
     navigate(`/booking?venue=${venueId}`)
@@ -235,6 +247,19 @@ export default function Facilities() {
   const handleClearFilters = () => {
     setSelectedProvince("")
     setSelectedDistrict("")
+    setFilterNearby(false)
+  }
+
+  const handleToggleNearby = () => {
+    if (filterNearby) {
+      setFilterNearby(false)
+    } else {
+      if (userLocation && userLocation.latitude && userLocation.longitude) {
+        setFilterNearby(true)
+      } else {
+        toast.warning('Không thể lấy vị trí của bạn. Vui lòng cho phép truy cập vị trí.')
+      }
+    }
   }
 
   return (
@@ -262,6 +287,11 @@ export default function Facilities() {
           view={view}
           onQuickChange={setQuick}
           onViewChange={setView}
+          filterNearby={filterNearby}
+          onToggleNearby={handleToggleNearby}
+          maxDistance={maxDistance}
+          onMaxDistanceChange={setMaxDistance}
+          userLocation={userLocation}
         />
 
         <div className="results-count">
