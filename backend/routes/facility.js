@@ -7,7 +7,7 @@ import {
   authenticateToken,
   authorize,
   requireAdmin,
-} from "../middleware/Auth.js";
+} from "../middleware/auth.js";
 import { logAudit } from "../utils/auditLogger.js";
 import { uploadFacilityImage, cloudinaryUtils } from "../config/cloudinary.js";
 import { geocodeAddress } from "../utils/goongService.js";
