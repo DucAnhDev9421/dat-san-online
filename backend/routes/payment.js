@@ -9,6 +9,7 @@ const router = express.Router();
 // vì server của Momo/VNPay gọi vào mà không cần đăng nhập.
 router.get("/callback/vnpay", paymentController.vnpayCallback); //
 router.post("/callback/momo", paymentController.momoCallback); //
+router.post("/callback/payos", paymentController.payosBookingCallback); //
 
 // === CÁC ROUTE CẦN ĐĂNG NHẬP ===
 // Tất cả các route bên dưới đây đều cần user đăng nhập

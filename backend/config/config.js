@@ -68,6 +68,13 @@ export const config = {
     redirectUrl: "http://localhost:5173/booking-success", // URL frontend
   },
 
+  // Payos Configuration
+  payos: {
+    clientId: process.env.PAYOS_CLIENT_ID || "YOUR_PAYOS_CLIENT_ID",
+    apiKey: process.env.PAYOS_API_KEY || "YOUR_PAYOS_API_KEY",
+    checksumKey: process.env.PAYOS_CHECKSUM_KEY || "YOUR_PAYOS_CHECKSUM_KEY",
+  },
+
   // Rate Limiting
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 minutes
