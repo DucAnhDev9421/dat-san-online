@@ -320,8 +320,28 @@ export const payosWalletCallback = asyncHandler(async (req, res) => {
     // BƯỚC 1: Kiểm tra mã "code" từ body TRƯỚC
     if (webhookBody.code !== "00") {
       console.log(
-        `PayOS Wallet: Giao dịch ${webhookBody.data?.orderCode} thất bại (code: ${webhookBody.code}).`
+        `PayOS Wallet: Giao dịch ${webhookBody.data?.orderCode} thất bại/hủy (code: ${webhookBody.code}).`
       );
+      
+      // Tìm và cập nhật transaction thành "failed" nếu có orderCode
+      if (webhookBody.data?.orderCode) {
+        const orderCode = webhookBody.data.orderCode;
+        const pendingTransactions = await WalletTransaction.find({
+          status: "pending",
+          "metadata.topUpMethod": "payos",
+        });
+
+        for (const trans of pendingTransactions) {
+          const transOrderCode = parseInt(trans._id.toString().substring(18), 16);
+          if (transOrderCode === orderCode) {
+            trans.status = "failed";
+            await trans.save();
+            console.log(`PayOS Wallet: Đã cập nhật transaction ${trans._id} thành failed`);
+            break;
+          }
+        }
+      }
+      
       return res
         .status(200)
         .json({ success: false, message: "Giao dịch thất bại" });
