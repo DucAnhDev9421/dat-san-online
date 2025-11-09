@@ -105,7 +105,7 @@ const promotionSchema = new mongoose.Schema(
 );
 
 // Indexes
-promotionSchema.index({ code: 1 }, { unique: true });
+// Note: code index is automatically created by unique: true in field definition
 promotionSchema.index({ status: 1 });
 promotionSchema.index({ startDate: 1, endDate: 1 });
 promotionSchema.index({ applicableFacilities: 1 });

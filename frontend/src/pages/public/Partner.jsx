@@ -12,9 +12,7 @@ export default function Partner() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    phone: "",
-    facilityName: "",
-    address: ""
+    phone: ""
   })
 
   useEffect(() => {

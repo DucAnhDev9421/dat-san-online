@@ -14,7 +14,6 @@ import {
   ScrollText,
   CircleDot,
   Target,
-  DollarSign,
   Loader,
 } from "lucide-react";
 import { facilityApi } from "../../../api/facilityApi";
@@ -30,7 +29,6 @@ const SetupVenue = () => {
     district: "", // Quận/Huyện
     phoneNumber: "", // Số điện thoại
     types: [], // Mảng các loại cơ sở (required, ít nhất 1 loại)
-    pricePerHour: "", // Giá mỗi giờ (required)
     description: "", // Mô tả
     services: [], // Tiện ích
     operatingHours: {
@@ -230,6 +228,54 @@ const SetupVenue = () => {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Tính toán tiến trình hoàn thành
+  const calculateProgress = () => {
+    const steps = [
+      // Thông tin cơ bản (40%)
+      {
+        weight: 40,
+        completed: 
+          formData.name.trim() !== "" &&
+          formData.address.trim() !== "" &&
+          formData.city.trim() !== "" &&
+          formData.district.trim() !== "" &&
+          formData.types.length > 0
+      },
+      // Thông tin liên hệ (15%)
+      {
+        weight: 15,
+        completed: formData.phoneNumber.trim() !== "" && /^[0-9]{10,11}$/.test(formData.phoneNumber)
+      },
+      // Mô tả (15%)
+      {
+        weight: 15,
+        completed: formData.description.trim() !== ""
+      },
+      // Tiện ích (10% - tùy chọn nhưng có điểm)
+      {
+        weight: 10,
+        completed: formData.services.length > 0
+      },
+      // Giờ hoạt động (15% - kiểm tra ít nhất 1 ngày mở cửa)
+      {
+        weight: 15,
+        completed: Object.values(formData.operatingHours).some(day => day.isOpen)
+      },
+      // Hình ảnh (5% - tùy chọn)
+      {
+        weight: 5,
+        completed: images.length > 0
+      }
+    ];
+
+    const totalWeight = steps.reduce((sum, step) => sum + step.weight, 0);
+    const completedWeight = steps.reduce((sum, step) => sum + (step.completed ? step.weight : 0), 0);
+    
+    return Math.round((completedWeight / totalWeight) * 100);
+  };
+
+  const progress = calculateProgress();
+
   const validate = () => {
     const newErrors = {};
 
@@ -244,8 +290,6 @@ const SetupVenue = () => {
       newErrors.phoneNumber = "Số điện thoại phải có 10-11 chữ số";
     if (!formData.types || formData.types.length === 0)
       newErrors.types = "Vui lòng chọn ít nhất một loại cơ sở";
-    if (!formData.pricePerHour || Number(formData.pricePerHour) <= 0)
-      newErrors.pricePerHour = "Vui lòng nhập giá mỗi giờ hợp lệ";
     if (!formData.description.trim())
       newErrors.description = "Vui lòng nhập mô tả";
 
@@ -291,7 +335,6 @@ const SetupVenue = () => {
         name: formData.name.trim(),
         address: fullAddress,
         types: formData.types, // Mảng các loại cơ sở
-        pricePerHour: Number(formData.pricePerHour),
         phoneNumber: formData.phoneNumber.trim(),
         description: formData.description.trim(),
         services: formData.services.length > 0 ? formData.services : undefined,
@@ -393,23 +436,47 @@ const SetupVenue = () => {
         </div>
 
         {/* Progress Bar */}
-        <div
-          style={{
-            background: "#e5e7eb",
-            height: 6,
-            borderRadius: 3,
-            overflow: "hidden",
-            marginBottom: 32,
-          }}
-        >
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ 
+            display: "flex", 
+            justifyContent: "space-between", 
+            alignItems: "center",
+            marginBottom: 8
+          }}>
+            <span style={{ 
+              fontSize: 14, 
+              fontWeight: 600, 
+              color: "#6b7280" 
+            }}>
+              Tiến trình hoàn thành
+            </span>
+            <span style={{ 
+              fontSize: 14, 
+              fontWeight: 700, 
+              color: "#10b981" 
+            }}>
+              {progress}%
+            </span>
+          </div>
           <div
             style={{
-              background: "linear-gradient(135deg, #10b981, #059669)",
-              height: "100%",
-              width: "70%",
-              transition: "width 0.3s",
+              background: "#e5e7eb",
+              height: 8,
+              borderRadius: 4,
+              overflow: "hidden",
+              position: "relative",
             }}
-          />
+          >
+            <div
+              style={{
+                background: "linear-gradient(135deg, #10b981, #059669)",
+                height: "100%",
+                width: `${progress}%`,
+                transition: "width 0.4s ease",
+                borderRadius: 4,
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -707,59 +774,6 @@ const SetupVenue = () => {
                 )}
               </>
             )}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, marginTop: 16 }}>
-
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: 8,
-                  fontWeight: 600,
-                  color: errors.pricePerHour ? "#ef4444" : "#374151",
-                }}
-              >
-                Giá mỗi giờ (VNĐ) *
-              </label>
-              <div style={{ position: "relative" }}>
-                <DollarSign
-                  size={20}
-                  style={{
-                    position: "absolute",
-                    left: 12,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "#9ca3af",
-                  }}
-                />
-                <input
-                  type="number"
-                  name="pricePerHour"
-                  value={formData.pricePerHour}
-                  onChange={handleChange}
-                  placeholder="VD: 200000"
-                  min="0"
-                  step="1000"
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px 12px 40px",
-                    borderRadius: 10,
-                    border: `2px solid ${errors.pricePerHour ? "#ef4444" : "#e5e7eb"}`,
-                    fontSize: 15,
-                    transition: "border-color 0.2s",
-                  }}
-                />
-              </div>
-              {errors.pricePerHour && (
-                <div style={{ color: "#ef4444", fontSize: 13, marginTop: 4 }}>
-                  {errors.pricePerHour}
-                </div>
-              )}
-              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
-                Ví dụ: 200,000 VNĐ/giờ
-              </div>
-            </div>
           </div>
         </div>
 

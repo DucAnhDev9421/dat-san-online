@@ -29,61 +29,31 @@ export default function RegistrationForm({ formData, onInputChange, onSubmit }) 
             />
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">
-                Email <span className="required">*</span>
-              </label>
-              <input
-                type="email"
-                required
-                value={formData.email}
-                onChange={e => onInputChange('email', e.target.value)}
-                className="form-input"
-                placeholder="email@example.com"
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">
-                Số điện thoại <span className="required">*</span>
-              </label>
-              <input
-                type="tel"
-                required
-                value={formData.phone}
-                onChange={e => onInputChange('phone', e.target.value)}
-                className="form-input"
-                placeholder="0901234567"
-              />
-            </div>
-          </div>
-
           <div className="form-group">
             <label className="form-label">
-              Tên sân thể thao <span className="required">*</span>
+              Email <span className="required">*</span>
             </label>
             <input
-              type="text"
+              type="email"
               required
-              value={formData.facilityName}
-              onChange={e => onInputChange('facilityName', e.target.value)}
+              value={formData.email}
+              onChange={e => onInputChange('email', e.target.value)}
               className="form-input"
-              placeholder="Sân thể thao XYZ"
+              placeholder="email@example.com"
             />
           </div>
 
           <div className="form-group">
             <label className="form-label">
-              Địa chỉ sân <span className="required">*</span>
+              Số điện thoại <span className="required">*</span>
             </label>
             <input
-              type="text"
+              type="tel"
               required
-              value={formData.address}
-              onChange={e => onInputChange('address', e.target.value)}
+              value={formData.phone}
+              onChange={e => onInputChange('phone', e.target.value)}
               className="form-input"
-              placeholder="123 Đường ABC, Quận 1, TP.HCM"
+              placeholder="0901234567"
             />
           </div>
 
