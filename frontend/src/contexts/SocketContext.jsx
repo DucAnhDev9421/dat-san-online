@@ -349,10 +349,10 @@ export const SocketProvider = ({ children }) => {
   }, [getSocket, isConnected]);
 
   // Helper function to join court room
-  const joinCourt = useCallback((courtId, facilityId, namespace = 'default') => {
+  const joinCourt = useCallback((courtId, facilityId, namespace = 'default', date = null) => {
     const sock = getSocket(namespace);
     if (sock && isConnected) {
-      sock.emit('join_court', { courtId, facilityId });
+      sock.emit('join_court', { courtId, facilityId, date });
     }
   }, [getSocket, isConnected]);
 

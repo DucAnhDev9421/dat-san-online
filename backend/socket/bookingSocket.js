@@ -129,6 +129,64 @@ const unlockUserSlots = (userId) => {
 };
 
 /**
+ * Get all locked slots for a court (and optionally a specific date)
+ */
+const getLockedSlotsForCourt = (courtId, date = null) => {
+  const now = Date.now();
+  const lockedSlotsList = [];
+  
+  for (const [key, lock] of lockedSlots.entries()) {
+    // Skip expired locks
+    if (lock.expiresAt < now) {
+      continue;
+    }
+    
+    // Check if this lock is for the requested court
+    if (lock.courtId === courtId || key.startsWith(`${courtId}_`)) {
+      // If date is specified, filter by date
+      if (date) {
+        let lockDateStr;
+        if (typeof lock.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(lock.date)) {
+          lockDateStr = lock.date;
+        } else {
+          const d = new Date(lock.date);
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          lockDateStr = `${year}-${month}-${day}`;
+        }
+        
+        let requestedDateStr;
+        if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          requestedDateStr = date;
+        } else {
+          const d = new Date(date);
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          requestedDateStr = `${year}-${month}-${day}`;
+        }
+        
+        if (lockDateStr !== requestedDateStr) {
+          continue;
+        }
+      }
+      
+      lockedSlotsList.push({
+        courtId: lock.courtId,
+        date: lock.date,
+        timeSlot: lock.timeSlot,
+        lockedBy: lock.userId,
+        lockedAt: lock.lockedAt,
+        expiresAt: lock.expiresAt,
+      });
+    }
+  }
+  
+  return lockedSlotsList;
+};
+
+/**
  * Booking socket handlers
  * Handles lock, unlock, and confirm events for bookings
  */
@@ -346,4 +404,4 @@ export default function bookingSocket(io) {
   console.log('✅ Booking socket handlers initialized');
 }
 
-export { lockSlot, unlockSlot, isSlotLocked, unlockUserSlots };
+export { lockSlot, unlockSlot, isSlotLocked, unlockUserSlots, getLockedSlotsForCourt };

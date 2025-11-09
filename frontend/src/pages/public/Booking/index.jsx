@@ -374,7 +374,37 @@ function Booking() {
     joinFacility(venueId, 'default')
     
     // Join court room for specific court updates
-    joinCourt(selectedCourt, venueId, 'default')
+    // Pass selectedDate so backend can filter locked slots by date
+    const dateStr = selectedDate ? formatDateToYYYYMMDD(selectedDate) : null
+    joinCourt(selectedCourt, venueId, 'default', dateStr)
+
+    // Listen for initial locked slots when joining court
+    const handleLockedSlots = (data) => {
+      const { courtId, date, lockedSlots: receivedLockedSlots } = data
+      
+      // Only process if it's for the current court and date
+      if (courtId === selectedCourt) {
+        const currentDateStr = selectedDate ? formatDateToYYYYMMDD(selectedDate) : null
+        if (!date || date === currentDateStr) {
+          const newLockedSlots = {}
+          receivedLockedSlots.forEach(lock => {
+            const lockKey = `${lock.courtId}_${lock.date}_${lock.timeSlot}`
+            // Only mark as locked by other if it's not locked by current user
+            if (lock.lockedBy !== user?._id) {
+              newLockedSlots[lockKey] = {
+                lockedBy: lock.lockedBy,
+                expiresAt: lock.expiresAt,
+                isLockedByOther: true
+              }
+            }
+          })
+          
+          if (Object.keys(newLockedSlots).length > 0) {
+            setLockedSlots(prev => ({ ...prev, ...newLockedSlots }))
+          }
+        }
+      }
+    }
 
     // Listen for slot lock events from other users
     const handleSlotLocked = (data) => {
@@ -424,18 +454,20 @@ function Booking() {
       })
     }
 
+    defaultSocket.on('booking:locked:slots', handleLockedSlots)
     defaultSocket.on('booking:slot:locked', handleSlotLocked)
     defaultSocket.on('booking:slot:unlocked', handleSlotUnlocked)
     defaultSocket.on('booking:slot:confirmed', handleSlotConfirmed)
 
     return () => {
+      defaultSocket.off('booking:locked:slots', handleLockedSlots)
       defaultSocket.off('booking:slot:locked', handleSlotLocked)
       defaultSocket.off('booking:slot:unlocked', handleSlotUnlocked)
       defaultSocket.off('booking:slot:confirmed', handleSlotConfirmed)
       leaveFacility(venueId, 'default')
       leaveCourt(selectedCourt, 'default')
     }
-  }, [venueId, selectedCourt, isConnected, defaultSocket, isAuthenticated, user?._id, joinFacility, leaveFacility, joinCourt, leaveCourt])
+  }, [venueId, selectedCourt, selectedDate, isConnected, defaultSocket, isAuthenticated, user?._id, joinFacility, leaveFacility, joinCourt, leaveCourt])
 
   // Reset slots when date changes
   const handleDateChange = (newDate) => {
