@@ -3,7 +3,6 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import PaymentMethods from './Payment/components/PaymentMethods'
 import PaymentInstructions from './Payment/components/PaymentInstructions'
 import BookingSummary from './Payment/components/BookingSummary'
-import ConfirmModal from './Payment/components/ConfirmModal'
 import { defaultBookingData, paymentMethods } from './Payment/constants'
 import { 
   convertSelectedSlotsToSlots, 
@@ -11,6 +10,7 @@ import {
   formatBookingData 
 } from './Payment/utils/helpers'
 import { bookingApi } from '../../api/bookingApi'
+import { paymentApi } from '../../api/paymentApi'
 import { toast } from 'react-toastify'
 import { useCountdown } from '../../hook/use-countdown'
 import '../../styles/Payment.css'
@@ -19,9 +19,10 @@ function Payment() {
   const navigate = useNavigate()
   const location = useLocation()
   const [selectedMethod, setSelectedMethod] = useState('')
-  const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
+  const [paymentResult, setPaymentResult] = useState(null) // 'success' | 'failed' | null
+  const paymentCallbackProcessed = useRef(false) // Flag to prevent duplicate processing
 
   // Get booking data from navigation state, fallback to default
   const rawBookingData = location.state?.bookingData || defaultBookingData
@@ -145,12 +146,116 @@ function Payment() {
     }
   }, [bookingId, isCancelled, start, stop, PAYMENT_TIMEOUT_SECONDS, getRemainingTime, handleCountdownComplete])
 
-  // Stop countdown when payment is confirmed
+  // Stop countdown when payment is being processed
   useEffect(() => {
-    if (showConfirmModal && isProcessing) {
+    if (isProcessing) {
       stop() // Stop countdown when payment is being processed
     }
-  }, [showConfirmModal, isProcessing, stop])
+  }, [isProcessing, stop])
+
+  // Handle payment callback from MoMo/VNPay
+  useEffect(() => {
+    // Prevent duplicate processing
+    if (paymentCallbackProcessed.current) {
+      return
+    }
+
+    const searchParams = new URLSearchParams(location.search)
+    const result = searchParams.get('success')
+    const paymentId = searchParams.get('paymentId')
+    const resultCode = searchParams.get('resultCode')
+    const orderId = searchParams.get('orderId')
+    const message = searchParams.get('message')
+
+    // Check if this is a callback from payment gateway
+    if (result !== null || resultCode !== null || orderId) {
+      // Mark as processed immediately to prevent duplicate calls
+      paymentCallbackProcessed.current = true
+      
+      // Clear query params from URL
+      navigate(location.pathname, { replace: true })
+
+      // Determine payment result
+      let paymentSuccess = false
+      if (result === 'true' || resultCode === '0') {
+        paymentSuccess = true
+      } else if (result === 'false' || (resultCode && resultCode !== '0')) {
+        paymentSuccess = false
+      }
+
+      if (paymentSuccess) {
+        // Payment successful
+        setPaymentResult('success')
+        stop() // Stop countdown
+        
+        // Clear localStorage
+        if (bookingId) {
+          const startTimeKey = `payment_start_time_${bookingId}`
+          localStorage.removeItem(startTimeKey)
+          
+          const pendingBookingKey = `pending_booking_${bookingId}`
+          localStorage.removeItem(pendingBookingKey)
+        }
+
+        toast.success('Thanh toán thành công! Đơn đặt sân của bạn đã được xác nhận.')
+        
+        // Navigate to bookings page after delay
+        setTimeout(() => {
+          navigate('/profile/bookings')
+        }, 3000)
+      } else {
+        // Payment failed or cancelled
+        setPaymentResult('failed')
+        
+        // Cancel booking if payment failed
+        // Extract bookingId from paymentId format: MOMO_bookingId_timestamp or VNPAY_bookingId_timestamp
+        let currentBookingId = bookingId
+        if (!currentBookingId && orderId) {
+          // paymentId format: MOMO_bookingId_timestamp or VNPAY_bookingId_timestamp
+          const parts = orderId.split('_')
+          if (parts.length >= 2) {
+            currentBookingId = parts[1] // bookingId is the second part
+          }
+        }
+        
+        if (currentBookingId) {
+          handleCancelBookingAfterPaymentFailed(currentBookingId)
+        } else {
+          toast.error('Thanh toán thất bại hoặc đã bị hủy.')
+          setIsCancelled(true)
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]) // Only depend on location.search to avoid re-running unnecessarily
+
+  // Handle cancel booking after payment failed
+  const handleCancelBookingAfterPaymentFailed = async (bookingIdToCancel) => {
+    try {
+      setIsCancelled(true)
+      stop() // Stop countdown
+      
+      // Clear localStorage
+      const startTimeKey = `payment_start_time_${bookingIdToCancel}`
+      localStorage.removeItem(startTimeKey)
+      
+      const pendingBookingKey = `pending_booking_${bookingIdToCancel}`
+      localStorage.removeItem(pendingBookingKey)
+
+      const result = await bookingApi.cancelBooking(bookingIdToCancel)
+      if (result.success) {
+        toast.error('Thanh toán thất bại. Đơn đặt sân đã được hủy.')
+        setTimeout(() => {
+          navigate('/')
+        }, 3000)
+      } else {
+        toast.error('Thanh toán thất bại. Vui lòng kiểm tra lại đơn đặt sân.')
+      }
+    } catch (error) {
+      console.error('Error cancelling booking:', error)
+      toast.error('Thanh toán thất bại. Vui lòng kiểm tra lại đơn đặt sân.')
+    }
+  }
 
   // Format countdown time (MM:SS)
   const formatCountdown = (seconds) => {
@@ -179,10 +284,10 @@ function Payment() {
 
   const handlePayment = () => {
     if (!selectedMethod) {
-      alert('Vui lòng chọn phương thức thanh toán')
+      toast.error('Vui lòng chọn phương thức thanh toán')
       return
     }
-    setShowConfirmModal(true)
+    handleConfirmPayment()
   }
 
   const handleConfirmPayment = async () => {
@@ -217,9 +322,6 @@ function Payment() {
           // Show success message
           toast.success('Đã chọn thanh toán tiền mặt. Vui lòng thanh toán khi đến sân.')
           
-          // Close modal
-          setShowConfirmModal(false)
-          
           // Navigate to profile bookings after delay
           setTimeout(() => {
             navigate('/profile/bookings')
@@ -229,32 +331,35 @@ function Payment() {
         }
       } else {
         // Online payment methods (momo/vnpay)
-        // TODO: Implement online payment flow
         const method = paymentMethods.find(m => m.id === selectedMethod)
-        toast.info(`Đang chuyển hướng đến ${method?.name || selectedMethod}...`)
         
-        // For now, just update payment method
-        const result = await bookingApi.updatePaymentMethod(bookingId, selectedMethod)
-        
-        if (result.success || result.data) {
-          // Clear localStorage
-          const startTimeKey = `payment_start_time_${bookingId}`
-          localStorage.removeItem(startTimeKey)
+        try {
+          // Call API to initialize payment
+          const paymentResult = await paymentApi.initPayment(bookingId, selectedMethod)
           
-          const pendingBookingKey = `pending_booking_${bookingId}`
-          localStorage.removeItem(pendingBookingKey)
-          
-          // TODO: Redirect to payment gateway
-          // For now, just show message
-          toast.info('Chức năng thanh toán online sẽ được tích hợp sớm')
+          if (paymentResult.success && paymentResult.data?.paymentUrl) {
+            // Stop countdown when redirecting to payment gateway
+            stop()
+            
+            // Update payment method first
+            await bookingApi.updatePaymentMethod(bookingId, selectedMethod)
+            
+            // Redirect to payment gateway
+            toast.info(`Đang chuyển hướng đến ${method?.name || selectedMethod}...`)
+            window.location.href = paymentResult.data.paymentUrl
+          } else {
+            throw new Error('Không thể khởi tạo thanh toán. Vui lòng thử lại.')
+          }
+        } catch (error) {
+          console.error('Error initializing payment:', error)
+          toast.error(error.message || 'Không thể khởi tạo thanh toán. Vui lòng thử lại.')
+          setIsProcessing(false)
         }
       }
     } catch (error) {
       console.error('Error confirming payment:', error)
       toast.error(error.message || 'Không thể xác nhận thanh toán. Vui lòng thử lại.')
-    } finally {
       setIsProcessing(false)
-      setShowConfirmModal(false)
     }
   }
 
@@ -345,30 +450,23 @@ function Payment() {
 
             <div className="payment-action">
               <button 
-                className={`btn btn-payment ${!selectedMethod || isCancelled ? 'disabled' : ''}`}
+                className={`btn btn-payment ${!selectedMethod || isCancelled || isProcessing ? 'disabled' : ''}`}
                 onClick={handlePayment}
-                disabled={!selectedMethod || isCancelled}
+                disabled={!selectedMethod || isCancelled || isProcessing}
               >
                 {isCancelled 
                   ? 'Booking đã bị hủy' 
-                  : selectedMethod 
-                    ? '🔒 Xác nhận thanh toán' 
-                    : 'Chọn phương thức thanh toán'}
+                  : isProcessing
+                    ? 'Đang xử lý...'
+                    : selectedMethod 
+                      ? '🔒 Xác nhận thanh toán' 
+                      : 'Chọn phương thức thanh toán'}
               </button>
             </div>
           </div>
 
           <BookingSummary bookingData={bookingData} />
         </div>
-
-        <ConfirmModal
-          show={showConfirmModal}
-          selectedMethod={selectedMethod}
-          bookingData={bookingData}
-          isProcessing={isProcessing}
-          onClose={() => setShowConfirmModal(false)}
-          onConfirm={handleConfirmPayment}
-        />
       </div>
     </main>
   )

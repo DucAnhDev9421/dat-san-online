@@ -65,7 +65,7 @@ export const config = {
     notifyUrl:
       process.env.MOMO_NOTIFYURL ||
       "http://localhost:3000/api/payments/callback/momo",
-    redirectUrl: "http://localhost:5173/booking-success", // URL frontend
+    redirectUrl: process.env.MOMO_REDIRECT_URL || "http://localhost:5173/payment", // URL frontend - sẽ redirect về /payment với query params
   },
 
   // Rate Limiting
