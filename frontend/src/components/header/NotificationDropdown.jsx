@@ -1,5 +1,6 @@
 import React from 'react'
 import { Bell, CheckCircle, Clock, AlertCircle, Info } from 'lucide-react'
+import useClickOutside from '../../hook/use-click-outside'
 
 const NotificationDropdown = ({ 
   isOpen, 
@@ -8,13 +9,16 @@ const NotificationDropdown = ({
   unreadCount, 
   onNotificationClick, 
   onMarkAllAsRead,
-  onViewAll 
+  onViewAll,
+  loading = false
 }) => {
+  const dropdownRef = useClickOutside(onClose, isOpen)
+
   if (!isOpen) return null
 
   return (
     <>
-      <div style={{
+      <div ref={dropdownRef} style={{
         position: 'absolute',
         top: '100%',
         right: 0,
@@ -70,7 +74,26 @@ const NotificationDropdown = ({
 
         {/* Notifications List */}
         <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-          {notifications.length > 0 ? (
+          {loading ? (
+            <div style={{
+              padding: '40px 20px',
+              textAlign: 'center',
+              color: '#6b7280'
+            }}>
+              <div style={{
+                width: '24px',
+                height: '24px',
+                border: '2px solid #e5e7eb',
+                borderTop: '2px solid #3b82f6',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                margin: '0 auto 12px'
+              }} />
+              <p style={{ fontSize: '14px', margin: 0 }}>
+                Đang tải thông báo...
+              </p>
+            </div>
+          ) : notifications.length > 0 ? (
             notifications.map((notification) => {
               const IconComponent = notification.icon
               return (
@@ -99,7 +122,7 @@ const NotificationDropdown = ({
                       justifyContent: 'center',
                       flexShrink: 0
                     }}>
-                      <IconComponent size={16} color={notification.iconColor} />
+                      {notification.icon && <notification.icon size={16} color={notification.iconColor} />}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
@@ -181,19 +204,12 @@ const NotificationDropdown = ({
           </button>
         </div>
       </div>
-
-      {/* Click outside to close dropdown */}
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 999,
-        }}
-        onClick={onClose}
-      />
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </>
   )
 }

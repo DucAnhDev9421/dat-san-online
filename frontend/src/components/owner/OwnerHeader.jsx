@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
   Bell, 
   Search, 
@@ -7,53 +7,88 @@ import {
   LogOut, 
   Menu,
   Home,
-  MapPin
+  MapPin,
+  CheckCircle,
+  DollarSign,
+  XCircle,
+  Star,
+  Wrench,
+  Tag,
+  Clock,
+  Info
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { useSocket } from "../../contexts/SocketContext";
+import { notificationApi } from "../../api/notificationApi";
+import { toast } from "react-toastify";
 import UserMenu from "../header/UserMenu";
 import NotificationDropdown from "../header/NotificationDropdown";
+
+// Helper function to get icon and color based on notification type
+const getNotificationIcon = (type) => {
+  const iconMap = {
+    booking: { icon: Bell, color: "#3b82f6" },
+    payment: { icon: DollarSign, color: "#10b981" },
+    cancellation: { icon: XCircle, color: "#ef4444" },
+    review: { icon: Star, color: "#f59e0b" },
+    maintenance: { icon: Wrench, color: "#8b5cf6" },
+    promotion: { icon: Tag, color: "#ec4899" },
+    reminder: { icon: Clock, color: "#06b6d4" },
+    system: { icon: Info, color: "#6b7280" },
+  };
+  return iconMap[type] || { icon: Bell, color: "#3b82f6" };
+};
+
+// Helper function to format time
+const formatTime = (dateString) => {
+  if (!dateString) return "Vừa xong";
+  
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "Vừa xong";
+  if (diffMins < 60) return `${diffMins} phút trước`;
+  if (diffHours < 24) return `${diffHours} giờ trước`;
+  if (diffDays < 7) return `${diffDays} ngày trước`;
+  
+  return date.toLocaleDateString('vi-VN', { 
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric' 
+  });
+};
+
+// Transform API notification to dropdown format
+const transformNotification = (notification) => {
+  const { icon, color } = getNotificationIcon(notification.type);
+  return {
+    id: notification._id || notification.id,
+    title: notification.title,
+    message: notification.message,
+    time: formatTime(notification.createdAt),
+    type: notification.type,
+    icon,
+    iconColor: color,
+    isRead: notification.isRead || false,
+    metadata: notification.metadata || {},
+    _original: notification
+  };
+};
 
 export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-
-  const [notifications, setNotifications] = useState([
-    { 
-      id: 1, 
-      title: "Đơn đặt mới",
-      message: "Có 2 đơn đặt sân mới cần xác nhận", 
-      time: "10 phút trước", 
-      type: "booking",
-      icon: Bell,
-      iconColor: "#3b82f6",
-      isRead: false
-    },
-    { 
-      id: 2, 
-      title: "Đặt sân thành công",
-      message: "Sân 1 đã được đặt thành công", 
-      time: "30 phút trước", 
-      type: "success",
-      icon: Settings,
-      iconColor: "#10b981",
-      isRead: true
-    },
-    { 
-      id: 3, 
-      title: "Báo cáo doanh thu",
-      message: "Báo cáo doanh thu tuần này", 
-      time: "1 giờ trước", 
-      type: "report",
-      icon: User,
-      iconColor: "#f59e0b",
-      isRead: false
-    },
-  ]);
-
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const { ownerSocket, isConnected } = useSocket();
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const handleLogout = async () => {
     if (confirm("Bạn có chắc chắn muốn đăng xuất?")) {
@@ -69,12 +104,17 @@ export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
 
   const handleSettingsClick = () => {
     setIsProfileOpen(false);
-    navigate("/profile?tab=settings");
+    navigate("/profile/settings");
   };
 
   const handleBookingHistoryClick = () => {
     setIsProfileOpen(false);
-    navigate("/profile?tab=bookings");
+    navigate("/profile/bookings");
+  };
+
+  const handleTopUpClick = () => {
+    setIsProfileOpen(false);
+    alert('Chức năng nạp tiền sẽ được triển khai sớm');
   };
 
   const handleNotificationClick = () => {
@@ -82,174 +122,145 @@ export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
     setIsProfileOpen(false);
   };
 
-  const handleNotificationItemClick = (notification) => {
+  // Fetch notifications
+  const fetchNotifications = useCallback(async () => {
+    if (!user?._id) return;
+
+    try {
+      setLoading(true);
+      const data = await notificationApi.getNotifications({ 
+        limit: 10,
+        page: 1 
+      });
+      
+      const notificationsList = data.notifications || data || [];
+      const transformed = notificationsList.map(transformNotification);
+      setNotifications(transformed);
+      
+      // Get unread count
+      const unreadData = await notificationApi.getUnreadCount();
+      setUnreadCount(unreadData.count || transformed.filter(n => !n.isRead).length);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?._id]);
+
+  // Fetch notifications on mount and when user changes
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  // Listen for real-time notifications
+  useEffect(() => {
+    if (!ownerSocket || !isConnected || !user?._id) return;
+
+    const handleNewNotification = (data) => {
+      if (data.notification) {
+        const transformed = transformNotification(data.notification);
+        setNotifications(prev => {
+          // Check if notification already exists
+          const exists = prev.some(n => n.id === transformed.id);
+          if (exists) return prev;
+          
+          // Add to beginning of list
+          return [transformed, ...prev].slice(0, 10);
+        });
+        
+        // Update unread count
+        setUnreadCount(prev => prev + 1);
+        
+        // Show toast
+        toast.info(transformed.title, {
+          position: 'top-right',
+          autoClose: 3000,
+        });
+      }
+    };
+
+    ownerSocket.on('notification:new', handleNewNotification);
+
+    return () => {
+      ownerSocket.off('notification:new', handleNewNotification);
+    };
+  }, [ownerSocket, isConnected, user?._id]);
+
+  const handleNotificationItemClick = async (notification) => {
     // Mark as read if unread
-    setNotifications(prev => 
-      prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
-    );
+    if (!notification.isRead) {
+      try {
+        await notificationApi.markAsRead(notification.id);
+        setNotifications(prev => 
+          prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
+        );
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
+    }
+    
     setIsNotificationOpen(false);
-    // Navigate based on type
-    if (notification.type === 'booking') {
-      navigate('/owner');
+    
+    // Navigate based on type and metadata
+    if (notification.type === 'booking' && notification.metadata?.bookingId) {
+      navigate('/owner/bookings');
+    } else if (notification.metadata?.facilityId) {
+      navigate('/owner/bookings');
+    } else {
+      navigate('/owner/notifications');
     }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  const markAllAsRead = async () => {
+    try {
+      await notificationApi.markAllAsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+      toast.error('Không thể đánh dấu tất cả đã đọc');
+    }
   };
 
   const handleViewAllNotifications = () => {
     setIsNotificationOpen(false);
-    navigate('/owner');
+    navigate('/owner/notifications');
   };
 
   return (
-    <header
-      style={{
-        background: "#fff",
-        borderBottom: "1px solid #e5e7eb",
-        padding: "0 24px",
-        height: 64,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        boxShadow: "0 1px 3px rgba(0,0,0,.1)",
-        position: "sticky",
-        top: 0,
-        zIndex: 1000,
-      }}
-    >
+    <div className="flex items-center justify-between w-full">
       {/* Left side - Logo and Menu */}
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <div className="flex items-center justify-start rtl:justify-end">
         <button
           onClick={onToggleSidebar}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 8,
-            borderRadius: 8,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#6b7280",
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.background = "#f3f4f6";
-            e.target.style.color = "#374151";
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.background = "none";
-            e.target.style.color = "#6b7280";
-          }}
+          type="button"
+          className="inline-flex items-center p-2 text-sm text-gray-500 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200"
+          aria-controls="logo-sidebar"
         >
+          <span className="sr-only">Open sidebar</span>
           <Menu size={20} />
         </button>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img 
-            src="/Logo.png" 
-            alt="Booking Sport Logo" 
-            style={{ 
-              height: "32px", 
-              width: "auto",
-              objectFit: "contain"
-            }}
-          />
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1f2937", margin: 0 }}>
-              Owner Dashboard
-            </h1>
-            <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
-              Quản lý sân bóng
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Center - Search */}
-      <div style={{ flex: 1, maxWidth: 400, margin: "0 24px" }}>
-        <div style={{ position: "relative" }}>
-          <Search
-            size={18}
-            style={{
-              position: "absolute",
-              left: 12,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "#9ca3af",
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Tìm kiếm đơn đặt, khách hàng, sân bóng..."
-            style={{
-              width: "100%",
-              padding: "10px 12px 10px 40px",
-              border: "1px solid #e5e7eb",
-              borderRadius: 8,
-              fontSize: 14,
-              background: "#f9fafb",
-              outline: "none",
-            }}
-            onFocus={(e) => {
-              e.target.style.background = "#fff";
-              e.target.style.borderColor = "#3b82f6";
-            }}
-            onBlur={(e) => {
-              e.target.style.background = "#f9fafb";
-              e.target.style.borderColor = "#e5e7eb";
-            }}
-          />
-        </div>
+        <a href="/" className="flex ms-2 md:me-24">
+          <img src="/Logo.png" className="h-8 me-3" alt="Dat San Online Logo" />
+          <span className="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap">
+            Booking sport
+          </span>
+        </a>
       </div>
 
       {/* Right side - Actions */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div className="flex items-center">
         {/* Notifications */}
-        <div style={{ position: "relative" }}>
+        <div className="flex items-center ms-3 relative">
           <button
             onClick={handleNotificationClick}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 8,
-              borderRadius: 8,
-              cursor: "pointer",
-              color: "#6b7280",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = "#f3f4f6";
-              e.target.style.color = "#374151";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = "none";
-              e.target.style.color = "#6b7280";
-            }}
+            type="button"
+            className="inline-flex items-center p-2 text-sm text-gray-500 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 relative"
           >
             <Bell size={18} />
             {unreadCount > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: 4,
-                  right: 4,
-                  background: "#ef4444",
-                  color: "#fff",
-                  borderRadius: "50%",
-                  width: 16,
-                  height: 16,
-                  fontSize: 10,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 700,
-                }}
-              >
+              <span className="absolute top-0 right-0 inline-flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-red-500 rounded-full">
                 {unreadCount}
               </span>
             )}
@@ -262,20 +273,24 @@ export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
             onNotificationClick={handleNotificationItemClick}
             onMarkAllAsRead={markAllAsRead}
             onViewAll={handleViewAllNotifications}
+            loading={loading}
           />
         </div>
 
         {/* Profile dropdown - Using UserMenu component */}
-        <UserMenu
-          user={user}
-          isOpen={isProfileOpen}
-          onToggle={() => setIsProfileOpen(!isProfileOpen)}
-          onProfileClick={handleProfileClick}
-          onLogout={handleLogout}
-          onSettingsClick={handleSettingsClick}
-          onBookingHistoryClick={handleBookingHistoryClick}
-        />
+        <div className="flex items-center ms-3">
+          <UserMenu
+            user={user}
+            isOpen={isProfileOpen}
+            onToggle={() => setIsProfileOpen(!isProfileOpen)}
+            onProfileClick={handleProfileClick}
+            onLogout={handleLogout}
+            onSettingsClick={handleSettingsClick}
+            onBookingHistoryClick={handleBookingHistoryClick}
+            onTopUpClick={handleTopUpClick}
+          />
+        </div>
       </div>
-    </header>
+    </div>
   );
 }

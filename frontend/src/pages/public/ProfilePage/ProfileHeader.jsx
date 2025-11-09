@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Mail, Phone, MapPin, Calendar, Trophy, Heart, Edit3 } from 'lucide-react'
+import { Mail, Phone, Calendar, Trophy, Heart, Edit3 } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
 import { authService } from '../../../api/authService'
 import StatCard from './components/StatCard'
@@ -136,7 +136,7 @@ export default function ProfileHeader({ userData, favoriteVenues }) {
             </p>
 
             {/* Contact Info */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#374151' }}>
                 <Mail size={16} color="#6b7280" />
                 {currentUserData.email}
@@ -144,10 +144,6 @@ export default function ProfileHeader({ userData, favoriteVenues }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#374151' }}>
                 <Phone size={16} color="#6b7280" />
                 {currentUserData.phone}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#374151' }}>
-                <MapPin size={16} color="#6b7280" />
-                {currentUserData.location}
               </div>
             </div>
 

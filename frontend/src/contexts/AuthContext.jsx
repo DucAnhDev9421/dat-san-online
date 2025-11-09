@@ -70,6 +70,78 @@ const initialState = {
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
+  // Listen for token refresh events from axios interceptor
+  useEffect(() => {
+    const handleTokenRefreshed = (event) => {
+      const { accessToken, refreshToken, user } = event.detail;
+      dispatch({
+        type: 'LOGIN_SUCCESS',
+        payload: {
+          user: user || state.user,
+          accessToken,
+          refreshToken
+        }
+      });
+    };
+
+    const handleTokenRefreshFailed = () => {
+      logout();
+    };
+
+    window.addEventListener('tokenRefreshed', handleTokenRefreshed);
+    window.addEventListener('tokenRefreshFailed', handleTokenRefreshFailed);
+    return () => {
+      window.removeEventListener('tokenRefreshed', handleTokenRefreshed);
+      window.removeEventListener('tokenRefreshFailed', handleTokenRefreshFailed);
+    };
+  }, [state.user]);
+
+  // Refresh token function (defined early for use in initAuth)
+  const refreshAccessToken = async () => {
+    try {
+      // Get refreshToken from state or localStorage
+      const refreshToken = state.refreshToken || authService.getTokens().refreshToken;
+      
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+
+      const result = await authService.refreshToken(refreshToken);
+      
+      authService.setTokens({
+        accessToken: result.data.accessToken,
+        refreshToken: result.data.refreshToken
+      });
+
+      dispatch({
+        type: 'LOGIN_SUCCESS',
+        payload: {
+          user: result.data.user,
+          accessToken: result.data.accessToken,
+          refreshToken: result.data.refreshToken
+        }
+      });
+
+      // Dispatch custom event to notify other parts of the app
+      window.dispatchEvent(new CustomEvent('tokenRefreshed', {
+        detail: {
+          accessToken: result.data.accessToken,
+          refreshToken: result.data.refreshToken,
+          user: result.data.user
+        }
+      }));
+
+      return result.data.accessToken;
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      // Clear tokens and dispatch logout action instead of calling logout function
+      authService.clearTokens();
+      localStorage.removeItem('userData');
+      dispatch({ type: 'LOGOUT' });
+      throw error;
+    }
+  };
+
   // Check if user is logged in on app start
   useEffect(() => {
     const initAuth = async () => {
@@ -99,12 +171,24 @@ export const AuthProvider = ({ children }) => {
       } catch (error) {
         console.error('Auth initialization error:', error);
         
-        // Only clear tokens if it's an authentication error (401)
-        // Don't clear tokens for network errors or other issues
+        // Try to refresh token if we have a refreshToken
         if (error.response?.status === 401 || error.response?.status === 403) {
-          console.log('Token invalid or expired, clearing tokens');
-          authService.clearTokens();
-          dispatch({ type: 'LOGIN_FAILURE', payload: error.message });
+          const tokens = authService.getTokens();
+          if (tokens.refreshToken) {
+            try {
+              console.log('🔄 Token expired, attempting to refresh...');
+              await refreshAccessToken();
+              return; // Successfully refreshed, exit early
+            } catch (refreshError) {
+              console.log('❌ Token refresh failed, clearing tokens');
+              authService.clearTokens();
+              dispatch({ type: 'LOGIN_FAILURE', payload: refreshError.message });
+            }
+          } else {
+            console.log('Token invalid or expired, clearing tokens');
+            authService.clearTokens();
+            dispatch({ type: 'LOGIN_FAILURE', payload: error.message });
+          }
         } else {
           console.log('Network or server error, keeping tokens for retry');
           // Keep tokens, might be temporary network issue
@@ -199,36 +283,6 @@ export const AuthProvider = ({ children }) => {
     });
   };
 
-  // Refresh token
-  const refreshAccessToken = async () => {
-    try {
-      if (!state.refreshToken) {
-        throw new Error('No refresh token available');
-      }
-
-      const result = await authService.refreshToken(state.refreshToken);
-      
-      authService.setTokens({
-        accessToken: result.data.accessToken,
-        refreshToken: result.data.refreshToken
-      });
-
-      dispatch({
-        type: 'LOGIN_SUCCESS',
-        payload: {
-          user: result.data.user,
-          accessToken: result.data.accessToken,
-          refreshToken: result.data.refreshToken
-        }
-      });
-
-      return result.data.accessToken;
-    } catch (error) {
-      console.error('Token refresh error:', error);
-      logout();
-      throw error;
-    }
-  };
 
   // Refresh user data from server
   const refreshUserData = async () => {
@@ -247,13 +301,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Get access token helper
+  const getAccessToken = () => {
+    return state.accessToken || authService.getTokens().accessToken;
+  };
+
   const value = {
     ...state,
     login,
     logout,
     updateUser,
     refreshUserData,
-    refreshAccessToken
+    refreshAccessToken,
+    getAccessToken
   };
 
   return (

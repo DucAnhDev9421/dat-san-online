@@ -1,38 +1,94 @@
 import React, { useState, useMemo } from "react";
 import { Plus, Eye, Pencil, Trash2 } from "lucide-react";
 import { customerData } from "../data/mockData";
-
-const ActionButton = ({ bg, Icon, onClick, title }) => (
-  <button
-    onClick={onClick}
-    title={title}
-    style={{
-      background: bg,
-      color: "#fff",
-      border: 0,
-      borderRadius: 8,
-      padding: 8,
-      marginRight: 6,
-      cursor: "pointer",
-    }}
-  >
-    <Icon size={16} />
-  </button>
-);
+import CustomerDetailModal from "../modals/CustomerDetailModal";
+import CustomerEditModal from "../modals/CustomerEditModal";
+import CustomerDeleteModal from "../modals/CustomerDeleteModal";
+import CustomerAddModal from "../modals/CustomerAddModal";
+import { ActionButton } from "./shared";
 
 const Customers = () => {
+  const [customers, setCustomers] = useState(customerData);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [customerToEdit, setCustomerToEdit] = useState(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const filteredCustomers = useMemo(
     () =>
-      customerData.filter((r) =>
+      customers.filter((r) =>
         [r.name, r.email, r.phone, r.status]
           .join(" ")
           .toLowerCase()
           .includes(searchQuery.toLowerCase())
       ),
-    [searchQuery]
+    [customers, searchQuery]
   );
+
+  const handleViewDetails = (customer) => {
+    setSelectedCustomer(customer);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleCloseDetailModal = () => {
+    setIsDetailModalOpen(false);
+    setSelectedCustomer(null);
+  };
+
+  const handleOpenEditModal = (customer) => {
+    setCustomerToEdit(customer);
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setCustomerToEdit(null);
+  };
+
+  const handleSaveCustomer = (updatedCustomer) => {
+    setCustomers(currentCustomers =>
+      currentCustomers.map(c =>
+        c.id === updatedCustomer.id ? updatedCustomer : c
+      )
+    );
+    handleCloseEditModal();
+  };
+
+  const handleOpenDeleteModal = (customer) => {
+    setCustomerToDelete(customer);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setCustomerToDelete(null);
+    setIsDeleteModalOpen(false);
+  };
+
+  const handleConfirmDelete = () => {
+    if (customerToDelete) {
+      setCustomers((currentCustomers) =>
+        currentCustomers.filter((c) => c.id !== customerToDelete.id)
+      );
+      handleCloseDeleteModal();
+    }
+  };
+
+  const handleOpenAddModal = () => {
+    setIsAddModalOpen(true);
+  };
+
+  const handleCloseAddModal = () => {
+    setIsAddModalOpen(false);
+  };
+
+  const handleAddNewCustomer = (newCustomer) => {
+    setCustomers((currentCustomers) => [newCustomer, ...currentCustomers]);
+    handleCloseAddModal();
+  };
 
   return (
     <div>
@@ -40,7 +96,7 @@ const Customers = () => {
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Quản lý người dùng</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={() => alert("TODO: Thêm người dùng")}
+            onClick={handleOpenAddModal}
             style={{ 
               display: "inline-flex", 
               alignItems: "center", 
@@ -179,19 +235,19 @@ const Customers = () => {
                     <ActionButton
                       bg="#06b6d4"
                       Icon={Eye}
-                      onClick={() => alert("Xem chi tiết " + r.id)}
+                      onClick={() => handleViewDetails(r)}
                       title="Xem chi tiết"
                     />
                     <ActionButton
                       bg="#22c55e"
                       Icon={Pencil}
-                      onClick={() => alert("Sửa " + r.name)}
+                      onClick={() => handleOpenEditModal(r)}
                       title="Sửa"
                     />
                     <ActionButton
                       bg="#ef4444"
                       Icon={Trash2}
-                      onClick={() => alert("Xóa " + r.name)}
+                      onClick={() => handleOpenDeleteModal(r)}
                       title="Xóa"
                     />
                   </td>
@@ -216,8 +272,35 @@ const Customers = () => {
           </table>
         </div>
       </div>
+
+      <CustomerDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={handleCloseDetailModal}
+        customer={selectedCustomer}
+      />
+
+      <CustomerEditModal
+        isOpen={isEditModalOpen}
+        onClose={handleCloseEditModal}
+        onSave={handleSaveCustomer}
+        customer={customerToEdit}
+      />
+
+      <CustomerDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDelete}
+        customer={customerToDelete}
+      />
+
+      <CustomerAddModal
+        isOpen={isAddModalOpen}
+        onClose={handleCloseAddModal}
+        onSave={handleAddNewCustomer}
+      />
     </div>
   );
 };
 
 export default Customers;
+

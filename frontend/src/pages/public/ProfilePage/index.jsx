@@ -1,27 +1,17 @@
-import React, { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import React, { useMemo } from 'react'
+import { Outlet, useLocation, Link } from 'react-router-dom'
 import { LayoutDashboard, Calendar, Heart, Settings } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
 import ProfileHeader from './ProfileHeader'
-import OverviewTab from './tabs/OverviewTab'
-import BookingsTab from './tabs/BookingsTab'
-import FavoritesTab from './tabs/FavoritesTab'
-import SettingsTab from './tabs/SettingsTab'
 import { mockFavoriteVenues } from './mockData'
 
 function ProfilePage() {
-  const { user, refreshUserData } = useAuth()
-  const [searchParams] = useSearchParams()
-  const [activeTab, setActiveTab] = useState('overview')
-  const [favoriteVenues, setFavoriteVenues] = useState(mockFavoriteVenues)
-  const [notifications, setNotifications] = useState({
-    booking: true,
-    promotion: true,
-    email: false
-  })
+  const { user } = useAuth()
+  const location = useLocation()
+  const favoriteVenues = mockFavoriteVenues
 
   // Merge real user data with mock data for missing fields
-  const userData = user ? {
+  const userData = useMemo(() => user ? {
     name: user.name || 'Người dùng',
     email: user.email || '',
     phone: user.phone || 'Chưa cập nhật',
@@ -41,15 +31,16 @@ function ProfilePage() {
     totalBookings: 0,
     points: 0,
     isVIP: false
-  }
+  }, [user])
 
-  // Check for tab parameter in URL and set active tab
-  useEffect(() => {
-    const tabParam = searchParams.get('tab')
-    if (tabParam && ['overview', 'bookings', 'favorites', 'settings'].includes(tabParam)) {
-      setActiveTab(tabParam)
-    }
-  }, [searchParams])
+  // Get active tab from URL pathname
+  const activeTab = useMemo(() => {
+    const path = location.pathname
+    if (path.includes('/bookings')) return 'bookings'
+    if (path.includes('/favorites')) return 'favorites'
+    if (path.includes('/settings')) return 'settings'
+    return 'overview'
+  }, [location.pathname])
 
   return (
     <main className="profile-page" style={{
@@ -70,38 +61,38 @@ function ProfilePage() {
           border: '1px solid #e5e7eb'
         }}>
           <div className="tabs">
-            <button 
+            <Link 
+              to="/profile/overview"
               className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
-              onClick={() => setActiveTab('overview')}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}
             >
               <LayoutDashboard size={18} />
               Tổng quan
-            </button>
-            <button 
+            </Link>
+            <Link 
+              to="/profile/bookings"
               className={`tab ${activeTab === 'bookings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('bookings')}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}
             >
               <Calendar size={18} />
-              Lịch sử đặt sân
-            </button>
-            <button 
+              Đặt sân của tôi
+            </Link>
+            <Link 
+              to="/profile/favorites"
               className={`tab ${activeTab === 'favorites' ? 'active' : ''}`}
-              onClick={() => setActiveTab('favorites')}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}
             >
               <Heart size={18} />
               Sân yêu thích
-            </button>
-            <button 
+            </Link>
+            <Link 
+              to="/profile/settings"
               className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}
             >
               <Settings size={18} />
               Cài đặt
-            </button>
+            </Link>
           </div>
         </section>
 
@@ -113,15 +104,7 @@ function ProfilePage() {
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           border: '1px solid #e5e7eb'
         }}>
-          {activeTab === 'overview' && <OverviewTab />}
-          {activeTab === 'bookings' && <BookingsTab />}
-          {activeTab === 'favorites' && <FavoritesTab venues={favoriteVenues} />}
-          {activeTab === 'settings' && (
-            <SettingsTab 
-              notifications={notifications} 
-              setNotifications={setNotifications} 
-            />
-          )}
+          <Outlet />
         </section>
       </div>
     </main>

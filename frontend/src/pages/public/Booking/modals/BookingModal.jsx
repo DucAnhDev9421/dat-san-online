@@ -1,8 +1,30 @@
 import React, { useState } from 'react'
 import { formatDate } from '../utils/dateHelpers'
-import { MapPin, Grid3x3 } from 'lucide-react'
+import { MapPin, Grid3x3, Tag } from 'lucide-react'
+import useClickOutside from '../../../../hook/use-click-outside'
+import useBodyScrollLock from '../../../../hook/use-body-scroll-lock'
+import useEscapeKey from '../../../../hook/use-escape-key'
 
-export default function BookingModal({ selectedDate, selectedSlots, selectedCourt, selectedFieldType, venueData, onClose, onSubmit }) {
+export default function BookingModal({ 
+  selectedDate, 
+  selectedSlots, 
+  selectedCourt, 
+  selectedFieldType, 
+  venueData, 
+  courts, 
+  promotionData,
+  onClose, 
+  onSubmit 
+}) {
+  // Lock body scroll
+  useBodyScrollLock(true)
+  
+  // Handle escape key
+  useEscapeKey(onClose, true)
+  
+  // Handle click outside
+  const modalRef = useClickOutside(onClose, true)
+
   const [bookingForm, setBookingForm] = useState({
     name: '',
     phone: '',
@@ -19,11 +41,51 @@ export default function BookingModal({ selectedDate, selectedSlots, selectedCour
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    onSubmit()
+    
+    // Validate required fields
+    if (!bookingForm.name.trim()) {
+      alert('Vui lòng nhập tên người đặt')
+      return
+    }
+    
+    if (!bookingForm.phone.trim()) {
+      alert('Vui lòng nhập số điện thoại')
+      return
+    }
+
+    // Validate phone format (10-11 digits)
+    const phoneRegex = /^[0-9]{10,11}$/
+    if (!phoneRegex.test(bookingForm.phone.replace(/\s/g, ''))) {
+      alert('Số điện thoại không hợp lệ. Vui lòng nhập 10-11 chữ số')
+      return
+    }
+    
+    // Pass contactInfo to parent
+    onSubmit({
+      name: bookingForm.name.trim(),
+      phone: bookingForm.phone.replace(/\s/g, ''),
+      email: bookingForm.email.trim() || undefined,
+      notes: bookingForm.notes.trim() || undefined
+    })
   }
 
+  // Get selected court data
+  const selectedCourtData = courts?.find(c => (c.id || c._id) === selectedCourt)
+  const courtPrice = selectedCourtData?.price || parseInt(venueData.pricePerHour || venueData.price.replace(/[^\d]/g, ''))
+
+  // Calculate subtotal
+  const calculateSubtotal = () => {
+    if (!selectedSlots.length) return 0
+    return selectedSlots.length * courtPrice
+  }
+
+  // Calculate discount
+  const discountAmount = promotionData?.discountAmount || 0
+
+  // Calculate final total
   const calculateTotal = () => {
-    return selectedSlots.length * parseInt(venueData.price.replace(/[^\d]/g, ''))
+    const subtotal = calculateSubtotal()
+    return Math.max(0, subtotal - discountAmount)
   }
 
   return (
@@ -44,6 +106,7 @@ export default function BookingModal({ selectedDate, selectedSlots, selectedCour
       onClick={onClose}
     >
       <div 
+        ref={modalRef}
         style={{
           background: '#fff',
           borderRadius: '12px',
@@ -97,7 +160,11 @@ export default function BookingModal({ selectedDate, selectedSlots, selectedCour
                   <MapPin size={14} color="#6b7280" />
                   <span style={{ color: '#6b7280' }}>Sân:</span>
                 </div>
-                <span style={{ fontWeight: '500' }}>{selectedCourt}</span>
+                <span style={{ fontWeight: '500' }}>
+                  {courts && selectedCourt 
+                    ? (courts.find(c => (c.id || c._id) === selectedCourt)?.name || 'Sân đã chọn')
+                    : selectedCourt || 'Chưa chọn'}
+                </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -118,9 +185,54 @@ export default function BookingModal({ selectedDate, selectedSlots, selectedCour
                 <span style={{ color: '#6b7280' }}>Số khung giờ:</span>
                 <span style={{ fontWeight: '500' }}>{selectedSlots.length} khung giờ</span>
               </div>
+              {/* Promotion Info */}
+              {promotionData && promotionData.promotion && (
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  background: '#e6f9f0',
+                  borderRadius: '6px',
+                  marginTop: '8px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Tag size={14} style={{ color: '#059669' }} />
+                    <span style={{ fontSize: '13px', color: '#059669', fontWeight: '500' }}>
+                      {promotionData.promotion.name}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '13px', color: '#059669', fontWeight: '600' }}>
+                    {promotionData.code}
+                  </span>
+                </div>
+              )}
+
+              <div style={{ 
+                height: '1px', 
+                background: '#e5e7eb', 
+                margin: '12px 0' 
+              }}></div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <span style={{ color: '#6b7280', fontSize: '14px' }}>Tạm tính:</span>
+                <span style={{ fontWeight: '500', fontSize: '14px', color: '#374151' }}>
+                  {calculateSubtotal().toLocaleString('vi-VN')} VNĐ
+                </span>
+              </div>
+
+              {discountAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ color: '#059669', fontSize: '14px' }}>Giảm giá:</span>
+                  <span style={{ fontWeight: '500', fontSize: '14px', color: '#059669' }}>
+                    -{discountAmount.toLocaleString('vi-VN')} VNĐ
+                  </span>
+                </div>
+              )}
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
-                <span style={{ color: '#1f2937', fontWeight: '600' }}>Tổng tiền:</span>
-                <span style={{ fontWeight: '700', color: '#059669', fontSize: '16px' }}>
+                <span style={{ color: '#1f2937', fontWeight: '600', fontSize: '16px' }}>Tổng cộng:</span>
+                <span style={{ fontWeight: '700', color: '#059669', fontSize: '18px' }}>
                   {calculateTotal().toLocaleString('vi-VN')} VNĐ
                 </span>
               </div>

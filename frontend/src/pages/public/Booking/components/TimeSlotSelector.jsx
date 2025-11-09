@@ -1,88 +1,189 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { Clock, Calendar, ChevronLeft, ChevronRight, MapPin, Grid3x3 } from 'lucide-react'
-import { formatDate, generateCalendarDays } from '../utils/dateHelpers'
-import { getBookedSlots } from '../mockData'
+import React, { useState, useEffect } from 'react'
+import { Clock, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import useDeviceType from '../../../../hook/use-device-type'
+import useClickOutside from '../../../../hook/use-click-outside'
+import useToggle from '../../../../hook/use-toggle'
+import { formatDate, generateCalendarDays, formatDateToYYYYMMDD } from '../utils/dateHelpers'
+import { bookingApi } from '../../../../api/bookingApi'
+import { toast } from 'react-toastify'
 
 export default function TimeSlotSelector({ 
   selectedDate, 
   onDateChange, 
   selectedSlots, 
   onSlotSelect,
-  venuePrice,
   selectedCourt,
-  onCourtChange,
-  selectedFieldType,
-  onFieldTypeChange
+  venuePrice,
+  onTimeSlotsDataChange,
+  lockedSlots = {},
+  onSlotLock,
+  onSlotUnlock,
+  currentUserId
 }) {
-  const [showDatePicker, setShowDatePicker] = useState(false)
-  const [showCourtPicker, setShowCourtPicker] = useState(false)
-  const [showFieldTypePicker, setShowFieldTypePicker] = useState(false)
+  const { isMobile, isTablet } = useDeviceType()
+  const [showDatePicker, { toggle: toggleDatePicker, setFalse: closeDatePicker }] = useToggle(false)
+  const [bookedTimes, setBookedTimes] = useState([])
+  const [timeSlots, setTimeSlots] = useState([])
+  const [loadingAvailability, setLoadingAvailability] = useState(false)
+  const [showSkeleton, setShowSkeleton] = useState(false)
   
-  const datePickerRef = useRef(null)
-  const courtPickerRef = useRef(null)
-  const fieldTypePickerRef = useRef(null)
+  const datePickerRef = useClickOutside(() => closeDatePicker(), showDatePicker)
 
-  const courts = ['Sân số 1', 'Sân số 2', 'Sân số 3', 'Sân số 4', 'Sân số 5']
-  const fieldTypes = ['Bóng đá mini', 'Bóng đá 7 người', 'Bóng đá 11 người', 'Bóng rổ', 'Tennis']
-
-  // Close dropdown when clicking outside
+  // Fetch availability from API when court or date changes
   useEffect(() => {
-    function handleClickOutside(event) {
-      if (datePickerRef.current && !datePickerRef.current.contains(event.target)) {
-        setShowDatePicker(false)
+    const fetchAvailability = async () => {
+      if (!selectedCourt || !selectedDate) {
+        // Reset to default if no court selected
+        const defaultSlots = [
+          { time: '06:00', endTime: '07:00', price: venuePrice || 200000 },
+          { time: '07:00', endTime: '08:00', price: venuePrice || 200000 },
+          { time: '08:00', endTime: '09:00', price: venuePrice || 200000 },
+          { time: '09:00', endTime: '10:00', price: venuePrice || 250000 },
+          { time: '10:00', endTime: '11:00', price: venuePrice || 250000 },
+          { time: '11:00', endTime: '12:00', price: venuePrice || 250000 },
+          { time: '12:00', endTime: '13:00', price: venuePrice || 250000 },
+          { time: '13:00', endTime: '14:00', price: venuePrice || 250000 },
+          { time: '14:00', endTime: '15:00', price: venuePrice || 300000 },
+          { time: '15:00', endTime: '16:00', price: venuePrice || 300000 },
+          { time: '16:00', endTime: '17:00', price: venuePrice || 300000 },
+          { time: '17:00', endTime: '18:00', price: venuePrice || 350000 },
+          { time: '18:00', endTime: '19:00', price: venuePrice || 350000 },
+          { time: '19:00', endTime: '20:00', price: venuePrice || 350000 },
+          { time: '20:00', endTime: '21:00', price: venuePrice || 350000 },
+          { time: '21:00', endTime: '22:00', price: venuePrice || 300000 }
+        ]
+        setTimeSlots(defaultSlots)
+        if (onTimeSlotsDataChange) {
+          onTimeSlotsDataChange(defaultSlots)
+        }
+        setBookedTimes([])
+        return
       }
-      if (courtPickerRef.current && !courtPickerRef.current.contains(event.target)) {
-        setShowCourtPicker(false)
-      }
-      if (fieldTypePickerRef.current && !fieldTypePickerRef.current.contains(event.target)) {
-        setShowFieldTypePicker(false)
+
+      setLoadingAvailability(true)
+      setShowSkeleton(true)
+      
+      // Add minimum delay to show skeleton loading (improve UX)
+      const minLoadingTime = 300 // 300ms minimum loading time
+      const startTime = Date.now()
+      
+      try {
+        // Format date to YYYY-MM-DD in local timezone (not UTC)
+        const dateStr = formatDateToYYYYMMDD(selectedDate)
+        
+        const result = await bookingApi.getAvailability(selectedCourt, dateStr)
+        
+        // Calculate remaining time to meet minimum loading time
+        const elapsedTime = Date.now() - startTime
+        const remainingTime = Math.max(0, minLoadingTime - elapsedTime)
+        
+        // Wait for remaining time if needed
+        if (remainingTime > 0) {
+          await new Promise(resolve => setTimeout(resolve, remainingTime))
+        }
+        
+        if (result.success && result.data) {
+          const slots = result.data.slots || []
+          
+          // Transform API response to timeSlots format
+          const transformedSlots = slots.map(slot => {
+            const [startTime, endTime] = slot.slot.split('-')
+            return {
+              time: startTime,
+              endTime: endTime,
+              price: slot.price || venuePrice || 200000,
+              available: slot.available
+            }
+          })
+
+          setTimeSlots(transformedSlots)
+          
+          // Pass time slots data to parent component for price calculation
+          if (onTimeSlotsDataChange) {
+            onTimeSlotsDataChange(transformedSlots)
+          }
+          
+          // Get booked times (not available)
+          const booked = slots
+            .filter(slot => !slot.available)
+            .map(slot => slot.time)
+          setBookedTimes(booked)
+        }
+      } catch (error) {
+        console.error('Error fetching availability:', error)
+        // Fallback to default slots on error
+        const defaultSlots = [
+          { time: '06:00', endTime: '07:00', price: venuePrice || 200000 },
+          { time: '07:00', endTime: '08:00', price: venuePrice || 200000 },
+          { time: '08:00', endTime: '09:00', price: venuePrice || 200000 },
+          { time: '09:00', endTime: '10:00', price: venuePrice || 250000 },
+          { time: '10:00', endTime: '11:00', price: venuePrice || 250000 },
+          { time: '11:00', endTime: '12:00', price: venuePrice || 250000 },
+          { time: '12:00', endTime: '13:00', price: venuePrice || 250000 },
+          { time: '13:00', endTime: '14:00', price: venuePrice || 250000 },
+          { time: '14:00', endTime: '15:00', price: venuePrice || 300000 },
+          { time: '15:00', endTime: '16:00', price: venuePrice || 300000 },
+          { time: '16:00', endTime: '17:00', price: venuePrice || 300000 },
+          { time: '17:00', endTime: '18:00', price: venuePrice || 350000 },
+          { time: '18:00', endTime: '19:00', price: venuePrice || 350000 },
+          { time: '19:00', endTime: '20:00', price: venuePrice || 350000 },
+          { time: '20:00', endTime: '21:00', price: venuePrice || 350000 },
+          { time: '21:00', endTime: '22:00', price: venuePrice || 300000 }
+        ]
+        setTimeSlots(defaultSlots)
+        if (onTimeSlotsDataChange) {
+          onTimeSlotsDataChange(defaultSlots)
+        }
+        setBookedTimes([])
+      } finally {
+        setLoadingAvailability(false)
+        // Small delay before hiding skeleton for smooth transition
+        setTimeout(() => {
+          setShowSkeleton(false)
+        }, 150)
       }
     }
 
-    if (showDatePicker || showCourtPicker || showFieldTypePicker) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showDatePicker, showCourtPicker, showFieldTypePicker])
-  
-  // Time slots 1 tiếng với giá tiền (hiển thị dạng range)
-  const timeSlots = [
-    { time: '06:00', endTime: '07:00', price: 200000 },
-    { time: '07:00', endTime: '08:00', price: 200000 },
-    { time: '08:00', endTime: '09:00', price: 200000 },
-    { time: '09:00', endTime: '10:00', price: 250000 },
-    { time: '10:00', endTime: '11:00', price: 250000 },
-    { time: '11:00', endTime: '12:00', price: 250000 },
-    { time: '12:00', endTime: '13:00', price: 250000 },
-    { time: '13:00', endTime: '14:00', price: 250000 },
-    { time: '14:00', endTime: '15:00', price: 300000 },
-    { time: '15:00', endTime: '16:00', price: 300000 },
-    { time: '16:00', endTime: '17:00', price: 300000 },
-    { time: '17:00', endTime: '18:00', price: 350000 },
-    { time: '18:00', endTime: '19:00', price: 350000 },
-    { time: '19:00', endTime: '20:00', price: 350000 },
-    { time: '20:00', endTime: '21:00', price: 350000 },
-    { time: '21:00', endTime: '22:00', price: 300000 }
-  ]
-  
-  // Mock booked slots - In real app, this would come from API
-  const bookedTimes = ['08:00', '11:00', '16:00', '20:00']
+    fetchAvailability()
+  }, [selectedCourt, selectedDate, venuePrice])
 
   const handleSlotClick = (timeSlot) => {
-    const slotKey = `${selectedDate.toISOString().split('T')[0]}-${timeSlot.time}`
+    // Require court to be selected before allowing slot selection
+    if (!selectedCourt) {
+      toast.warning('Vui lòng chọn sân trước khi chọn khung giờ')
+      return
+    }
+
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const slotKey = `${dateStr}-${timeSlot.time}`
+    const timeSlotStr = `${timeSlot.time}-${timeSlot.endTime}`
+    const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
+    const slotLock = lockedSlots[lockKey]
     
+    // Check if locked by another user
+    if (slotLock?.isLockedByOther) {
+      toast.warning('Slot này đang được người khác giữ chỗ')
+      return
+    }
+
     if (selectedSlots.includes(slotKey)) {
+      // Unlock slot when user deselects
+      if (onSlotUnlock && slotLock?.isLockedByMe) {
+        onSlotUnlock(timeSlotStr)
+      }
       onSlotSelect(selectedSlots.filter(slot => slot !== slotKey))
     } else {
+      // Lock slot when user selects
+      if (onSlotLock) {
+        onSlotLock(timeSlotStr)
+      }
       onSlotSelect([...selectedSlots, slotKey])
     }
   }
 
   const isSlotSelected = (timeSlot) => {
-    const slotKey = `${selectedDate.toISOString().split('T')[0]}-${timeSlot.time}`
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const slotKey = `${dateStr}-${timeSlot.time}`
     return selectedSlots.includes(slotKey)
   }
 
@@ -95,6 +196,10 @@ export default function TimeSlotSelector({
   }
 
   const isSlotBooked = (timeSlot) => {
+    // Use available property from API if available, otherwise fallback to bookedTimes
+    if (timeSlot.hasOwnProperty('available')) {
+      return !timeSlot.available
+    }
     return bookedTimes.includes(timeSlot.time)
   }
 
@@ -117,7 +222,13 @@ export default function TimeSlotSelector({
   }
   
   const getSlotStatus = (timeSlot) => {
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    const timeSlotStr = `${timeSlot.time}-${timeSlot.endTime}`
+    const lockKey = selectedCourt ? `${selectedCourt}_${dateStr}_${timeSlotStr}` : null
+    const slotLock = lockKey ? lockedSlots[lockKey] : null
+    
     if (isPastTime(timeSlot) || isSlotBooked(timeSlot)) return 'booked'
+    if (slotLock?.isLockedByOther) return 'locked' // Locked by another user
     if (isSlotSelected(timeSlot)) return 'selected'
     return 'available'
   }
@@ -125,263 +236,73 @@ export default function TimeSlotSelector({
   return (
     <div style={{ 
       background: '#fff', 
-      padding: '24px', 
+      padding: isMobile ? '16px' : isTablet ? '20px' : '24px', 
       borderRadius: '12px',
       boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         {/* Header */}
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: isMobile ? '16px' : '20px' }}>
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
             gap: '8px', 
             marginBottom: '16px' 
           }}>
-            <Clock size={20} color="#374151" />
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>
+            <Clock size={isMobile ? 18 : isTablet ? 19 : 20} color="#374151" />
+            <h3 style={{ margin: 0, fontSize: isMobile ? '16px' : isTablet ? '17px' : '18px', fontWeight: '600', color: '#1f2937' }}>
               Chọn khung giờ
             </h3>
           </div>
 
-          {/* Court and Field Type Pickers */}
-          <div style={{ 
-            display: 'flex', 
-            gap: '12px', 
-            marginBottom: '12px',
-            flexWrap: 'wrap'
-          }}>
-            {/* Court Picker */}
-            <div ref={courtPickerRef} style={{ position: 'relative', flex: '1', minWidth: '150px' }}>
-              <button
-                onClick={() => {
-                  setShowCourtPicker(!showCourtPicker)
-                  setShowFieldTypePicker(false)
-                  setShowDatePicker(false)
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  background: '#fff',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  color: '#6b7280',
-                  transition: 'all 0.2s',
-                  width: '100%'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#9ca3af'
-                  e.currentTarget.style.background = '#f9fafb'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#e5e7eb'
-                  e.currentTarget.style.background = '#fff'
-                }}
-              >
-                <MapPin size={16} />
-                <span style={{ flex: 1, textAlign: 'left' }}>{selectedCourt}</span>
-              </button>
-
-              {/* Court Dropdown */}
-              {showCourtPicker && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  marginTop: '4px',
-                  background: '#fff',
-                  borderRadius: '8px',
-                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                  border: '1px solid #e5e7eb',
-                  zIndex: 1000,
-                  minWidth: '100%'
-                }}>
-                  {courts.map((court) => (
-                    <button
-                      key={court}
-              onClick={() => {
-                onCourtChange(court)
-                setShowCourtPicker(false)
-              }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '10px 12px',
-                        border: 'none',
-                        background: selectedCourt === court ? '#f3f4f6' : 'transparent',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        color: selectedCourt === court ? '#1f2937' : '#6b7280',
-                        width: '100%',
-                        textAlign: 'left',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (selectedCourt !== court) {
-                          e.target.style.background = '#f9fafb'
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (selectedCourt !== court) {
-                          e.target.style.background = 'transparent'
-                        }
-                      }}
-                    >
-                      {selectedCourt === court && <MapPin size={14} color="#1f2937" />}
-                      {court}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Field Type Picker */}
-            <div ref={fieldTypePickerRef} style={{ position: 'relative', flex: '1', minWidth: '150px' }}>
-              <button
-                onClick={() => {
-                  setShowFieldTypePicker(!showFieldTypePicker)
-                  setShowCourtPicker(false)
-                  setShowDatePicker(false)
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  background: '#fff',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  color: '#6b7280',
-                  transition: 'all 0.2s',
-                  width: '100%'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#9ca3af'
-                  e.currentTarget.style.background = '#f9fafb'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#e5e7eb'
-                  e.currentTarget.style.background = '#fff'
-                }}
-              >
-                <Grid3x3 size={16} />
-                <span style={{ flex: 1, textAlign: 'left' }}>{selectedFieldType}</span>
-              </button>
-
-              {/* Field Type Dropdown */}
-              {showFieldTypePicker && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  marginTop: '4px',
-                  background: '#fff',
-                  borderRadius: '8px',
-                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                  border: '1px solid #e5e7eb',
-                  zIndex: 1000,
-                  minWidth: '100%'
-                }}>
-                  {fieldTypes.map((type) => (
-                    <button
-                      key={type}
-              onClick={() => {
-                onFieldTypeChange(type)
-                setShowFieldTypePicker(false)
-              }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '10px 12px',
-                        border: 'none',
-                        background: selectedFieldType === type ? '#f3f4f6' : 'transparent',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        color: selectedFieldType === type ? '#1f2937' : '#6b7280',
-                        width: '100%',
-                        textAlign: 'left',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (selectedFieldType !== type) {
-                          e.target.style.background = '#f9fafb'
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (selectedFieldType !== type) {
-                          e.target.style.background = 'transparent'
-                        }
-                      }}
-                    >
-                      {selectedFieldType === type && <Grid3x3 size={14} color="#1f2937" />}
-                      {type}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Date Picker */}
-          <div ref={datePickerRef} style={{ position: 'relative' }}>
+          <div ref={datePickerRef} style={{ position: 'relative', marginBottom: '16px' }}>
             <button
-            onClick={() => {
-              setShowDatePicker(!showDatePicker)
-              setShowCourtPicker(false)
-              setShowFieldTypePicker(false)
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 12px',
-              border: '1px solid #e5e7eb',
-              borderRadius: '6px',
-              background: '#fff',
-              cursor: 'pointer',
-              fontSize: '14px',
-              color: '#6b7280',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#9ca3af'
-              e.currentTarget.style.background = '#f9fafb'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#e5e7eb'
-              e.currentTarget.style.background = '#fff'
-            }}
-          >
-            <Calendar size={16} />
-            {formatDate(selectedDate)}
-          </button>
-
-          {/* Calendar Picker - Dropdown */}
-          {showDatePicker && (
-            <div 
+              onClick={toggleDatePicker}
               style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                marginTop: '8px',
-                background: '#fff',
-                borderRadius: '12px',
-                padding: '20px',
-                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                zIndex: 1000,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 12px',
                 border: '1px solid #e5e7eb',
-                maxWidth: '320px',
-                width: '100%'
+                borderRadius: '6px',
+                background: '#fff',
+                cursor: 'pointer',
+                fontSize: '14px',
+                color: '#6b7280',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#9ca3af'
+                e.currentTarget.style.background = '#f9fafb'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb'
+                e.currentTarget.style.background = '#fff'
               }}
             >
+              <Calendar size={16} />
+              {formatDate(selectedDate)}
+            </button>
+
+            {/* Calendar Picker - Dropdown */}
+            {showDatePicker && (
+              <div 
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  marginTop: '8px',
+                  background: '#fff',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                  zIndex: 1000,
+                  border: '1px solid #e5e7eb',
+                  maxWidth: '320px',
+                  width: '100%'
+                }}
+              >
               {/* Calendar Header */}
               <div style={{
                 display: 'flex',
@@ -468,7 +389,7 @@ export default function TimeSlotSelector({
                       onClick={() => {
                         if (!day.isPast) {
                           onDateChange(day.date)
-                          setShowDatePicker(false)
+                          closeDatePicker()
                         }
                       }}
                       disabled={day.isPast}
@@ -503,28 +424,22 @@ export default function TimeSlotSelector({
                   )
                 })}
               </div>
-            </div>
-          )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Time Slots Grid */}
         <div style={{ marginBottom: '20px' }}>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: window.innerWidth <= 768 ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-                  gap: '12px'
-                }}>
-            {timeSlots.map((slot) => {
-              const status = getSlotStatus(slot)
-              const isSelected = status === 'selected'
-              const isBooked = status === 'booked'
-              
-              return (
-                <button
-                  key={slot.time}
-                  onClick={() => !isBooked && handleSlotClick(slot)}
-                  disabled={isBooked}
+          {(loadingAvailability || showSkeleton) && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)',
+              gap: '12px'
+            }}>
+              {Array.from({ length: 16 }).map((_, index) => (
+                <div
+                  key={`skeleton-${index}`}
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -532,10 +447,85 @@ export default function TimeSlotSelector({
                     justifyContent: 'center',
                     gap: '8px',
                     padding: '16px 12px',
-                    border: isSelected ? '2px solid #000' : '1px solid #e5e7eb',
+                    border: '1px solid #e5e7eb',
                     borderRadius: '8px',
-                    background: isSelected ? '#000' : isBooked ? '#f5f5f5' : '#fff',
-                    cursor: isBooked ? 'not-allowed' : 'pointer',
+                    background: '#f9fafb',
+                    minHeight: '90px',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {/* Skeleton shimmer effect */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: '-100%',
+                      width: '100%',
+                      height: '100%',
+                      background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent)',
+                      animation: 'shimmer 1.5s infinite'
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: '60%',
+                      height: '16px',
+                      background: '#e5e7eb',
+                      borderRadius: '4px',
+                      position: 'relative',
+                      zIndex: 1
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: '40%',
+                      height: '14px',
+                      background: '#e5e7eb',
+                      borderRadius: '4px',
+                      position: 'relative',
+                      zIndex: 1
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          {!loadingAvailability && !showSkeleton && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)',
+            gap: '12px',
+            animation: 'fadeIn 0.3s ease-in'
+          }}>
+            {timeSlots.map((slot) => {
+              const status = getSlotStatus(slot)
+              const isSelected = status === 'selected'
+              const isBooked = status === 'booked'
+              const isLockedByOther = status === 'locked'
+              const isDisabled = !selectedCourt || isBooked || isLockedByOther
+              
+              return (
+                <button
+                  key={slot.time}
+                  onClick={() => !isDisabled && handleSlotClick(slot)}
+                  disabled={isDisabled}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '16px 12px',
+                    border: isSelected ? '2px solid #000' : 
+                            isLockedByOther ? '2px solid #ffc107' : 
+                            '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    background: isSelected ? '#000' : 
+                               isBooked ? '#f5f5f5' : 
+                               isLockedByOther ? '#fff3cd' : '#fff',
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                    opacity: !selectedCourt ? 0.6 : 1,
                     transition: 'all 0.2s',
                     minHeight: '90px'
                   }}
@@ -553,7 +543,9 @@ export default function TimeSlotSelector({
                   <div style={{ 
                     fontSize: '16px',
                     fontWeight: '600',
-                    color: isSelected ? '#fff' : isBooked ? '#9ca3af' : '#1f2937'
+                    color: isSelected ? '#fff' : 
+                           isBooked ? '#9ca3af' : 
+                           isLockedByOther ? '#856404' : '#1f2937'
                   }}>
                     {slot.time} - {slot.endTime}
                   </div>
@@ -561,25 +553,54 @@ export default function TimeSlotSelector({
                   <div style={{ 
                     fontSize: '14px',
                     fontWeight: '500',
-                    color: isSelected ? '#fff' : isBooked ? '#9ca3af' : '#374151'
+                    color: isSelected ? '#fff' : 
+                           isBooked ? '#9ca3af' : 
+                           isLockedByOther ? '#856404' : '#374151'
                   }}>
-                    {isBooked ? 'Đã đặt' : `${slot.price.toLocaleString('vi-VN')} đ`}
+                    {!selectedCourt ? 'Chọn sân trước' :
+                     isBooked ? 'Đã đặt' : 
+                     isLockedByOther ? 'Đang giữ chỗ' : 
+                     `${slot.price.toLocaleString('vi-VN')} đ`}
                   </div>
                 </button>
               )
             })}
           </div>
+          )}
         </div>
         
+        {/* Add CSS animations */}
+        <style>{`
+          @keyframes shimmer {
+            0% {
+              left: -100%;
+            }
+            100% {
+              left: 100%;
+            }
+          }
+          
+          @keyframes fadeIn {
+            from {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `}</style>
+        
         {/* Legend */}
-                <div style={{
-                  display: 'flex',
-                  flexDirection: window.innerWidth <= 768 ? 'column' : 'row',
-                  alignItems: 'center',
-                  gap: window.innerWidth <= 768 ? '12px' : '24px',
-                  paddingTop: '16px',
-                  borderTop: '1px solid #e5e7eb'
-                }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: 'center',
+          gap: isMobile ? '12px' : '24px',
+          paddingTop: '16px',
+          borderTop: '1px solid #e5e7eb'
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
               width: '16px',
@@ -610,6 +631,17 @@ export default function TimeSlotSelector({
               borderRadius: '4px'
             }}></div>
             <span style={{ fontSize: '14px', color: '#374151' }}>Đã đặt</span>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '16px',
+              height: '16px',
+              background: '#fff3cd',
+              border: '2px solid #ffc107',
+              borderRadius: '4px'
+            }}></div>
+            <span style={{ fontSize: '14px', color: '#374151' }}>Đang giữ chỗ</span>
           </div>
         </div>
 

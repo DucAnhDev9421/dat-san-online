@@ -62,19 +62,38 @@ apiClient.interceptors.response.use(
         if (refreshToken) {
           // Try to refresh token
           const response = await refreshTokenRequest(refreshToken);
-          const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+          const { accessToken, refreshToken: newRefreshToken, user } = response.data.data;
           
           // Update tokens
           setTokens({ accessToken, refreshToken: newRefreshToken });
           
+          // Dispatch custom event to notify AuthContext
+          window.dispatchEvent(new CustomEvent('tokenRefreshed', {
+            detail: {
+              accessToken,
+              refreshToken: newRefreshToken,
+              user
+            }
+          }));
+          
           // Retry original request with new token
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           return apiClient(originalRequest);
+        } else {
+          // No refresh token available
+          clearTokens();
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+          return Promise.reject(error);
         }
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
         // Clear tokens and redirect to login
         clearTokens();
+        
+        // Dispatch logout event
+        window.dispatchEvent(new CustomEvent('tokenRefreshFailed'));
         
         // Only redirect if not already on login page
         if (window.location.pathname !== '/login') {

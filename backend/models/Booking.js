@@ -1,5 +1,6 @@
 // models/Booking.js
 import mongoose, { Schema } from "mongoose";
+import BookingSequence from "./BookingSequence.js";
 
 const bookingSchema = new mongoose.Schema(
   {
@@ -67,6 +68,21 @@ const bookingSchema = new mongoose.Schema(
       min: [0, "Tổng tiền không được âm"],
     },
 
+    // Mã khuyến mãi (nếu có)
+    promotionCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: null,
+    },
+
+    // Số tiền giảm giá từ khuyến mãi
+    discountAmount: {
+      type: Number,
+      default: 0,
+      min: [0, "Số tiền giảm giá không được âm"],
+    },
+
     // Thông tin liên hệ
     contactInfo: {
       name: {
@@ -114,6 +130,30 @@ const bookingSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Mã đặt sân (format: BK-YYYYMMDD-XXXX)
+    bookingCode: {
+      type: String,
+      unique: true,
+      sparse: true, // Cho phép null nhưng unique nếu có giá trị
+      trim: true,
+      uppercase: true,
+    },
+    // Mã QR điện tử Booking (base64)
+    qrCode: {
+      type: String,
+      default: null,
+    },
+    // Thời điểm check-in tại cơ sở
+    checkedInAt: {
+      type: Date,
+      default: null,
+    },
+    // Người thực hiện check-in (owner/admin)
+    checkedInBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -122,15 +162,47 @@ const bookingSchema = new mongoose.Schema(
 
 // Indexes để tối ưu hóa tìm kiếm
 bookingSchema.index({ user: 1, createdAt: -1 });
-bookingSchema.index({ facility: 1, date: 1 });
-bookingSchema.index({ court: 1, date: 1 });
+bookingSchema.index({ facility: 1, date: 1 }); // Compound index cho facility và date (cũng hỗ trợ query theo date)
+bookingSchema.index({ court: 1, date: 1 }); // Compound index cho court và date (cũng hỗ trợ query theo date)
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ paymentStatus: 1 });
-bookingSchema.index({ date: 1 });
+// Note: bookingCode index được tạo tự động bởi unique: true trong field definition
+// Note: date index không cần thiết vì đã có trong compound indexes ở trên
+
+// Pre-save hook để generate booking code
+bookingSchema.pre("save", async function (next) {
+  // Chỉ generate nếu chưa có bookingCode và đây là document mới
+  if (!this.bookingCode && this.isNew) {
+    try {
+      // Lấy ngày từ createdAt hoặc date
+      const date = this.createdAt || this.date || new Date();
+      const dateStr = date.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+
+      // Get or create sequence for today
+      let sequence = await BookingSequence.findOneAndUpdate(
+        { date: dateStr },
+        { $inc: { sequence: 1 } },
+        { upsert: true, new: true }
+      );
+
+      const seqNum = sequence.sequence.toString().padStart(4, "0");
+      this.bookingCode = `BK-${dateStr}-${seqNum}`;
+    } catch (error) {
+      // Nếu có lỗi, vẫn tiếp tục nhưng không có bookingCode
+      console.error("Error generating booking code:", error);
+    }
+  }
+  next();
+});
 
 // Virtual field để lấy tổng số khung giờ
 bookingSchema.virtual("duration").get(function () {
   return this.timeSlots.length;
+});
+
+// Virtual method để lấy display code (fallback về _id nếu không có bookingCode)
+bookingSchema.virtual("displayCode").get(function () {
+  return this.bookingCode || this._id.toString().slice(-8).toUpperCase();
 });
 
 // Method để check xem booking có đang pending không
@@ -152,7 +224,7 @@ bookingSchema.methods.isEligibleForRefund = function () {
 bookingSchema.statics.findByUser = function (userId, filters = {}) {
   return this.find({ user: userId, ...filters })
     .populate("court", "name type price")
-    .populate("facility", "name location")
+    .populate("facility", "name address location")
     .sort({ createdAt: -1 });
 };
 

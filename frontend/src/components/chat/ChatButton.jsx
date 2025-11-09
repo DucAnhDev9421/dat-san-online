@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import useMobile from '../../hook/use-mobile';
+import useToggle from '../../hook/use-toggle';
+import chatbotAvatar from '../../assets/chatbot.png';
 import './ChatButton.css';
 
 const ChatButton = () => {
   const location = useLocation();
-  const [isOpen, setIsOpen] = useState(false);
+  const isMobile = useMobile(768);
+  const [isOpen, { toggle: toggleChat }] = useToggle(false);
   const [isTyping, setIsTyping] = useState(false);
   
-  // Hide chat button on auth pages
+  // Hide chat button on auth pages, admin pages, and owner pages
   const authPages = ['/login', '/register', '/verify-otp', '/forgot-password', '/reset-password', '/auth/callback', '/auth/error'];
   const isAuthPage = authPages.some(path => location.pathname.startsWith(path));
-
-  const toggleChat = () => {
-    setIsOpen(!isOpen);
-  };
+  const isAdminPage = location.pathname.startsWith('/admin');
+  const isOwnerPage = location.pathname.startsWith('/owner');
 
   // Simulate typing effect
   useEffect(() => {
@@ -26,8 +28,8 @@ const ChatButton = () => {
     }
   }, [isOpen]);
 
-  // Don't render chat button on auth pages
-  if (isAuthPage) {
+  // Don't render chat button on auth pages, admin pages, or owner pages
+  if (isAuthPage || isAdminPage || isOwnerPage) {
     return null;
   }
 
@@ -59,13 +61,20 @@ const ChatButton = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="chat-window">
+        <div 
+          className="chat-window"
+          style={isMobile ? {
+            width: 'calc(100vw - 40px)',
+            height: 'calc(100vh - 120px)',
+            bottom: '80px',
+            right: '20px',
+            left: '20px'
+          } : undefined}
+        >
           <div className="chat-header">
             <div className="chat-header-info">
               <div className="chat-avatar">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4H19V9Z" fill="currentColor"/>
-                </svg>
+                <img src={chatbotAvatar} alt="Chatbot Avatar" />
               </div>
               <div className="chat-header-text">
                 <h4>AI Assistant</h4>
@@ -82,9 +91,7 @@ const ChatButton = () => {
           <div className="chat-messages">
             <div className="message bot-message">
               <div className="message-avatar">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4H19V9Z" fill="currentColor"/>
-                </svg>
+                <img src={chatbotAvatar} alt="Chatbot Avatar" />
               </div>
               <div className="message-content">
                 <p>Xin chào! Tôi là AI Assistant. Tôi có thể giúp bạn:</p>
@@ -100,9 +107,7 @@ const ChatButton = () => {
             {isTyping && (
               <div className="message bot-message typing-message">
                 <div className="message-avatar">
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4H19V9Z" fill="currentColor"/>
-                  </svg>
+                  <img src={chatbotAvatar} alt="Chatbot Avatar" />
                 </div>
                 <div className="message-content typing-content">
                   <div className="typing-indicator">

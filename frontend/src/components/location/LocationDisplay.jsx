@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, RefreshCw, AlertCircle } from 'lucide-react';
+import useMobile from '../../hook/use-mobile';
 import './LocationDisplay.css';
 
 const LocationDisplay = () => {
+  const isMobile = useMobile(768);
+  const isSmallMobile = useMobile(480);
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -159,14 +162,25 @@ const LocationDisplay = () => {
           </button>
         </div>
       ) : location ? (
-        <div className="location-info">
-          <MapPin size={16} />
-          <div className="location-text">
-            <span className="location-main">{location.shortAddress}</span>
-            {location.city && (
-              <span className="location-detail">{location.city}</span>
-            )}
-          </div>
+        <div className="location-info" style={{
+          minWidth: isSmallMobile ? '120px' : isMobile ? '150px' : 'auto',
+          maxWidth: isSmallMobile ? '150px' : isMobile ? '200px' : 'auto',
+          padding: isSmallMobile ? '4px 6px' : isMobile ? '6px 8px' : undefined,
+          fontSize: isSmallMobile ? '12px' : isMobile ? '13px' : undefined
+        }}>
+          <MapPin size={isMobile ? 14 : 16} />
+          {!isSmallMobile && (
+            <div className="location-text">
+              <span className="location-main" style={{ fontSize: isSmallMobile ? '12px' : isMobile ? '13px' : undefined }}>
+                {location.shortAddress}
+              </span>
+              {location.city && (
+                <span className="location-detail" style={{ fontSize: isSmallMobile ? '10px' : isMobile ? '11px' : undefined }}>
+                  {location.city}
+                </span>
+              )}
+            </div>
+          )}
           <button onClick={handleRefresh} className="refresh-button" title="Làm mới vị trí">
             <RefreshCw size={14} />
           </button>

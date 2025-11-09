@@ -1,5 +1,6 @@
 import React from 'react'
-import { User, LogOut, Settings, ChevronDown, Calendar } from 'lucide-react'
+import { User, LogOut, Settings, ChevronDown, Calendar, Wallet } from 'lucide-react'
+import useClickOutside from '../../hook/use-click-outside'
 
 const UserMenu = ({ 
   user, 
@@ -8,10 +9,13 @@ const UserMenu = ({
   onProfileClick, 
   onLogout,
   onSettingsClick,
-  onBookingHistoryClick
+  onBookingHistoryClick,
+  onTopUpClick
 }) => {
+  const menuRef = useClickOutside(() => onToggle(), isOpen)
+
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={menuRef} style={{ position: 'relative' }}>
       <button
         onClick={onToggle}
         style={{
@@ -55,13 +59,26 @@ const UserMenu = ({
             {user?.name?.charAt(0)?.toUpperCase() || 'U'}
           </div>
         )}
-        <span style={{ 
-          fontSize: '14px', 
-          fontWeight: '500',
-          color: '#374151'
-        }}>
-          {user?.name || 'User'}
-        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+          <span style={{ 
+            fontSize: '14px', 
+            fontWeight: '500',
+            color: '#374151',
+            lineHeight: '1.2'
+          }}>
+            {user?.name || 'User'}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Wallet size={14} color="#10b981" />
+            <span style={{ 
+              fontSize: '13px', 
+              fontWeight: '600',
+              color: '#10b981'
+            }}>
+              {(user?.balance || 0).toLocaleString('vi-VN')} ₫
+            </span>
+          </div>
+        </div>
         <ChevronDown size={16} color="#6b7280" />
       </button>
 
@@ -97,6 +114,21 @@ const UserMenu = ({
                  (user.role || user.userType) === 'owner' ? 'Chủ sân' : 'Người dùng'}
               </div>
             )}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '4px',
+              marginTop: '6px'
+            }}>
+              <Wallet size={14} color="#10b981" />
+              <span style={{ 
+                fontSize: '13px', 
+                fontWeight: '600',
+                color: '#10b981'
+              }}>
+                {(user?.balance || 0).toLocaleString('vi-VN')} ₫
+              </span>
+            </div>
           </div>
           
           <div style={{ padding: '8px' }}>
@@ -143,7 +175,30 @@ const UserMenu = ({
               onMouseLeave={(e) => e.target.style.background = 'none'}
             >
               <Calendar size={16} />
-              Lịch đặt sân
+              Đặt sân của tôi
+            </button>
+            
+            <button
+              onClick={onTopUpClick}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '10px 12px',
+                border: 'none',
+                background: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                color: '#374151',
+                textAlign: 'left'
+              }}
+              onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+              onMouseLeave={(e) => e.target.style.background = 'none'}
+            >
+              <Wallet size={16} />
+              Nạp tiền
             </button>
             
             <button
@@ -195,21 +250,6 @@ const UserMenu = ({
             </button>
           </div>
         </div>
-      )}
-
-      {/* Click outside to close menu */}
-      {isOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 999,
-          }}
-          onClick={onToggle}
-        />
       )}
     </div>
   )

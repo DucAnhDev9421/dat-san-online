@@ -1,5 +1,8 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { X } from 'lucide-react'
+import useClickOutside from '../../hook/use-click-outside'
+import useBodyScrollLock from '../../hook/use-body-scroll-lock'
+import useEscapeKey from '../../hook/use-escape-key'
 
 /**
  * Custom Dialog Component
@@ -21,30 +24,14 @@ const Dialog = ({
   showCloseButton = true,
   maxWidth = '500px'
 }) => {
-  // Prevent body scroll when dialog is open
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = 'unset'
-    }
-
-    return () => {
-      document.body.style.overflow = 'unset'
-    }
-  }, [open])
+  // Lock body scroll when dialog is open
+  useBodyScrollLock(open)
 
   // Handle escape key
-  useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === 'Escape' && open) {
-        onClose()
-      }
-    }
+  useEscapeKey(onClose, open)
 
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
-  }, [open, onClose])
+  // Handle click outside
+  const dialogRef = useClickOutside(onClose, open)
 
   if (!open) return null
 
@@ -67,6 +54,7 @@ const Dialog = ({
 
       {/* Dialog Content */}
       <div
+        ref={dialogRef}
         style={{
           position: 'fixed',
           top: '50%',

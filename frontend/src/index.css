@@ -548,3 +548,5 @@ a { color: inherit; text-decoration: none; }
   .booking-modal { width: 95%; margin: 20px; }
   .modal-actions { flex-direction: column; }
 }
+
+@import "tailwindcss";

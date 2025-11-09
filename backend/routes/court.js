@@ -84,7 +84,7 @@ router.post(
   authorize("owner"), // Chỉ owner mới được tạo
   async (req, res, next) => {
     try {
-      const { facility, name, type, capacity, price, description, status, services, images, maintenance } =
+      const { facility, name, type, courtType, sportCategory, capacity, price, description, status, services, images, maintenance } =
         req.body;
 
       // Kiểm tra facility có tồn tại không
@@ -104,11 +104,39 @@ router.post(
         });
       }
 
+      // Validate courtType if provided
+      if (courtType && !mongoose.Types.ObjectId.isValid(courtType)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid courtType ID format",
+        });
+      }
+
+      // Validate sportCategory if provided
+      if (sportCategory && !mongoose.Types.ObjectId.isValid(sportCategory)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid sportCategory ID format",
+        });
+      }
+
+      // Nếu có courtType nhưng chưa có sportCategory, lấy từ courtType
+      let finalSportCategory = sportCategory;
+      if (courtType && !sportCategory) {
+        const CourtType = (await import("../models/CourtType.js")).default;
+        const courtTypeDoc = await CourtType.findById(courtType).lean();
+        if (courtTypeDoc && courtTypeDoc.sportCategory) {
+          finalSportCategory = courtTypeDoc.sportCategory;
+        }
+      }
+
       // Tạo sân mới
       const court = new Court({
         facility,
         name,
         type,
+        courtType: courtType || null, // Optional field
+        sportCategory: finalSportCategory || null, // Optional field
         capacity,
         price,
         description,
@@ -148,8 +176,48 @@ router.get("/", async (req, res, next) => {
     if (req.query.status) {
       query.status = req.query.status;
     }
-    if (req.query.type) {
-      query.type = req.query.type;
+    
+    // Filter by sportCategory
+    if (req.query.sportCategory) {
+      if (mongoose.Types.ObjectId.isValid(req.query.sportCategory)) {
+        query.sportCategory = req.query.sportCategory;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid sportCategory ID format",
+        });
+      }
+    }
+    
+    // Filter by courtType ID (reference) - preferred method
+    if (req.query.typeId) {
+      // Validate ObjectId format
+      if (mongoose.Types.ObjectId.isValid(req.query.typeId)) {
+        query.courtType = req.query.typeId;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid courtType ID format",
+        });
+      }
+    } 
+    // Fallback: filter by type string (backward compatible)
+    else if (req.query.type) {
+      // Extract number from type name (e.g., "Sân 5" -> "5", "Sân 11" -> "11")
+      // Then match with court types like "5 người", "11 người", etc.
+      const typeString = req.query.type.toString().trim();
+      
+      // Extract number from type string (e.g., "Sân 5" -> "5", "Sân 11 người" -> "11")
+      const numberMatch = typeString.match(/\d+/);
+      
+      if (numberMatch) {
+        const number = numberMatch[0];
+        // Match any court type containing this number (e.g., "5 người", "Sân 5", "5v5")
+        query.type = { $regex: number, $options: "i" };
+      } else {
+        // Fallback: use original regex matching
+        query.type = { $regex: typeString, $options: "i" };
+      }
     }
     if (req.query.search) {
       query.$or = [
@@ -159,7 +227,9 @@ router.get("/", async (req, res, next) => {
     }
 
     const courts = await Court.find(query)
-      .populate("facility", "name location")
+      .populate("facility", "name address location")
+      .populate("courtType", "name description sportCategory") // Populate courtType info
+      .populate("sportCategory", "name") // Populate sportCategory info
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -196,10 +266,10 @@ router.get("/:id", async (req, res, next) => {
       });
     }
 
-    const court = await Court.findById(req.params.id).populate(
-      "facility",
-      "name location"
-    );
+    const court = await Court.findById(req.params.id)
+      .populate("facility", "name location")
+      .populate("courtType", "name description sportCategory")
+      .populate("sportCategory", "name");
 
     if (!court) {
       return res.status(404).json({
@@ -230,11 +300,31 @@ router.put(
       // Không cho phép cập nhật facility
       delete req.body.facility;
 
+      // Validate sportCategory if provided
+      if (req.body.sportCategory && !mongoose.Types.ObjectId.isValid(req.body.sportCategory)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid sportCategory ID format",
+        });
+      }
+
+      // Nếu có courtType nhưng chưa có sportCategory, lấy từ courtType
+      if (req.body.courtType && !req.body.sportCategory) {
+        const CourtType = (await import("../models/CourtType.js")).default;
+        const courtTypeDoc = await CourtType.findById(req.body.courtType).lean();
+        if (courtTypeDoc && courtTypeDoc.sportCategory) {
+          req.body.sportCategory = courtTypeDoc.sportCategory;
+        }
+      }
+
       const updatedCourt = await Court.findByIdAndUpdate(
         req.params.id,
         req.body,
         { new: true, runValidators: true }
-      ).populate("facility", "name location");
+      )
+        .populate("facility", "name address location")
+        .populate("courtType", "name description sportCategory")
+        .populate("sportCategory", "name");
 
       res.json({
         success: true,
@@ -270,7 +360,7 @@ router.patch(
         req.params.id,
         { status },
         { new: true }
-      ).populate("facility", "name location");
+      ).populate("facility", "name address location");
 
       res.json({
         success: true,

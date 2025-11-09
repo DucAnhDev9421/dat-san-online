@@ -57,6 +57,13 @@ const userSchema = new mongoose.Schema(
       default: "vi", // hoặc 'en'
     },
 
+    // Ví điện tử
+    walletBalance: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
     // Trạng thái tài khoản
     isActive: {
       type: Boolean,
@@ -65,6 +72,18 @@ const userSchema = new mongoose.Schema(
     isEmailVerified: {
       type: Boolean,
       default: false,
+    },
+    isLocked: {
+      type: Boolean,
+      default: false, // Admin có thể khóa tài khoản
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false, // Soft delete
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
     },
 
     // Thông tin đăng nhập
@@ -217,7 +236,9 @@ userSchema.methods.removeRefreshTokenById = async function (tokenId) {
     if (!this.refreshTokens || !Array.isArray(this.refreshTokens)) {
       this.refreshTokens = [];
     }
-    this.refreshTokens = this.refreshTokens.filter((rt) => rt._id.toString() !== tokenId);
+    this.refreshTokens = this.refreshTokens.filter(
+      (rt) => rt._id.toString() !== tokenId
+    );
     return await this.save();
   } catch (error) {
     if (error.name === "VersionError") {
@@ -255,7 +276,7 @@ userSchema.statics.cleanupUnverifiedUsers = function () {
   const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
   return this.deleteMany({
     isEmailVerified: false,
-    createdAt: { $lt: new Date(fifteenMinutesAgo) }
+    createdAt: { $lt: new Date(fifteenMinutesAgo) },
   });
 };
 
@@ -267,6 +288,7 @@ userSchema.statics.createFromGoogleProfile = function (profile) {
     name: profile.displayName,
     avatar: profile.photos[0]?.value,
     isEmailVerified: true,
+    isActive: true, // Google users should be active immediately
   });
 };
 

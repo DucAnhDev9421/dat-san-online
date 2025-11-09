@@ -2,6 +2,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import Facility from "../models/Facility.js";
+import Review from "../models/Review.js";
 import {
   authenticateToken,
   authorize,
@@ -9,6 +10,7 @@ import {
 } from "../middleware/Auth.js";
 import { logAudit } from "../utils/auditLogger.js";
 import { uploadFacilityImage, cloudinaryUtils } from "../config/cloudinary.js";
+import { geocodeAddress } from "../utils/goongService.js";
 
 const router = express.Router();
 
@@ -82,6 +84,60 @@ const checkOwnershipOrAdmin = async (req, res, next) => {
   }
 };
 
+// Middleware để tự động lấy tọa độ từ địa chỉ
+const autoGeocode = async (req, res, next) => {
+  try {
+    // Nếu có address và chưa có location, hoặc address thay đổi
+    if (req.body.address && (!req.body.location?.coordinates || req.body.addressChanged)) {
+      try {
+        const geocodeResult = await geocodeAddress(req.body.address);
+        
+        // Format theo GeoJSON: [longitude, latitude]
+        if (geocodeResult.lng && geocodeResult.lat) {
+          req.body.location = {
+            type: 'Point',
+            coordinates: [geocodeResult.lng, geocodeResult.lat]
+          };
+        } else {
+          // Xóa location nếu không có tọa độ hợp lệ
+          delete req.body.location;
+        }
+
+        // Có thể cập nhật lại address với formatted_address từ Goong (tùy chọn)
+        // req.body.address = geocodeResult.formatted_address;
+      } catch (error) {
+        // Nếu không lấy được tọa độ, xóa location để tránh lỗi
+        console.warn('Không thể lấy tọa độ từ Goong API:', error.message);
+        delete req.body.location;
+      }
+    }
+    
+    // Validate location từ client: chỉ set nếu có coordinates hợp lệ
+    if (req.body.location) {
+      if (req.body.location.coordinates && Array.isArray(req.body.location.coordinates) && req.body.location.coordinates.length === 2) {
+        const [lng, lat] = req.body.location.coordinates;
+        // Validate range
+        if (lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90) {
+          req.body.location = {
+            type: 'Point',
+            coordinates: [lng, lat]
+          };
+        } else {
+          // Tọa độ không hợp lệ, xóa location
+          delete req.body.location;
+        }
+      } else {
+        // Location không có coordinates hợp lệ, xóa để tránh lỗi
+        delete req.body.location;
+      }
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 // === CÁC API ENDPOINTS ===
 
 /**
@@ -92,10 +148,9 @@ router.post(
   "/",
   authenticateToken,
   authorize("owner"), // Chỉ 'owner' mới được tạo
+  autoGeocode, // Middleware tự động lấy tọa độ từ địa chỉ
   async (req, res, next) => {
     try {
-      const { name, location, type, pricePerHour, description } = req.body;
-
       const facility = new Facility({
         ...req.body,
         owner: req.user._id, // Gán chủ sở hữu là user đang đăng nhập
@@ -125,12 +180,22 @@ router.get("/", async (req, res, next) => {
 
     // Filter
     const query = {};
-    if (req.query.type) {
-      query.type = req.query.type;
+    // Xử lý filter theo type/types
+    if (req.query.types) {
+      // Hỗ trợ filter theo nhiều types (types=a,b,c)
+      const typesArray = Array.isArray(req.query.types) 
+        ? req.query.types 
+        : req.query.types.split(',').map(t => t.trim()).filter(t => t);
+      if (typesArray.length > 0) {
+        query.types = { $in: typesArray };
+      }
+    } else if (req.query.type) {
+      // Tìm kiếm facilities có types chứa type được chỉ định
+      query.types = { $in: [req.query.type] };
     }
-    if (req.query.location) {
-      // Tìm kiếm location gần đúng
-      query.location = { $regex: req.query.location, $options: "i" };
+    if (req.query.address) {
+      // Tìm kiếm address gần đúng
+      query.address = { $regex: req.query.address, $options: "i" };
     }
     if (req.query.ownerId) {
       query.owner = req.query.ownerId;
@@ -138,18 +203,107 @@ router.get("/", async (req, res, next) => {
 
     query.status = "opening"; // Mặc định chỉ lấy sân đang mở
 
-    const facilities = await Facility.find(query)
-      .populate("owner", "name email avatar") // Lấy thông tin chủ sân
-      .sort({ createdAt: -1 })
+    // Tìm kiếm theo khoảng cách nếu có tọa độ
+    let hasLocationFilter = false;
+    let locationQuery = {};
+    if (req.query.lat && req.query.lng) {
+      const lat = parseFloat(req.query.lat);
+      const lng = parseFloat(req.query.lng);
+      const maxDistance = parseFloat(req.query.maxDistance) || 10000; // mặc định 10km (meters)
+
+      hasLocationFilter = true;
+      
+      // For find() - use $near (automatically sorts by distance)
+      query.location = {
+        $near: {
+          $geometry: {
+            type: "Point",
+            coordinates: [lng, lat]
+          },
+          $maxDistance: maxDistance
+        }
+      };
+
+      // For countDocuments() - use $geoWithin (doesn't require sorting)
+      // Create a bounding circle using $centerSphere
+      const radiusInRadians = maxDistance / 6378100; // Earth radius in meters
+      locationQuery = {
+        location: {
+          $geoWithin: {
+            $centerSphere: [[lng, lat], radiusInRadians]
+          }
+        }
+      };
+    }
+
+    let queryBuilder = Facility.find(query)
+      .populate("owner", "name email avatar");
+
+    // Sort theo khoảng cách nếu tìm theo vị trí, không thì sort theo createdAt
+    // Note: $near automatically sorts by distance, so we don't need to add sort
+    if (!hasLocationFilter) {
+      queryBuilder.sort({ createdAt: -1 });
+    }
+
+    const facilities = await queryBuilder
       .skip(skip)
       .limit(limit);
 
-    const total = await Facility.countDocuments(query);
+    // For count, use locationQuery if we have location filter, otherwise use the same query
+    // Note: countDocuments doesn't support $near, so we use $geoWithin instead
+    let countQuery = { ...query };
+    if (hasLocationFilter) {
+      // Remove $near from query and use $geoWithin for count
+      delete countQuery.location;
+      countQuery = { ...countQuery, ...locationQuery };
+    }
+    const total = await Facility.countDocuments(countQuery);
+
+    // Get facility IDs
+    const facilityIds = facilities.map(f => f._id);
+
+    // Calculate average ratings for all facilities in one aggregation (only if there are facilities)
+    let ratingMap = new Map();
+    if (facilityIds.length > 0) {
+      const ratingResults = await Review.aggregate([
+        {
+          $match: {
+            facility: { $in: facilityIds },
+            isDeleted: false,
+          },
+        },
+        {
+          $group: {
+            _id: "$facility",
+            averageRating: { $avg: "$rating" },
+            totalReviews: { $sum: 1 },
+          },
+        },
+      ]);
+
+      // Create a map of facilityId -> rating stats
+      ratingResults.forEach((result) => {
+        ratingMap.set(result._id.toString(), {
+          averageRating: Math.round(result.averageRating * 10) / 10,
+          totalReviews: result.totalReviews,
+        });
+      });
+    }
+
+    // Add averageRating to each facility
+    const facilitiesWithRatings = facilities.map((facility) => {
+      const ratingData = ratingMap.get(facility._id.toString());
+      return {
+        ...facility.toObject(),
+        averageRating: ratingData?.averageRating || 0,
+        totalReviews: ratingData?.totalReviews || 0,
+      };
+    });
 
     res.json({
       success: true,
       data: {
-        facilities,
+        facilities: facilitiesWithRatings,
         pagination: {
           page,
           limit,
@@ -200,6 +354,7 @@ router.put(
   "/:id",
   authenticateToken,
   checkOwnership, // Middleware kiểm tra đúng chủ sở hữu
+  autoGeocode, // Middleware tự động lấy tọa độ từ địa chỉ
   async (req, res, next) => {
     try {
       // Không cho phép cập nhật owner
