@@ -1,7 +1,7 @@
 // routes/audit.js
 import express from "express";
 import AuditLog from "../models/AuditLog.js";
-import { authenticateToken, requireAdmin } from "../middleware/Auth.js";
+import { authenticateToken, requireAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
 
