@@ -13,6 +13,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@payos/node": "^2.0.3",
     "axios": "^1.13.1",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^1.41.3",
@@ -21,6 +22,7 @@
     "crypto": "^1.0.1",
     "date-fns": "^3.6.0",
     "dotenv": "^16.3.1",
+    "epress": "^0.0.1-security",
     "express": "^5.1.0",
     "express-async-handler": "^1.2.0",
     "express-rate-limit": "^7.1.5",

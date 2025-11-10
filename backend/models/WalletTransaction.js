@@ -36,7 +36,7 @@ const walletTransactionSchema = new mongoose.Schema(
     metadata: {
       bookingId: { type: Schema.Types.ObjectId, ref: "Booking" },
       paymentId: { type: Schema.Types.ObjectId, ref: "Payment" },
-      topUpMethod: { type: String, enum: ["momo", "vnpay"] },
+      topUpMethod: { type: String, enum: ["momo", "vnpay", "payos"] },
       transactionCode: { type: String }, // Mã giao dịch của Momo/VNPay
       reason: { type: String },
     },

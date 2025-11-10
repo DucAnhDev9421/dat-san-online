@@ -114,7 +114,7 @@ export default function OwnerHeader({ onToggleSidebar, isSidebarOpen }) {
 
   const handleTopUpClick = () => {
     setIsProfileOpen(false);
-    alert('Chức năng nạp tiền sẽ được triển khai sớm');
+    navigate('/wallet');
   };
 
   const handleNotificationClick = () => {
