@@ -9,6 +9,14 @@ const router = express.Router();
 router.get("/callback/vnpay", walletController.vnpayCallback);
 router.post("/callback/momo", walletController.momoCallback);
 
+// Thêm route GET này để PayOS xác thực webhook
+router.get("/callback/payos", (req, res) => {
+  console.log("PayOS Webhook: Nhận được yêu cầu GET (xác thực).");
+  res.status(200).json({ success: true, message: "Webhook URL is active." });
+});
+// DÒNG ĐÃ SỬA:
+router.post("/callback/payos", walletController.payosWalletCallback);
+
 // === CÁC ROUTE CẦN ĐĂNG NHẬP ===
 router.use(authenticateToken);
 

@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { User, LogOut, Settings, ChevronDown, Calendar, Wallet } from 'lucide-react'
 import useClickOutside from '../../hook/use-click-outside'
+import { walletApi } from '../../api/walletApi'
 
 const UserMenu = ({ 
   user, 
@@ -13,6 +14,40 @@ const UserMenu = ({
   onTopUpClick
 }) => {
   const menuRef = useClickOutside(() => onToggle(), isOpen)
+  const [balance, setBalance] = useState(user?.walletBalance || user?.balance || 0)
+  const [loadingBalance, setLoadingBalance] = useState(false)
+
+  // Fetch balance when component mounts or user changes
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (!user) return
+      
+      try {
+        setLoadingBalance(true)
+        const result = await walletApi.getBalance()
+        if (result.success && result.data?.balance !== undefined) {
+          setBalance(result.data.balance)
+        }
+      } catch (error) {
+        console.error('Error fetching balance:', error)
+        // Fallback to user.walletBalance if API fails
+        setBalance(user?.walletBalance || user?.balance || 0)
+      } finally {
+        setLoadingBalance(false)
+      }
+    }
+
+    fetchBalance()
+  }, [user])
+
+  // Update balance when user object changes (e.g., after top-up)
+  useEffect(() => {
+    if (user?.walletBalance !== undefined) {
+      setBalance(user.walletBalance)
+    } else if (user?.balance !== undefined) {
+      setBalance(user.balance)
+    }
+  }, [user?.walletBalance, user?.balance])
 
   return (
     <div ref={menuRef} style={{ position: 'relative' }}>
@@ -75,7 +110,7 @@ const UserMenu = ({
               fontWeight: '600',
               color: '#10b981'
             }}>
-              {(user?.balance || 0).toLocaleString('vi-VN')} ₫
+              {loadingBalance ? '...' : balance.toLocaleString('vi-VN')} ₫
             </span>
           </div>
         </div>
@@ -126,7 +161,7 @@ const UserMenu = ({
                 fontWeight: '600',
                 color: '#10b981'
               }}>
-                {(user?.balance || 0).toLocaleString('vi-VN')} ₫
+                {loadingBalance ? '...' : balance.toLocaleString('vi-VN')} ₫
               </span>
             </div>
           </div>

@@ -1,4 +1,6 @@
 // backend/socket/userSocket.js
+import { getLockedSlotsForCourt } from './bookingSocket.js';
+
 /**
  * User namespace socket handlers
  * Handles events for regular users
@@ -31,13 +33,21 @@ export default function userSocket(namespace) {
 
     // Handle join court room (for real-time slot updates)
     socket.on('join_court', (data) => {
-      const { courtId, facilityId } = data;
-      if (!courtId || !facilityId) {
-        socket.emit('error', { message: 'Court ID and Facility ID are required' });
+      const { courtId, facilityId, date } = typeof data === 'object' ? data : { courtId: data, facilityId: null, date: null };
+      if (!courtId) {
+        socket.emit('error', { message: 'Court ID is required' });
         return;
       }
       socket.join(`court_${courtId}`);
       console.log(`📌 User ${socket.userId} joined court room: ${courtId}`);
+      
+      // Send all currently locked slots for this court to the user
+      const lockedSlots = getLockedSlotsForCourt(courtId, date);
+      if (lockedSlots.length > 0) {
+        socket.emit('booking:locked:slots', { courtId, date, lockedSlots });
+        console.log(`📋 Sent ${lockedSlots.length} locked slots to user ${socket.userId} for court ${courtId}`);
+      }
+      
       socket.emit('joined_court', { courtId, facilityId });
     });
 

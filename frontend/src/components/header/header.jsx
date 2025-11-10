@@ -200,7 +200,7 @@ function Header() {
 
   const handleTopUpClick = () => {
     closeUserMenu()
-    alert('Chức năng nạp tiền sẽ được triển khai sớm')
+    navigate('/wallet')
   }
 
   // Helper function to get notification icon

@@ -5,6 +5,10 @@ import { config } from "../config/config.js";
 import Payment from "../models/Payment.js";
 import Booking from "../models/Booking.js";
 import { format } from "date-fns";
+import {
+  createPaymentLink as createPayOSLink,
+  verifyWebhook as verifyPayOSWebhook,
+} from "../utils/payosService.js";
 import { credit } from "../utils/walletService.js";
 
 // Hàm helper sắp xếp object (cho VNPay)
@@ -71,7 +75,10 @@ export const initPayment = asyncHandler(async (req, res, next) => {
     booking._id
   }_${new Date().getTime()}`;
   const amount = booking.totalAmount;
-  const orderInfo = `Thanh toan don dat san ${booking._id}`;
+  // Rút ngắn description cho PayOS (tối đa 25 ký tự)
+  const orderInfo = method === "payos" 
+    ? `Dat san ${booking._id.toString().slice(-8)}` // Lấy 8 ký tự cuối của booking ID
+    : `Thanh toan don dat san ${booking._id}`;
 
   // 3. Tạo/Cập nhật bản ghi Payment
   // (Tìm hoặc tạo mới để tránh tạo thừa khi user thử lại)
@@ -209,6 +216,40 @@ export const initPayment = asyncHandler(async (req, res, next) => {
         message: "Lỗi khi kết nối tới MoMo",
       });
     }
+  } else if (method === "payos") {
+    // --- XỬ LÝ PAYOS ---
+
+    // 1. Tạo orderCode duy nhất (kiểu số) cho PayOS
+    const orderCode = parseInt(new Date().getTime() / 1000);
+
+    // 2. Cập nhật paymentId (mã của chúng ta) vào bản ghi Payment
+    payment.paymentId = `PAYOS_${orderCode}`;
+    await payment.save();
+
+    // 3. Tạo link thanh toán
+    try {
+      // Rút ngắn description cho PayOS (tối đa 25 ký tự)
+      const payosDescription = `Dat san ${booking._id.toString().slice(-8)}`.substring(0, 25);
+      
+      const paymentLinkData = await createPayOSLink({
+        orderCode,
+        amount: amount,
+        description: payosDescription,
+        returnUrl: `${config.frontendUrl}/booking-success`,
+        cancelUrl: `${config.frontendUrl}/booking-failed`,
+      });
+
+      res.status(200).json({
+        success: true,
+        paymentUrl: paymentLinkData.checkoutUrl,
+      });
+    } catch (error) {
+      console.error("PayOS Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi khi khởi tạo thanh toán PayOS",
+      });
+    }
   } else {
     return res.status(400).json({
       success: false,
@@ -315,6 +356,54 @@ export const momoCallback = asyncHandler(async (req, res, next) => {
 
   // Phản hồi cho Momo
   res.status(204).send(); // Momo yêu cầu 204 No Content
+});
+
+// === POST /api/payments/callback/payos ===
+// Webhook callback PayOS (IPN) cho Đặt Sân
+export const payosBookingCallback = asyncHandler(async (req, res, next) => {
+  const webhookBody = req.body;
+  const headers = req.headers;
+
+  try {
+    // BƯỚC 1: Kiểm tra code "00" (thành công) từ body TRƯỚC
+    if (webhookBody.code !== "00") {
+      console.log(
+        `PayOS Webhook: Giao dịch ${webhookBody.data?.orderCode} thất bại (code: ${webhookBody.code}).`
+      );
+      // Vẫn trả về 200 để PayOS không gửi lại
+      return res
+        .status(200)
+        .json({ success: false, message: "Giao dịch thất bại" });
+    }
+
+    // BƯỚC 2: Xác thực chữ ký
+    const verifiedData = await verifyPayOSWebhook(webhookBody, headers);
+
+    // BƯỚC 3: Xử lý logic (verifiedData bây giờ chính là "data" object)
+    const { orderCode, reference, amount } = verifiedData; // Lấy dữ liệu từ kết quả đã xác thực
+
+    const paymentId = `PAYOS_${orderCode}`;
+    const transactionId = reference; // Mã giao dịch của PayOS
+
+    // 4. Gọi hàm helper để cập nhật Booking và Payment
+    const success = await processSuccessfulPayment(paymentId, transactionId);
+
+    if (success) {
+      console.log(`PayOS: Thanh toán thành công cho paymentId ${paymentId}`);
+    } else {
+      console.warn(
+        `PayOS: Không tìm thấy paymentId ${paymentId} hoặc đã xử lý`
+      );
+    }
+
+    // 5. Phản hồi 200 cho PayOS
+    res.status(200).json({ success: true, message: "Webhook đã xử lý" });
+  } catch (error) {
+    // Bắt lỗi nếu chữ ký (checksum) không hợp lệ
+    console.error("Lỗi xác thực PayOS Webhook:", error.message);
+    // Phản hồi lỗi 400 nếu chữ ký không hợp lệ
+    res.status(400).json({ success: false, message: error.message });
+  }
 });
 
 // === POST /api/payments/cash ===

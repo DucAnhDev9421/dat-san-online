@@ -77,7 +77,7 @@ export default function AdminHeader({ onToggleSidebar, isSidebarOpen, currentTab
 
   const handleTopUpClick = () => {
     setIsProfileOpen(false);
-    alert('Chức năng nạp tiền sẽ được triển khai sớm');
+    navigate('/wallet');
   };
 
   const handleLogoClick = () => {

@@ -65,7 +65,14 @@ export const config = {
     notifyUrl:
       process.env.MOMO_NOTIFYURL ||
       "http://localhost:3000/api/payments/callback/momo",
-    redirectUrl: "http://localhost:5173/booking-success", // URL frontend
+    redirectUrl: process.env.MOMO_REDIRECT_URL || "http://localhost:5173/payment", // URL frontend - sẽ redirect về /payment với query params
+  },
+
+  // Payos Configuration
+  payos: {
+    clientId: process.env.PAYOS_CLIENT_ID || "YOUR_PAYOS_CLIENT_ID",
+    apiKey: process.env.PAYOS_API_KEY || "YOUR_PAYOS_API_KEY",
+    checksumKey: process.env.PAYOS_CHECKSUM_KEY || "YOUR_PAYOS_CHECKSUM_KEY",
   },
 
   // Rate Limiting

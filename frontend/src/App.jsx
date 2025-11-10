@@ -31,6 +31,9 @@ import ProfilePage from "./pages/public/ProfilePage";
 import ProfileRoutes from "./pages/public/ProfilePage/ProfileRoutes";
 import Booking from "./pages/public/Booking";
 import Payment from "./pages/public/Payment.jsx";
+import Wallet from "./pages/public/Wallet";
+import WalletSuccess from "./pages/public/Wallet/WalletSuccess.jsx";
+import WalletFailed from "./pages/public/Wallet/WalletFailed.jsx";
 import Partner from "./pages/public/Partner.jsx";
 import Facilities from "./pages/public/Facilities.jsx";
 import Promotion from "./pages/public/Promotion.jsx";
@@ -110,6 +113,35 @@ function App() {
             <div className="layout">
               <Header />
               <Payment />
+              <Footer />
+            </div>
+          } />
+
+          {/* Wallet Routes - With Footer */}
+          <Route path="/wallet" element={
+            <div className="layout">
+              <Header />
+              <ProtectedRoute>
+                <Wallet />
+              </ProtectedRoute>
+              <Footer />
+            </div>
+          } />
+          <Route path="/wallet-success" element={
+            <div className="layout">
+              <Header />
+              <ProtectedRoute>
+                <WalletSuccess />
+              </ProtectedRoute>
+              <Footer />
+            </div>
+          } />
+          <Route path="/wallet-failed" element={
+            <div className="layout">
+              <Header />
+              <ProtectedRoute>
+                <WalletFailed />
+              </ProtectedRoute>
               <Footer />
             </div>
           } />

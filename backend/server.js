@@ -6,6 +6,14 @@ import cookieParser from "cookie-parser";
 import session from "express-session";
 import passport from "passport";
 import { initializeSocket } from "./socket/index.js";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+dotenv.config();
+
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.error("❌ MongoDB error:", err));
+
 
 // Import configurations
 import { config, validateConfig } from "./config/config.js";
@@ -103,6 +111,10 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
     environment: config.nodeEnv,
   });
+});
+
+app.get("/", (req, res) => {
+  res.send("✅ Backend is live and healthy!");
 });
 
 // Favicon handler - prevent 404 errors for browser favicon requests
