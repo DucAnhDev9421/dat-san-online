@@ -57,7 +57,7 @@ const bookingSchema = new mongoose.Schema(
     // Phương thức thanh toán
     paymentMethod: {
       type: String,
-      enum: ["momo", "vnpay", "cash"],
+      enum: ["momo", "vnpay", "cash", "payos"],
       default: null,
     },
 
@@ -253,4 +253,3 @@ bookingSchema.statics.checkAvailability = async function (
 };
 
 export default mongoose.model("Booking", bookingSchema);
-
