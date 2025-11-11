@@ -50,7 +50,9 @@ function Booking() {
   const [contactInfo, setContactInfo] = useState(null)
   const [timeSlotsData, setTimeSlotsData] = useState([])
   const [lockedSlots, setLockedSlots] = useState({}) // Track locked slots: { "courtId_date_timeSlot": { lockedBy, expiresAt, isLockedByMe, isLockedByOther } }
+  const [bookedSlots, setBookedSlots] = useState(new Set()) // Track booked slots: Set of "courtId_date_timeSlot"
   const hasUnlockedRef = useRef(false) // Track if we've already unlocked on unmount
+  const lockedSlotsByMeRef = useRef(new Set()) // Track all slot keys locked by current user for quick unlock
   const [reviews, setReviews] = useState([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
   const [reviewsStats, setReviewsStats] = useState({ averageRating: 0, totalReviews: 0 })
@@ -432,7 +434,53 @@ function Booking() {
 
     const handleSlotConfirmed = (data) => {
       const { courtId, date, timeSlots } = data
-      // Remove confirmed slots from locked slots
+      markSlotsAsBooked(courtId, date, timeSlots)
+    }
+
+    const handleSlotBooked = (data) => {
+      const { courtId, date, timeSlots } = data
+      markSlotsAsBooked(courtId, date, timeSlots)
+    }
+
+    const handleSlotCancelled = (data) => {
+      const { courtId, date, timeSlots } = data
+      markSlotsAsAvailable(courtId, date, timeSlots)
+    }
+
+    const handleStatusUpdated = (data) => {
+      // If booking is cancelled, mark slots as available
+      if (data.status === 'cancelled' && data.timeSlots) {
+        const { courtId, date, timeSlots } = data
+        markSlotsAsAvailable(courtId, date, timeSlots)
+      }
+    }
+
+    // Helper function to mark slots as available (when cancelled)
+    const markSlotsAsAvailable = (courtId, date, timeSlots) => {
+      // date can be Date object or string (YYYY-MM-DD), handle both cases
+      let dateStr
+      if (date instanceof Date) {
+        dateStr = formatDateToYYYYMMDD(date)
+      } else if (typeof date === 'string') {
+        dateStr = date.includes('T') ? formatDateToYYYYMMDD(new Date(date)) : date
+      } else {
+        dateStr = formatDateToYYYYMMDD(new Date(date))
+      }
+      
+      timeSlots.forEach(timeSlot => {
+        const lockKey = `${courtId}_${dateStr}_${timeSlot}`
+        
+        // Remove from booked slots
+        setBookedSlots(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(lockKey)
+          return newSet
+        })
+      })
+    }
+
+    // Helper function to mark slots as booked
+    const markSlotsAsBooked = (courtId, date, timeSlots) => {
       // date can be Date object or string (YYYY-MM-DD), handle both cases
       let dateStr
       if (date instanceof Date) {
@@ -446,10 +494,20 @@ function Booking() {
       
       timeSlots.forEach(timeSlot => {
         const lockKey = `${courtId}_${dateStr}_${timeSlot}`
+        lockedSlotsByMeRef.current.delete(lockKey) // Remove from tracking
+        
+        // Remove from locked slots
         setLockedSlots(prev => {
           const newState = { ...prev }
           delete newState[lockKey]
           return newState
+        })
+        
+        // Mark as booked
+        setBookedSlots(prev => {
+          const newSet = new Set(prev)
+          newSet.add(lockKey)
+          return newSet
         })
       })
     }
@@ -458,12 +516,18 @@ function Booking() {
     defaultSocket.on('booking:slot:locked', handleSlotLocked)
     defaultSocket.on('booking:slot:unlocked', handleSlotUnlocked)
     defaultSocket.on('booking:slot:confirmed', handleSlotConfirmed)
+    defaultSocket.on('booking:slot:booked', handleSlotBooked)
+    defaultSocket.on('booking:slot:cancelled', handleSlotCancelled)
+    defaultSocket.on('booking:status:updated', handleStatusUpdated)
 
     return () => {
       defaultSocket.off('booking:locked:slots', handleLockedSlots)
       defaultSocket.off('booking:slot:locked', handleSlotLocked)
       defaultSocket.off('booking:slot:unlocked', handleSlotUnlocked)
       defaultSocket.off('booking:slot:confirmed', handleSlotConfirmed)
+      defaultSocket.off('booking:slot:booked', handleSlotBooked)
+      defaultSocket.off('booking:slot:cancelled', handleSlotCancelled)
+      defaultSocket.off('booking:status:updated', handleStatusUpdated)
       leaveFacility(venueId, 'default')
       leaveCourt(selectedCourt, 'default')
     }
@@ -493,6 +557,7 @@ function Booking() {
     const handleLockSuccess = (data) => {
       if (data.courtId === selectedCourt && data.timeSlot === timeSlotStr) {
         const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
+        lockedSlotsByMeRef.current.add(lockKey) // Track this slot
         setLockedSlots(prev => ({
           ...prev,
           [lockKey]: { 
@@ -536,6 +601,7 @@ function Booking() {
     // Remove from lockedSlots on success
     const handleUnlockSuccess = () => {
       const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
+      lockedSlotsByMeRef.current.delete(lockKey) // Remove from tracking
       setLockedSlots(prev => {
         const newState = { ...prev }
         delete newState[lockKey]
@@ -555,14 +621,62 @@ function Booking() {
     defaultSocket.once('booking:unlock:error', handleUnlockError)
   }
 
-  // Unlock all slots when component unmounts
+  // Unlock all slots when component unmounts, user navigates away, or socket disconnects
   useEffect(() => {
-    return () => {
-      if (!hasUnlockedRef.current && defaultSocket && isAuthenticated) {
-        hasUnlockedRef.current = true
-        // Unlock all slots locked by current user
-        defaultSocket.emit('booking:unlock:all')
+    const unlockAllSlots = () => {
+      if (hasUnlockedRef.current) return
+      
+      // Check if there are any slots locked by current user
+      const hasLockedSlots = lockedSlotsByMeRef.current.size > 0
+      
+      if (hasLockedSlots && defaultSocket && isAuthenticated) {
+        // Try to unlock via socket if connected
+        if (defaultSocket.connected) {
+          hasUnlockedRef.current = true
+          defaultSocket.emit('booking:unlock:all')
+        } else {
+          // Socket already disconnected, backend will handle via disconnect event
+          hasUnlockedRef.current = true
+        }
       }
+    }
+
+    const handleBeforeUnload = () => {
+      unlockAllSlots()
+    }
+
+    const handleVisibilityChange = () => {
+      // If page becomes hidden (user switched tab or minimized), don't unlock yet
+      // Only unlock when actually leaving
+      if (document.hidden) {
+        // Could unlock here if needed, but let's wait for actual disconnect
+      }
+    }
+
+    // Handle socket disconnect
+    const handleDisconnect = () => {
+      hasUnlockedRef.current = true // Mark as unlocked to prevent duplicate attempts
+    }
+
+    // Handle page unload (closing tab, navigating away)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    // Listen for socket disconnect
+    if (defaultSocket) {
+      defaultSocket.on('disconnect', handleDisconnect)
+    }
+
+    // Cleanup on unmount
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      
+      if (defaultSocket) {
+        defaultSocket.off('disconnect', handleDisconnect)
+      }
+      
+      unlockAllSlots()
     }
   }, [defaultSocket, isAuthenticated])
 
@@ -615,6 +729,8 @@ function Booking() {
 
       // Unlock slots from previous court
       previousLocks.forEach(({ courtId, date, timeSlot }) => {
+        const lockKey = `${courtId}_${date}_${timeSlot}`
+        lockedSlotsByMeRef.current.delete(lockKey) // Remove from tracking
         defaultSocket.emit('booking:unlock', { courtId, date, timeSlot })
       })
 
@@ -637,6 +753,17 @@ function Booking() {
         }
       })
       return newState
+    })
+    
+    // Clear booked slots that don't match current court/date
+    setBookedSlots(prev => {
+      const newSet = new Set()
+      prev.forEach(key => {
+        if (key.startsWith(`${selectedCourt}_${dateStr}_`)) {
+          newSet.add(key)
+        }
+      })
+      return newSet
     })
 
     previousCourtRef.current = selectedCourt
@@ -990,6 +1117,7 @@ function Booking() {
             lockedSlots={lockedSlots}
             onSlotLock={handleSlotLock}
             onSlotUnlock={handleSlotUnlock}
+            bookedSlots={bookedSlots}
             currentUserId={user?._id}
           />
         </div>

@@ -116,16 +116,22 @@ const unlockSlot = (courtId, date, timeSlot, userId) => {
 
 /**
  * Unlock all slots for a user
+ * Returns array of unlocked slots with their details
  */
 const unlockUserSlots = (userId) => {
-  let unlockedCount = 0;
+  const unlockedSlots = [];
   for (const [key, lock] of lockedSlots.entries()) {
     if (lock.userId === userId) {
+      unlockedSlots.push({
+        courtId: lock.courtId,
+        date: lock.date,
+        timeSlot: lock.timeSlot,
+        key: key
+      });
       lockedSlots.delete(key);
-      unlockedCount++;
     }
   }
-  return unlockedCount;
+  return unlockedSlots;
 };
 
 /**
@@ -280,8 +286,6 @@ export default function bookingSocket(io) {
             unlockedBy: socket.userId,
           });
         }
-
-        console.log(`🔓 Slot unlocked: User ${socket.userId} unlocked ${courtId} on ${date} at ${timeSlot}`);
       } catch (error) {
         console.error('Error in booking:unlock:', error);
         socket.emit('booking:unlock:error', { message: 'Failed to unlock slot' });
@@ -289,10 +293,33 @@ export default function bookingSocket(io) {
     });
 
     // Unlock all user's slots
-    socket.on('booking:unlock:all', () => {
-      const unlockedCount = unlockUserSlots(socket.userId);
-      socket.emit('booking:unlock:all:success', { unlockedCount });
-      console.log(`🔓 Unlocked ${unlockedCount} slots for user ${socket.userId}`);
+    socket.on('booking:unlock:all', async () => {
+      const unlockedSlots = unlockUserSlots(socket.userId);
+      
+      // Emit success to user
+      socket.emit('booking:unlock:all:success', { unlockedCount: unlockedSlots.length });
+      
+      // Broadcast each unlocked slot to other users
+      for (const slot of unlockedSlots) {
+        try {
+          // Get court to find facility
+          const court = await Court.findById(slot.courtId).populate('facility').lean();
+          const facilityId = court?.facility?._id?.toString() || court?.facility?.toString();
+          
+          // Notify others in facility room that slot is unlocked
+          if (facilityId) {
+            socket.to(`facility_${facilityId}`).to(`court_${slot.courtId}`).emit('booking:slot:unlocked', {
+              courtId: slot.courtId,
+              date: slot.date,
+              timeSlot: slot.timeSlot,
+              unlockedBy: socket.userId,
+            });
+          }
+        } catch (error) {
+          console.error(`Error broadcasting unlock for slot ${slot.key}:`, error);
+        }
+      }
+      
     });
 
     // Confirm booking (create actual booking)
@@ -392,11 +419,32 @@ export default function bookingSocket(io) {
       }
     });
 
-    // Handle disconnect - unlock all user's slots
-    socket.on('disconnect', () => {
-      const unlockedCount = unlockUserSlots(socket.userId);
-      if (unlockedCount > 0) {
-        console.log(`🔓 User ${socket.userId} disconnected - unlocked ${unlockedCount} slots`);
+    // Handle disconnect - unlock all user's slots and broadcast
+    socket.on('disconnect', async () => {
+      const unlockedSlots = unlockUserSlots(socket.userId);
+      
+      if (unlockedSlots.length > 0) {
+        // Broadcast each unlocked slot to other users
+        for (const slot of unlockedSlots) {
+          try {
+            // Get court to find facility
+            const court = await Court.findById(slot.courtId).populate('facility').lean();
+            const facilityId = court?.facility?._id?.toString() || court?.facility?.toString();
+            
+            // Notify others in facility room that slot is unlocked
+            if (facilityId) {
+              // Use io to broadcast since socket is disconnected
+              io.to(`facility_${facilityId}`).to(`court_${slot.courtId}`).emit('booking:slot:unlocked', {
+                courtId: slot.courtId,
+                date: slot.date,
+                timeSlot: slot.timeSlot,
+                unlockedBy: socket.userId,
+              });
+            }
+          } catch (error) {
+            console.error(`Error broadcasting unlock for slot ${slot.key} on disconnect:`, error);
+          }
+        }
       }
     });
   });

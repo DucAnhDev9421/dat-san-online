@@ -857,6 +857,7 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
       courtId: booking.court._id?.toString() || booking.court.toString(),
       status,
       date: booking.date,
+      timeSlots: status === 'cancelled' ? booking.timeSlots : undefined, // Include timeSlots when cancelled
     });
 
     res.json({
@@ -933,6 +934,16 @@ router.patch("/:id/cancel", authenticateToken, checkBookingOwnership, async (req
         facilityId,
         cancellationReason: reason || "Người dùng tự hủy",
       },
+    });
+
+    // Notify facility room about cancelled booking slots
+    const courtId = booking.court._id?.toString() || booking.court.toString();
+    emitToFacility(facilityId, 'booking:slot:cancelled', {
+      bookingId: booking._id,
+      facilityId,
+      courtId,
+      date: booking.date,
+      timeSlots: booking.timeSlots,
     });
 
     res.json({
