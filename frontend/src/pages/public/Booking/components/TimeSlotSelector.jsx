@@ -18,17 +18,19 @@ export default function TimeSlotSelector({
   lockedSlots = {},
   onSlotLock,
   onSlotUnlock,
-  currentUserId
+  currentUserId,
+  bookedSlots = new Set()
 }) {
   const { isMobile, isTablet } = useDeviceType()
   const [showDatePicker, { toggle: toggleDatePicker, setFalse: closeDatePicker }] = useToggle(false)
   const [bookedTimes, setBookedTimes] = useState([])
   const [timeSlots, setTimeSlots] = useState([])
+  const [originalTimeSlots, setOriginalTimeSlots] = useState([]) // Store original availability from API
   const [loadingAvailability, setLoadingAvailability] = useState(false)
   const [showSkeleton, setShowSkeleton] = useState(false)
   
   const datePickerRef = useClickOutside(() => closeDatePicker(), showDatePicker)
-
+  
   // Fetch availability from API when court or date changes
   useEffect(() => {
     const fetchAvailability = async () => {
@@ -88,15 +90,23 @@ export default function TimeSlotSelector({
           // Transform API response to timeSlots format
           const transformedSlots = slots.map(slot => {
             const [startTime, endTime] = slot.slot.split('-')
+            const timeSlotStr = `${startTime}-${endTime}`
+            const dateStr = formatDateToYYYYMMDD(selectedDate)
+            const lockKey = selectedCourt ? `${selectedCourt}_${dateStr}_${timeSlotStr}` : null
+            
+            // Check if slot is in bookedSlots (from socket events)
+            const isBookedFromSocket = lockKey && bookedSlots.has(lockKey)
+            
             return {
               time: startTime,
               endTime: endTime,
               price: slot.price || venuePrice || 200000,
-              available: slot.available
+              available: isBookedFromSocket ? false : slot.available
             }
           })
 
           setTimeSlots(transformedSlots)
+          setOriginalTimeSlots(transformedSlots) // Store original availability
           
           // Pass time slots data to parent component for price calculation
           if (onTimeSlotsDataChange) {
@@ -147,6 +157,32 @@ export default function TimeSlotSelector({
     fetchAvailability()
   }, [selectedCourt, selectedDate, venuePrice])
 
+  // Update timeSlots when bookedSlots changes (from socket events)
+  useEffect(() => {
+    if (!selectedCourt || !selectedDate || timeSlots.length === 0 || originalTimeSlots.length === 0) return
+    
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    
+    setTimeSlots(prev => prev.map((slot, index) => {
+      const timeSlotStr = `${slot.time}-${slot.endTime}`
+      const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
+      const isBookedFromSocket = bookedSlots.has(lockKey)
+      
+      // Find original slot from API
+      const originalSlot = originalTimeSlots.find(os => os.time === slot.time && os.endTime === slot.endTime)
+      const originalAvailable = originalSlot ? originalSlot.available : slot.available
+      
+      // If slot is booked from socket, mark as unavailable
+      if (isBookedFromSocket) {
+        return { ...slot, available: false }
+      }
+      
+      // If slot is not in bookedSlots anymore (cancelled), restore original availability
+      // This handles the case where slot was booked via socket and then cancelled
+      return { ...slot, available: originalAvailable }
+    }))
+  }, [bookedSlots, selectedCourt, selectedDate, originalTimeSlots])
+
   const handleSlotClick = (timeSlot) => {
     // Require court to be selected before allowing slot selection
     if (!selectedCourt) {
@@ -165,7 +201,7 @@ export default function TimeSlotSelector({
       toast.warning('Slot này đang được người khác giữ chỗ')
       return
     }
-
+    
     if (selectedSlots.includes(slotKey)) {
       // Unlock slot when user deselects
       if (onSlotUnlock && slotLock?.isLockedByMe) {
@@ -196,6 +232,16 @@ export default function TimeSlotSelector({
   }
 
   const isSlotBooked = (timeSlot) => {
+    // Check if slot is in bookedSlots (from socket events)
+    if (selectedCourt) {
+      const dateStr = formatDateToYYYYMMDD(selectedDate)
+      const timeSlotStr = `${timeSlot.time}-${timeSlot.endTime}`
+      const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
+      if (bookedSlots.has(lockKey)) {
+        return true
+      }
+    }
+    
     // Use available property from API if available, otherwise fallback to bookedTimes
     if (timeSlot.hasOwnProperty('available')) {
       return !timeSlot.available
