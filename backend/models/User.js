@@ -64,6 +64,12 @@ const userSchema = new mongoose.Schema(
       min: 0,
     },
 
+    // Sân yêu thích
+    favorites: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Facility'
+    }],
+
     // Trạng thái tài khoản
     isActive: {
       type: Boolean,

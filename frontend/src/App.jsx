@@ -37,6 +37,9 @@ import WalletFailed from "./pages/public/Wallet/WalletFailed.jsx";
 import Partner from "./pages/public/Partner.jsx";
 import Facilities from "./pages/public/Facilities.jsx";
 import Promotion from "./pages/public/Promotion.jsx";
+import Tournament from "./pages/public/Tournament.jsx";
+import TournamentDetail from "./pages/public/Tournament/TournamentDetail.jsx";
+import CreateTournament from "./pages/public/Tournament/CreateTournament.jsx";
 import NotificationsPage from "./pages/public/Notifications.jsx";
 import Login from "./pages/auth/Login.jsx";
 import Register from "./pages/auth/Register.jsx";
@@ -168,6 +171,9 @@ function App() {
                 <Route path="/partner" element={<Partner />} />
                 <Route path="/facilities" element={<Facilities />} />
                 <Route path="/promotion" element={<Promotion />} />
+                <Route path="/tournament" element={<Tournament />} />
+                <Route path="/tournament/create" element={<CreateTournament />} />
+                <Route path="/tournament/:id/*" element={<TournamentDetail />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/verify-otp" element={<VerifyOtp />} />

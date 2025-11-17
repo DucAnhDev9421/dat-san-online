@@ -102,6 +102,101 @@ a { color: inherit; text-decoration: none; }
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Tournament Dropdown */
+.nav-item-dropdown {
+  position: relative;
+}
+
+.nav-item-with-dropdown {
+  cursor: pointer;
+}
+
+.tournament-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease-out;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.nav-item-dropdown:hover .tournament-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  color: #1f2937;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dropdown-item:first-child {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.dropdown-item:last-child {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.dropdown-item:hover {
+  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+  color: #667eea;
+}
+
+.dropdown-item svg {
+  flex-shrink: 0;
+}
+
+.dropdown-item span {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Mobile dropdown - show as regular items */
+.nav.mobile .nav-item-dropdown {
+  width: 100%;
+}
+
+.nav.mobile .tournament-dropdown {
+  position: static;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
+  margin-top: 8px;
+  padding-left: 16px;
+  background: #f9fafb;
+}
+
+.nav.mobile .dropdown-item {
+  padding: 10px 16px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+
 .auth-actions { display: flex; gap: 10px; }
 
 /* Responsive adjustments */
@@ -197,7 +292,8 @@ a { color: inherit; text-decoration: none; }
 /* Profile header uses inline styles - only responsive overrides below */
 
 .profile-tabs { margin-bottom: 24px; }
-.profile-tabs .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; background: #f3f4f6; padding: 6px; border-radius: 10px; }
+.profile-tabs .tabs { display: flex; flex-wrap: nowrap; gap: 8px; background: #f3f4f6; padding: 6px; border-radius: 10px; }
+.profile-tabs .tabs .tab { flex: 1 1 0; min-width: 0; }
 
 .profile-content { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; }
 
@@ -550,3 +646,36 @@ a { color: inherit; text-decoration: none; }
 }
 
 @import "tailwindcss";
+
+/* Inset ring utility for badges */
+.inset-ring {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.inset-ring-blue-700\/10 {
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.1);
+}
+
+.inset-ring-green-600\/20 {
+  box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.2);
+}
+
+.inset-ring-gray-500\/10 {
+  box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);
+}
+
+.inset-ring-yellow-600\/20 {
+  box-shadow: inset 0 0 0 1px rgba(202, 138, 4, 0.2);
+}
+
+/* Ping animation for live indicator */
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.animate-ping {
+  animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+}

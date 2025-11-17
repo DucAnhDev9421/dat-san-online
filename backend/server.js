@@ -41,6 +41,7 @@ import provinceRoutes from "./routes/province.js";
 import promotionRoutes from "./routes/promotion.js";
 import analyticsRoutes from "./routes/analytics.js";
 import walletRouters from "./routes/wallet.js";
+import leagueRoutes from "./routes/league.js";
 import User from "./models/User.js";
 
 const app = express();
@@ -139,6 +140,7 @@ app.use("/api/provinces", provinceRoutes);
 app.use("/api/promotions", promotionRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/wallet", walletRouters);
+app.use("/api/leagues", leagueRoutes);
 // 404 handler
 app.use(notFound);
 

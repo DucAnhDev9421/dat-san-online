@@ -6,7 +6,7 @@ import StatCard from './components/StatCard'
 import EditProfileModal from './modals/EditProfileModal'
 import './modals/EditProfileModal.css'
 
-export default function ProfileHeader({ userData, favoriteVenues }) {
+export default function ProfileHeader({ userData, favoriteVenuesCount = 0 }) {
   const { refreshUserData } = useAuth()
   const [showEditModal, setShowEditModal] = useState(false)
   const [currentUserData, setCurrentUserData] = useState(userData)
@@ -166,7 +166,7 @@ export default function ProfileHeader({ userData, favoriteVenues }) {
               <StatCard 
                 icon={Heart}
                 label="Sân yêu thích"
-                value={favoriteVenues.length}
+                value={favoriteVenuesCount}
                 bgColor="#f0fdf4"
                 iconColor="#16a34a"
               />

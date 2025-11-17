@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import { Home, Settings, Handshake, Search, Gift } from 'lucide-react'
+import { Home, Settings, Handshake, Search, Gift, Trophy, Plus, List } from 'lucide-react'
 
 function NavigationBar({ user, mobile, onLinkClick, className }) {
   // Kiểm tra nếu user có role owner
@@ -26,6 +26,22 @@ function NavigationBar({ user, mobile, onLinkClick, className }) {
         <Gift size={20} />
         <span>Khuyến mãi</span>
       </Link>
+      <div className="nav-item-dropdown">
+        <div className="nav-item nav-item-with-dropdown">
+          <Trophy size={20} />
+          <span>Giải đấu</span>
+        </div>
+        <div className="tournament-dropdown">
+          <Link to="/tournament/create" className="dropdown-item" onClick={handleClick}>
+            <Plus size={18} />
+            <span>Tạo giải đấu</span>
+          </Link>
+          <Link to="/tournament" className="dropdown-item" onClick={handleClick}>
+            <List size={18} />
+            <span>Tìm giải đấu</span>
+          </Link>
+        </div>
+      </div>
       {isOwner ? (
         <Link to="/owner" className="nav-item" onClick={handleClick}>
           <Settings size={20} />
