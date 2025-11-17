@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { User, LogOut, Settings, ChevronDown, Calendar, Wallet } from 'lucide-react'
+import { User, LogOut, Settings, ChevronDown, Calendar, Wallet, Trophy } from 'lucide-react'
 import useClickOutside from '../../hook/use-click-outside'
 import { walletApi } from '../../api/walletApi'
 
@@ -11,7 +11,8 @@ const UserMenu = ({
   onLogout,
   onSettingsClick,
   onBookingHistoryClick,
-  onTopUpClick
+  onTopUpClick,
+  onTournamentManagementClick
 }) => {
   const menuRef = useClickOutside(() => onToggle(), isOpen)
   const [balance, setBalance] = useState(user?.walletBalance || user?.balance || 0)
@@ -235,6 +236,31 @@ const UserMenu = ({
               <Wallet size={16} />
               Nạp tiền
             </button>
+            
+            {onTournamentManagementClick && (
+              <button
+                onClick={onTournamentManagementClick}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '10px 12px',
+                  border: 'none',
+                  background: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  color: '#374151',
+                  textAlign: 'left'
+                }}
+                onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+                onMouseLeave={(e) => e.target.style.background = 'none'}
+              >
+                <Trophy size={16} />
+                Giải đấu của tôi
+              </button>
+            )}
             
             <button
               onClick={onSettingsClick}

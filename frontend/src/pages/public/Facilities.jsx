@@ -247,6 +247,7 @@ export default function Facilities() {
   const handleClearFilters = () => {
     setSelectedProvince("")
     setSelectedDistrict("")
+    setSport("Tất cả")
     setFilterNearby(false)
   }
 
@@ -267,9 +268,7 @@ export default function Facilities() {
       <div className="facilities-container">
         <SearchBar
           query={query}
-          sport={sport}
           onQueryChange={setQuery}
-          onSportChange={setSport}
         />
 
         <FilterBar
@@ -277,8 +276,10 @@ export default function Facilities() {
           districts={districts}
           selectedProvince={selectedProvince}
           selectedDistrict={selectedDistrict}
+          sport={sport}
           onProvinceChange={setSelectedProvince}
           onDistrictChange={setSelectedDistrict}
+          onSportChange={setSport}
           onClearFilters={handleClearFilters}
         />
 

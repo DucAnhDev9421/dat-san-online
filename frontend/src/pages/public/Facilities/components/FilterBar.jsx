@@ -1,4 +1,5 @@
 import React from 'react'
+import { sportChips } from '../mockData'
 import '../../../../styles/Facilities.css'
 
 export default function FilterBar({
@@ -6,12 +7,23 @@ export default function FilterBar({
   districts,
   selectedProvince,
   selectedDistrict,
+  sport,
   onProvinceChange,
   onDistrictChange,
+  onSportChange,
   onClearFilters
 }) {
   return (
     <div className="filter-row">
+      <select 
+        className="sport-select"
+        value={sport} 
+        onChange={e => onSportChange(e.target.value)}
+      >
+        {sportChips.map(s => (
+          <option key={s} value={s}>{s}</option>
+        ))}
+      </select>
       <select 
         className="province-select"
         value={selectedProvince} 
@@ -37,7 +49,7 @@ export default function FilterBar({
           </option>
         ))}
       </select>
-      {(selectedProvince || selectedDistrict) && (
+      {(selectedProvince || selectedDistrict || (sport && sport !== 'Tất cả')) && (
         <button
           className="clear-filter-btn"
           onClick={onClearFilters}

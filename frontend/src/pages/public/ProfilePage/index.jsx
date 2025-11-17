@@ -1,14 +1,50 @@
 import React, { useMemo } from 'react'
 import { Outlet, useLocation, Link } from 'react-router-dom'
-import { LayoutDashboard, Calendar, Heart, Settings } from 'lucide-react'
+import { LayoutDashboard, Calendar, Heart, Settings, Trophy } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
+import { userApi } from '../../../api/userApi'
 import ProfileHeader from './ProfileHeader'
-import { mockFavoriteVenues } from './mockData'
 
 function ProfilePage() {
   const { user } = useAuth()
   const location = useLocation()
-  const favoriteVenues = mockFavoriteVenues
+  
+  // Lấy số lượng sân yêu thích từ API
+  const [favoriteVenuesCount, setFavoriteVenuesCount] = React.useState(0)
+  const { isAuthenticated } = useAuth()
+
+  // Fetch favorites count
+  React.useEffect(() => {
+    const fetchFavoritesCount = async () => {
+      if (!isAuthenticated) {
+        setFavoriteVenuesCount(0)
+        return
+      }
+
+      try {
+        const result = await userApi.getFavorites()
+        if (result.success && result.data) {
+          setFavoriteVenuesCount(result.data.count || 0)
+        }
+      } catch (error) {
+        console.error('Error fetching favorites count:', error)
+        setFavoriteVenuesCount(0)
+      }
+    }
+
+    fetchFavoritesCount()
+
+    // Listen for favorites updates
+    const handleFavoritesUpdated = () => {
+      fetchFavoritesCount()
+    }
+
+    window.addEventListener('favoritesUpdated', handleFavoritesUpdated)
+
+    return () => {
+      window.removeEventListener('favoritesUpdated', handleFavoritesUpdated)
+    }
+  }, [isAuthenticated])
 
   // Merge real user data with mock data for missing fields
   const userData = useMemo(() => user ? {
@@ -38,6 +74,7 @@ function ProfilePage() {
     const path = location.pathname
     if (path.includes('/bookings')) return 'bookings'
     if (path.includes('/favorites')) return 'favorites'
+    if (path.includes('/tournaments')) return 'tournaments'
     if (path.includes('/settings')) return 'settings'
     return 'overview'
   }, [location.pathname])
@@ -49,7 +86,7 @@ function ProfilePage() {
       padding: '24px 0'
     }}>
       <div className="container">
-        <ProfileHeader userData={userData} favoriteVenues={favoriteVenues} />
+        <ProfileHeader userData={userData} favoriteVenuesCount={favoriteVenuesCount} />
         
         {/* Navigation Tabs */}
         <section className="profile-tabs" style={{
@@ -84,6 +121,14 @@ function ProfilePage() {
             >
               <Heart size={18} />
               Sân yêu thích
+            </Link>
+            <Link 
+              to="/profile/tournaments"
+              className={`tab ${activeTab === 'tournaments' ? 'active' : ''}`}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}
+            >
+              <Trophy size={18} />
+              Giải đấu của tôi
             </Link>
             <Link 
               to="/profile/settings"

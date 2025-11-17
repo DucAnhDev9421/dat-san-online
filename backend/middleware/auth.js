@@ -32,6 +32,13 @@ export const authenticateToken = async (req, res, next) => {
       });
     }
 
+    // Đảm bảo user có role hợp lệ (nếu không có thì set mặc định là 'user')
+    if (!user.role || !['user', 'owner', 'admin'].includes(user.role)) {
+      console.warn(`⚠️ User ${user._id} has invalid role: ${user.role}, setting to 'user'`);
+      user.role = 'user';
+      await user.save();
+    }
+
     req.user = user;
     next();
   } catch (error) {

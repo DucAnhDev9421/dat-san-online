@@ -42,6 +42,11 @@ const auditLogSchema = new mongoose.Schema(
         "REPLY_REVIEW",
         "REPORT_REVIEW",
         "PROCESS_REVIEW_REPORT",
+        "ADD_FAVORITE",
+        "REMOVE_FAVORITE",
+        "CREATE_LEAGUE",
+        "UPDATE_LEAGUE",
+        "DELETE_LEAGUE"
       ],
     },
     ipAddress: {
