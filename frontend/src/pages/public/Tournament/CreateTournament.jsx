@@ -9,7 +9,7 @@ import { leagueApi } from '../../../api/leagueApi'
 import useClickOutside from '../../../hook/use-click-outside'
 import useBodyScrollLock from '../../../hook/use-body-scroll-lock'
 import useEscapeKey from '../../../hook/use-escape-key'
-import './CreateTournament.css'
+import '../../../styles/CreateTournament.css'
 
 const CreateTournament = () => {
   const navigate = useNavigate()
