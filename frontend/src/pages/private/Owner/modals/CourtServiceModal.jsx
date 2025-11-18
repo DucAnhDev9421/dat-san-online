@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, ShoppingCart, Coffee, Utensils, Club } from "lucide-react"; 
+import { X, ShoppingCart, Coffee, Utensils, Club, Trash2 } from "lucide-react"; 
 import { serviceData, sportCategories } from "../data/mockData"; 
 
 // Map icon
@@ -202,7 +202,7 @@ const CourtServiceModal = ({ isOpen, onClose, court, onSave }) => {
               ) : (
                 <div className="space-y-4">
                   {cart.map((item) => (
-                    <div key={item._id} className="flex items-center gap-3">
+                    <div key={item._id} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 hover:border-gray-300 transition-colors">
                       <img 
                         src={item.imageUrl} 
                         alt={item.name} 
@@ -213,7 +213,7 @@ const CourtServiceModal = ({ isOpen, onClose, court, onSave }) => {
                           <ShoppingCart size={20} />
                       </div>
 
-                      <div className="flex-1 overflow-hidden">
+                      <div className="flex-1 overflow-hidden min-w-0">
                         <p className="font-medium text-gray-800 text-sm truncate" title={item.name}>
                           {item.name}
                         </p>
@@ -222,19 +222,30 @@ const CourtServiceModal = ({ isOpen, onClose, court, onSave }) => {
                         </p>
                       </div>
                       
-                      <div className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-1.5 py-1">
-                        <button 
-                          onClick={() => updateQuantity(item._id, -1)}
-                          className="text-gray-500 hover:text-red-500"
+                      <div className="flex flex-shrink-0 items-center gap-2">
+                        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-1.5 py-1">
+                          <button 
+                            onClick={() => updateQuantity(item._id, -1)}
+                            className="text-gray-500 hover:text-red-500 transition-colors"
+                            title="Giảm số lượng"
+                          >
+                            -
+                          </button>
+                          <span className="w-4 text-center text-sm font-semibold">{item.quantity}</span>
+                          <button 
+                            onClick={() => addToCart(item)}
+                            className="text-gray-500 hover:text-blue-600 transition-colors"
+                            title="Tăng số lượng"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => removeFromCart(item._id)}
+                          className="flex-shrink-0 rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                          title="Xóa dịch vụ"
                         >
-                          -
-                        </button>
-                        <span className="w-4 text-center text-sm font-semibold">{item.quantity}</span>
-                        <button 
-                          onClick={() => addToCart(item)}
-                          className="text-gray-500 hover:text-blue-600"
-                        >
-                          +
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     </div>

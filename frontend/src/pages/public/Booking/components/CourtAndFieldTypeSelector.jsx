@@ -1,5 +1,4 @@
 import React from 'react'
-import { MapPin, Grid3x3, Activity } from 'lucide-react'
 import useDeviceType from '../../../../hook/use-device-type'
 import useClickOutside from '../../../../hook/use-click-outside'
 import useToggle from '../../../../hook/use-toggle'
@@ -59,12 +58,8 @@ export default function CourtAndFieldTypeSelector({
           borderBottom: '1px solid #e5e7eb'
         }}>
           <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
             marginBottom: isMobile ? '12px' : '16px' 
           }}>
-            <Activity size={18} color="#8b5cf6" />
             <h3 style={{ 
               margin: 0, 
               fontSize: isMobile ? '16px' : isTablet ? '17px' : '18px', 
@@ -178,12 +173,8 @@ export default function CourtAndFieldTypeSelector({
           borderBottom: '1px solid #e5e7eb'
         }}>
           <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
             marginBottom: isMobile ? '12px' : '16px' 
           }}>
-            <Grid3x3 size={18} color="#3b82f6" />
             <h3 style={{ 
               margin: 0, 
               fontSize: isMobile ? '16px' : isTablet ? '17px' : '18px', 
@@ -301,12 +292,8 @@ export default function CourtAndFieldTypeSelector({
         {/* Section 2: Chọn sân */}
         <div>
           <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
             marginBottom: isMobile ? '12px' : '16px' 
           }}>
-            <MapPin size={18} color="#059669" />
             <h3 style={{ 
               margin: 0, 
               fontSize: isMobile ? '16px' : isTablet ? '17px' : '18px', 
@@ -348,7 +335,6 @@ export default function CourtAndFieldTypeSelector({
                 e.currentTarget.style.background = '#fff'
               }}
             >
-              <MapPin size={16} color="#059669" />
               <span style={{ flex: 1, textAlign: 'left' }}>{getCourtName(selectedCourt)}</span>
               <span style={{ 
                 fontSize: '12px', 
@@ -424,7 +410,6 @@ export default function CourtAndFieldTypeSelector({
                           }
                         }}
                       >
-                        {isSelected && <MapPin size={14} color="#059669" />}
                         {court.name}
                       </button>
                     )

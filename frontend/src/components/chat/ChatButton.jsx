@@ -56,7 +56,6 @@ const ChatButton = () => {
             fill="currentColor"
           />
         </svg>
-        {!isOpen && <span className="chat-badge">AI</span>}
       </button>
 
       {/* Chat Window */}
