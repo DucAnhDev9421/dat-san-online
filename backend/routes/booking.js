@@ -19,6 +19,13 @@ import {
 } from "../utils/notificationService.js";
 import QRCode from "qrcode";
 
+// === IMPORTS TỪ STASH (CHO TÍNH NĂNG VÍ & REWARD) ===
+import { debit } from "../utils/walletService.js";
+import Payment from "../models/Payment.js";
+import { isSlotLocked } from "../socket/bookingSocket.js";
+import asyncHandler from "express-async-handler";
+import { processBookingRewards } from "../utils/rewardService.js";
+
 const router = express.Router();
 
 // === MIDDLEWARE TÙY CHỈNH ===
@@ -122,12 +129,20 @@ router.get("/availability", async (req, res, next) => {
 
     // Get day of week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
     const dayOfWeek = bookingDate.getDay();
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayNames = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
     const dayName = dayNames[dayOfWeek];
 
     // Get operating hours for this day
     const dayOperatingHours = facility.operatingHours?.[dayName];
-    
+
     // Check if facility is open on this day
     if (!dayOperatingHours || !dayOperatingHours.isOpen) {
       return res.json({
@@ -157,8 +172,8 @@ router.get("/availability", async (req, res, next) => {
     const closeTime = dayOperatingHours.close || "22:00";
 
     // Parse time strings to hours
-    const [openHour, openMinute] = openTime.split(':').map(Number);
-    const [closeHour, closeMinute] = closeTime.split(':').map(Number);
+    const [openHour, openMinute] = openTime.split(":").map(Number);
+    const [closeHour, closeMinute] = closeTime.split(":").map(Number);
 
     // Convert to total minutes for easier calculation
     let openMinutes = openHour * 60 + openMinute;
@@ -166,7 +181,7 @@ router.get("/availability", async (req, res, next) => {
 
     // Use query params if provided (override facility hours, but within valid range)
     if (timeStart) {
-      const [startHour, startMinute] = timeStart.split(':').map(Number);
+      const [startHour, startMinute] = timeStart.split(":").map(Number);
       const startMinutes = startHour * 60 + startMinute;
       if (startMinutes >= openMinutes && startMinutes < closeMinutes) {
         openMinutes = startMinutes;
@@ -174,7 +189,7 @@ router.get("/availability", async (req, res, next) => {
     }
 
     if (timeEnd) {
-      const [endHour, endMinute] = timeEnd.split(':').map(Number);
+      const [endHour, endMinute] = timeEnd.split(":").map(Number);
       const endMinutes = endHour * 60 + endMinute;
       if (endMinutes <= closeMinutes && endMinutes > openMinutes) {
         closeMinutes = endMinutes;
@@ -204,8 +219,12 @@ router.get("/availability", async (req, res, next) => {
         break;
       }
 
-      const startTime = `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`;
-      const endTime = `${String(nextHour).padStart(2, "0")}:${String(nextMin).padStart(2, "0")}`;
+      const startTime = `${String(currentHour).padStart(2, "0")}:${String(
+        currentMin
+      ).padStart(2, "0")}`;
+      const endTime = `${String(nextHour).padStart(2, "0")}:${String(
+        nextMin
+      ).padStart(2, "0")}`;
       const slotString = `${startTime}-${endTime}`;
 
       // Check if this slot is booked
@@ -393,32 +412,38 @@ router.post("/", authenticateToken, async (req, res, next) => {
 
     // Emit socket events for real-time updates
     // Notify user about successful booking
-    emitToUser(req.user._id.toString(), 'booking:created', {
+    emitToUser(req.user._id.toString(), "booking:created", {
       booking: booking.toObject(),
-      message: 'Đặt sân thành công! Vui lòng thanh toán để hoàn tất.',
+      message: "Đặt sân thành công! Vui lòng thanh toán để hoàn tất.",
     });
 
     // Create notification for user
     await createNotification({
       userId: req.user._id.toString(),
-      type: 'booking',
-      title: 'Đặt sân thành công',
-      message: `Bạn đã đặt sân thành công tại ${booking.facility.name}. Mã đặt sân: ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()}. Vui lòng thanh toán để hoàn tất.`,
+      type: "booking",
+      title: "Đặt sân thành công",
+      message: `Bạn đã đặt sân thành công tại ${
+        booking.facility.name
+      }. Mã đặt sân: ${
+        booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()
+      }. Vui lòng thanh toán để hoàn tất.`,
       metadata: {
         bookingId: booking._id.toString(),
         bookingCode: booking.bookingCode,
         facilityId: facilityId.toString(),
         courtId: courtId.toString(),
       },
-      priority: 'high',
+      priority: "high",
     });
 
     // Notify facility owner about new booking
     await notifyFacilityOwner({
       facilityId: facilityId.toString(),
-      type: 'booking',
-      title: 'Có đặt sân mới',
-      message: `Có đặt sân mới tại ${booking.facility.name}. Mã đặt sân: ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()}.`,
+      type: "booking",
+      title: "Có đặt sân mới",
+      message: `Có đặt sân mới tại ${booking.facility.name}. Mã đặt sân: ${
+        booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()
+      }.`,
       metadata: {
         bookingId: booking._id.toString(),
         bookingCode: booking.bookingCode,
@@ -429,7 +454,7 @@ router.post("/", authenticateToken, async (req, res, next) => {
     });
 
     // Notify all users in facility room about slot update
-    emitToFacility(facilityId, 'booking:slot:booked', {
+    emitToFacility(facilityId, "booking:slot:booked", {
       facilityId: facilityId.toString(),
       courtId,
       date,
@@ -478,24 +503,27 @@ router.get("/my-bookings", authenticateToken, async (req, res, next) => {
     // Auto-update status for past bookings
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const updatePromises = [];
     for (const booking of bookings) {
       const bookingDate = new Date(booking.date);
       bookingDate.setHours(0, 0, 0, 0);
-      
+
       // If booking date has passed and status is still pending/confirmed, update to completed
-      if (bookingDate < today && (booking.status === 'pending' || booking.status === 'confirmed')) {
-        booking.status = 'completed';
+      if (
+        bookingDate < today &&
+        (booking.status === "pending" || booking.status === "confirmed")
+      ) {
+        booking.status = "completed";
         booking.completedAt = new Date();
         updatePromises.push(booking.save());
       }
     }
-    
+
     // Wait for all updates to complete (don't block response)
     if (updatePromises.length > 0) {
-      Promise.all(updatePromises).catch(err => {
-        console.error('Error auto-updating booking statuses:', err);
+      Promise.all(updatePromises).catch((err) => {
+        console.error("Error auto-updating booking statuses:", err);
       });
     }
 
@@ -561,7 +589,7 @@ router.get(
       // Search functionality
       if (req.query.search) {
         const searchTerm = req.query.search.trim();
-        
+
         // Check if search term looks like a booking code (BK-YYYYMMDD-XXXX)
         if (/^BK-\d{8}-\d{4}$/i.test(searchTerm)) {
           // Search by booking code
@@ -571,9 +599,9 @@ router.get(
           const facilities = await Facility.find({
             name: { $regex: searchTerm, $options: "i" },
           }).select("_id");
-          
+
           const facilityIds = facilities.map((f) => f._id);
-          
+
           // Also search in user fields
           const users = await User.find({
             $or: [
@@ -582,9 +610,9 @@ router.get(
               { phone: { $regex: searchTerm, $options: "i" } },
             ],
           }).select("_id");
-          
+
           const userIds = users.map((u) => u._id);
-          
+
           // Combine filters - search in multiple fields
           filter.$or = [
             { facility: { $in: facilityIds } },
@@ -607,24 +635,27 @@ router.get(
       // Auto-update status for past bookings
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       const updatePromises = [];
       for (const booking of bookings) {
         const bookingDate = new Date(booking.date);
         bookingDate.setHours(0, 0, 0, 0);
-        
+
         // If booking date has passed and status is still pending/confirmed, update to completed
-        if (bookingDate < today && (booking.status === 'pending' || booking.status === 'confirmed')) {
-          booking.status = 'completed';
+        if (
+          bookingDate < today &&
+          (booking.status === "pending" || booking.status === "confirmed")
+        ) {
+          booking.status = "completed";
           booking.completedAt = new Date();
           updatePromises.push(booking.save());
         }
       }
-      
+
       // Wait for all updates to complete (don't block response)
       if (updatePromises.length > 0) {
-        Promise.all(updatePromises).catch(err => {
-          console.error('Error auto-updating booking statuses:', err);
+        Promise.all(updatePromises).catch((err) => {
+          console.error("Error auto-updating booking statuses:", err);
         });
       }
 
@@ -710,16 +741,17 @@ router.get("/:id", authenticateToken, async (req, res, next) => {
     }
 
     // Check permission
-    const isOwner = booking.user && booking.user._id.toString() === req.user._id.toString();
-    
+    const isOwner =
+      booking.user && booking.user._id.toString() === req.user._id.toString();
+
     // Handle both populated and unpopulated owner
     let facilityOwnerId = null;
     if (booking.facility && booking.facility.owner) {
-      facilityOwnerId = booking.facility.owner._id 
-        ? booking.facility.owner._id.toString() 
+      facilityOwnerId = booking.facility.owner._id
+        ? booking.facility.owner._id.toString()
         : booking.facility.owner.toString();
     }
-    
+
     const isFacilityOwner = facilityOwnerId === req.user._id.toString();
 
     if (!isOwner && !isFacilityOwner && req.user.role !== "admin") {
@@ -769,8 +801,8 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
     // Handle both populated and unpopulated owner
     let facilityOwnerId = null;
     if (booking.facility && booking.facility.owner) {
-      facilityOwnerId = booking.facility.owner._id 
-        ? booking.facility.owner._id.toString() 
+      facilityOwnerId = booking.facility.owner._id
+        ? booking.facility.owner._id.toString()
         : booking.facility.owner.toString();
     }
 
@@ -812,7 +844,7 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
 
     // Emit socket events for status update
     const userId = booking.user._id?.toString() || booking.user.toString();
-    emitToUser(userId, 'booking:status:updated', {
+    emitToUser(userId, "booking:status:updated", {
       booking: booking.toObject(),
       status,
       message: `Trạng thái booking đã được cập nhật thành: ${status}`,
@@ -820,38 +852,44 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
 
     // Status messages
     const statusMessages = {
-      confirmed: 'Đã xác nhận',
-      cancelled: 'Đã hủy',
-      completed: 'Đã hoàn thành',
-      pending: 'Đang chờ xử lý',
+      confirmed: "Đã xác nhận",
+      cancelled: "Đã hủy",
+      completed: "Đã hoàn thành",
+      pending: "Đang chờ xử lý",
     };
 
     const statusTitles = {
-      confirmed: 'Đặt sân đã được xác nhận',
-      cancelled: 'Đặt sân đã bị hủy',
-      completed: 'Đặt sân đã hoàn thành',
-      pending: 'Đặt sân đang chờ xử lý',
+      confirmed: "Đặt sân đã được xác nhận",
+      cancelled: "Đặt sân đã bị hủy",
+      completed: "Đặt sân đã hoàn thành",
+      pending: "Đặt sân đang chờ xử lý",
     };
 
     // Create notification for user
     await createNotification({
       userId,
-      type: status === 'cancelled' ? 'cancellation' : 'booking',
-      title: statusTitles[status] || 'Trạng thái đặt sân đã thay đổi',
-      message: `Đặt sân ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()} tại ${booking.facility.name} đã được ${statusMessages[status] || status}.`,
+      type: status === "cancelled" ? "cancellation" : "booking",
+      title: statusTitles[status] || "Trạng thái đặt sân đã thay đổi",
+      message: `Đặt sân ${
+        booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()
+      } tại ${booking.facility.name} đã được ${
+        statusMessages[status] || status
+      }.`,
       metadata: {
         bookingId: booking._id.toString(),
         bookingCode: booking.bookingCode,
-        facilityId: booking.facility._id?.toString() || booking.facility.toString(),
+        facilityId:
+          booking.facility._id?.toString() || booking.facility.toString(),
         status,
         notes,
       },
-      priority: status === 'cancelled' ? 'high' : 'normal',
+      priority: status === "cancelled" ? "high" : "normal",
     });
 
     // Notify facility room
-    const facilityId = booking.facility._id?.toString() || booking.facility.toString();
-    emitToFacility(facilityId, 'booking:status:updated', {
+    const facilityId =
+      booking.facility._id?.toString() || booking.facility.toString();
+    emitToFacility(facilityId, "booking:status:updated", {
       bookingId: booking._id,
       facilityId,
       courtId: booking.court._id?.toString() || booking.court.toString(),
@@ -874,67 +912,78 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
  * PATCH /api/bookings/:id/cancel
  * User hủy booking
  */
-router.patch("/:id/cancel", authenticateToken, checkBookingOwnership, async (req, res, next) => {
-  try {
-    const reason = req.body?.reason;
+router.patch(
+  "/:id/cancel",
+  authenticateToken,
+  checkBookingOwnership,
+  async (req, res, next) => {
+    try {
+      const reason = req.body?.reason;
 
-    const booking = req.booking;
+      const booking = req.booking;
 
-    // Check if can cancel
-    if (!booking.canCancel()) {
-      return res.status(400).json({
-        success: false,
-        message: "Booking này không thể hủy",
-      });
-    }
-
-    // Update status
-    booking.status = "cancelled";
-    booking.cancelledAt = new Date();
-    booking.cancellationReason = reason || "Người dùng tự hủy";
-
-    // Check if eligible for refund
-    let refundAmount = 0;
-    if (booking.paymentStatus === "paid") {
-      // Calculate refund based on cancellation time
-      const bookingDateTime = new Date(`${booking.date.toISOString().split("T")[0]} ${booking.timeSlots[0].split("-")[0]}`);
-      const now = new Date();
-      const hoursUntilBooking = (bookingDateTime - now) / (1000 * 60 * 60);
-
-      if (hoursUntilBooking >= 24) {
-        // Cancel 24+ hours before: 100% refund
-        refundAmount = booking.totalAmount;
-      } else if (hoursUntilBooking >= 12) {
-        // Cancel 12-24 hours before: 50% refund
-        refundAmount = booking.totalAmount * 0.5;
-      } else {
-        // Cancel less than 12 hours: no refund (or service fee only)
-        refundAmount = 0;
+      // Check if can cancel
+      if (!booking.canCancel()) {
+        return res.status(400).json({
+          success: false,
+          message: "Booking này không thể hủy",
+        });
       }
 
-      booking.paymentStatus = "refunded";
-    }
+      // Update status
+      booking.status = "cancelled";
+      booking.cancelledAt = new Date();
+      booking.cancellationReason = reason || "Người dùng tự hủy";
 
-    await booking.save();
+      // Check if eligible for refund
+      let refundAmount = 0;
+      if (booking.paymentStatus === "paid") {
+        // Calculate refund based on cancellation time
+        const bookingDateTime = new Date(
+          `${booking.date.toISOString().split("T")[0]} ${
+            booking.timeSlots[0].split("-")[0]
+          }`
+        );
+        const now = new Date();
+        const hoursUntilBooking = (bookingDateTime - now) / (1000 * 60 * 60);
 
-    // Populate for notifications
-    await booking.populate("facility", "name owner");
-    await booking.populate("court", "name");
+        if (hoursUntilBooking >= 24) {
+          // Cancel 24+ hours before: 100% refund
+          refundAmount = booking.totalAmount;
+        } else if (hoursUntilBooking >= 12) {
+          // Cancel 12-24 hours before: 50% refund
+          refundAmount = booking.totalAmount * 0.5;
+        } else {
+          // Cancel less than 12 hours: no refund (or service fee only)
+          refundAmount = 0;
+        }
 
-    // Notify facility owner about cancellation
-    const facilityId = booking.facility._id?.toString() || booking.facility.toString();
-    await notifyFacilityOwner({
-      facilityId,
-      type: 'cancellation',
-      title: 'Đặt sân đã bị hủy',
-      message: `Đặt sân ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()} tại ${booking.facility.name} đã bị hủy bởi người dùng.`,
-      metadata: {
-        bookingId: booking._id.toString(),
-        bookingCode: booking.bookingCode,
+        booking.paymentStatus = "refunded";
+      }
+
+      await booking.save();
+
+      // Populate for notifications
+      await booking.populate("facility", "name owner");
+      await booking.populate("court", "name");
+
+      // Notify facility owner about cancellation
+      const facilityId =
+        booking.facility._id?.toString() || booking.facility.toString();
+      await notifyFacilityOwner({
         facilityId,
-        cancellationReason: reason || "Người dùng tự hủy",
-      },
-    });
+        type: "cancellation",
+        title: "Đặt sân đã bị hủy",
+        message: `Đặt sân ${
+          booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()
+        } tại ${booking.facility.name} đã bị hủy bởi người dùng.`,
+        metadata: {
+          bookingId: booking._id.toString(),
+          bookingCode: booking.bookingCode,
+          facilityId,
+          cancellationReason: reason || "Người dùng tự hủy",
+        },
+      });
 
     // Notify facility room about cancelled booking slots
     const courtId = booking.court._id?.toString() || booking.court.toString();
@@ -958,98 +1007,119 @@ router.patch("/:id/cancel", authenticateToken, checkBookingOwnership, async (req
   } catch (error) {
     next(error);
   }
-});
+);
 
 /**
  * PATCH /api/bookings/:id/payment-method
  * User chọn phương thức thanh toán
  */
-router.patch("/:id/payment-method", authenticateToken, checkBookingOwnership, async (req, res, next) => {
-  try {
-    const { paymentMethod } = req.body;
-    
-    // Validate payment method
-    if (!paymentMethod || !['momo', 'vnpay', 'cash'].includes(paymentMethod)) {
-      return res.status(400).json({
-        success: false,
-        message: "Phương thức thanh toán không hợp lệ. Vui lòng chọn: momo, vnpay, hoặc cash",
-      });
-    }
-    
-    const booking = req.booking;
-    
-    // Check if booking is already paid
-    if (booking.paymentStatus === "paid") {
-      return res.status(400).json({
-        success: false,
-        message: "Booking này đã được thanh toán",
-      });
-    }
-    
-    // Update payment method
-    booking.paymentMethod = paymentMethod;
-    
-    // If cash payment, keep paymentStatus as "pending" and status as "pending"
-    // User will pay at the venue, owner will confirm later
-    if (paymentMethod === 'cash') {
-      // Keep paymentStatus = "pending" (chưa thanh toán)
-      // Keep status = "pending" (chờ xác nhận)
-      // Just update paymentMethod
+router.patch(
+  "/:id/payment-method",
+  authenticateToken,
+  checkBookingOwnership,
+  async (req, res, next) => {
+    try {
+      const { paymentMethod } = req.body;
+
+      // Validate payment method
+      if (
+        !paymentMethod ||
+        !["momo", "vnpay", "cash"].includes(paymentMethod)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Phương thức thanh toán không hợp lệ. Vui lòng chọn: momo, vnpay, hoặc cash",
+        });
+      }
+
+      const booking = req.booking;
+
+      // Check if booking is already paid
+      if (booking.paymentStatus === "paid") {
+        return res.status(400).json({
+          success: false,
+          message: "Booking này đã được thanh toán",
+        });
+      }
+
+      // Update payment method
+      booking.paymentMethod = paymentMethod;
+
+      // If cash payment, keep paymentStatus as "pending" and status as "pending"
+      // User will pay at the venue, owner will confirm later
+      if (paymentMethod === "cash") {
+        // Keep paymentStatus = "pending" (chưa thanh toán)
+        // Keep status = "pending" (chờ xác nhận)
+        // Just update paymentMethod
+        await booking.save();
+
+        // Populate for response
+        await booking.populate("court", "name type price");
+        await booking.populate("facility", "name address location");
+
+        // Create notification for user
+        await createNotification({
+          userId: booking.user._id?.toString() || booking.user.toString(),
+          type: "booking",
+          title: "Đã chọn thanh toán tiền mặt",
+          message: `Bạn đã chọn thanh toán tiền mặt cho đặt sân ${
+            booking.bookingCode ||
+            booking._id.toString().slice(-8).toUpperCase()
+          }. Vui lòng thanh toán khi đến sân.`,
+          metadata: {
+            bookingId: booking._id.toString(),
+            bookingCode: booking.bookingCode,
+            facilityId:
+              booking.facility._id?.toString() || booking.facility.toString(),
+            paymentMethod: "cash",
+          },
+          priority: "normal",
+        });
+
+        // Notify facility owner
+        await notifyFacilityOwner({
+          facilityId:
+            booking.facility._id?.toString() || booking.facility.toString(),
+          type: "booking",
+          title: "Đặt sân chọn thanh toán tiền mặt",
+          message: `Đặt sân ${
+            booking.bookingCode ||
+            booking._id.toString().slice(-8).toUpperCase()
+          } tại ${
+            booking.facility.name
+          } đã chọn thanh toán tiền mặt. Vui lòng xác nhận khi khách đến sân.`,
+          metadata: {
+            bookingId: booking._id.toString(),
+            bookingCode: booking.bookingCode,
+            facilityId:
+              booking.facility._id?.toString() || booking.facility.toString(),
+            paymentMethod: "cash",
+          },
+        });
+
+        return res.json({
+          success: true,
+          message:
+            "Đã chọn thanh toán tiền mặt. Vui lòng thanh toán khi đến sân.",
+          data: booking,
+        });
+      }
+
+      // For online payment methods (momo/vnpay), just update paymentMethod
+      // The actual payment will be handled by payment flow
       await booking.save();
-      
-      // Populate for response
-      await booking.populate("court", "name type price");
-      await booking.populate("facility", "name address location");
-      
-      // Create notification for user
-      await createNotification({
-        userId: booking.user._id?.toString() || booking.user.toString(),
-        type: 'booking',
-        title: 'Đã chọn thanh toán tiền mặt',
-        message: `Bạn đã chọn thanh toán tiền mặt cho đặt sân ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()}. Vui lòng thanh toán khi đến sân.`,
-        metadata: {
-          bookingId: booking._id.toString(),
-          bookingCode: booking.bookingCode,
-          facilityId: booking.facility._id?.toString() || booking.facility.toString(),
-          paymentMethod: 'cash',
-        },
-        priority: 'normal',
-      });
-      
-      // Notify facility owner
-      await notifyFacilityOwner({
-        facilityId: booking.facility._id?.toString() || booking.facility.toString(),
-        type: 'booking',
-        title: 'Đặt sân chọn thanh toán tiền mặt',
-        message: `Đặt sân ${booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()} tại ${booking.facility.name} đã chọn thanh toán tiền mặt. Vui lòng xác nhận khi khách đến sân.`,
-        metadata: {
-          bookingId: booking._id.toString(),
-          bookingCode: booking.bookingCode,
-          facilityId: booking.facility._id?.toString() || booking.facility.toString(),
-          paymentMethod: 'cash',
-        },
-      });
-      
-      return res.json({
+
+      res.json({
         success: true,
-        message: "Đã chọn thanh toán tiền mặt. Vui lòng thanh toán khi đến sân.",
+        message: `Đã chọn phương thức thanh toán: ${paymentMethod}`,
         data: booking,
       });
+    } catch (error) {
+      next(error);
     }
-    
-    // For online payment methods (momo/vnpay), just update paymentMethod
-    // The actual payment will be handled by payment flow
-    await booking.save();
-    
-    res.json({
-      success: true,
-      message: `Đã chọn phương thức thanh toán: ${paymentMethod}`,
-      data: booking,
-    });
-  } catch (error) {
-    next(error);
   }
-});
+);
 
 /**
  * POST /api/bookings/:id/checkin
@@ -1064,7 +1134,9 @@ router.post("/:id/checkin", authenticateToken, async (req, res, next) => {
     });
 
     if (!booking) {
-      return res.status(404).json({ success: false, message: "Không tìm thấy booking" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy booking" });
     }
 
     // Xác thực quyền: chủ cơ sở chứa sân hoặc admin
@@ -1079,20 +1151,30 @@ router.post("/:id/checkin", authenticateToken, async (req, res, next) => {
     const isAdmin = req.user.role === "admin";
 
     if (!isFacilityOwner && !isAdmin) {
-      return res.status(403).json({ success: false, message: "Bạn không có quyền check-in cho booking này" });
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền check-in cho booking này",
+      });
     }
 
     // Không cho check-in nếu đã hủy hoặc đã hoàn tất
     if (booking.status === "cancelled") {
-      return res.status(400).json({ success: false, message: "Booking đã bị hủy" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Booking đã bị hủy" });
     }
     if (booking.status === "completed") {
-      return res.status(400).json({ success: false, message: "Booking đã hoàn tất" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Booking đã hoàn tất" });
     }
 
     // Kiểm tra điều kiện cơ bản: đã thanh toán hoặc đã được xác nhận
     if (!(booking.paymentStatus === "paid" || booking.status === "confirmed")) {
-      return res.status(400).json({ success: false, message: "Booking chưa đủ điều kiện check-in (cần paid hoặc confirmed)" });
+      return res.status(400).json({
+        success: false,
+        message: "Booking chưa đủ điều kiện check-in (cần paid hoặc confirmed)",
+      });
     }
 
     // (Tuỳ chọn) Ràng buộc ngày: chỉ cho phép check-in trong ngày đặt
@@ -1101,7 +1183,9 @@ router.post("/:id/checkin", authenticateToken, async (req, res, next) => {
     const bookingDay = new Date(booking.date);
     bookingDay.setHours(0, 0, 0, 0);
     if (bookingDay > today) {
-      return res.status(400).json({ success: false, message: "Chưa đến ngày check-in" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Chưa đến ngày check-in" });
     }
 
     // Cập nhật check-in
@@ -1111,11 +1195,97 @@ router.post("/:id/checkin", authenticateToken, async (req, res, next) => {
 
     await booking.save();
 
-    return res.json({ success: true, message: "Check-in thành công", data: booking });
+    return res.json({
+      success: true,
+      message: "Check-in thành công",
+      data: booking,
+    });
   } catch (error) {
     next(error);
   }
 });
 
-export default router;
+/**
+ * POST /api/bookings/:id/pay-wallet
+ * User thanh toán booking bằng ví
+ */
+router.post(
+  "/:id/pay-wallet",
+  authenticateToken,
+  checkBookingOwnership, // Dùng lại middleware check quyền sở hữu
+  asyncHandler(async (req, res, next) => {
+    const booking = req.booking; // Lấy từ middleware checkBookingOwnership
 
+    // 1. Kiểm tra booking đã thanh toán chưa
+    if (booking.paymentStatus === "paid") {
+      return res
+        .status(400)
+        .json({ success: false, message: "Booking này đã được thanh toán" });
+    }
+
+    // 2. Kiểm tra số dư
+    const user = await User.findById(req.user._id);
+    const totalAmount = booking.totalAmount;
+
+    if (user.walletBalance < totalAmount) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Số dư ví không đủ" });
+    }
+
+    // 3. Trừ tiền (Sử dụng service đã có)
+    await debit(user._id, totalAmount, "payment", {
+      bookingId: booking._id,
+      description: `Thanh toan don ${booking.bookingCode}`,
+    });
+
+    // 4. Tạo bản ghi Payment (để đồng bộ)
+    const paymentId = `WALLET_${booking._id}_${new Date().getTime()}`;
+    await Payment.create({
+      user: user._id,
+      booking: booking._id,
+      amount: totalAmount,
+      method: "wallet",
+      status: "success",
+      paymentId: paymentId,
+      transactionId: paymentId, // Tự gán
+      orderInfo: `Thanh toan bang vi cho ${booking.bookingCode}`,
+      paidAt: new Date(),
+    });
+
+    // 5. Cập nhật Booking
+    booking.paymentStatus = "paid";
+    booking.status = "confirmed"; // Tự động xác nhận
+    booking.paymentMethod = "wallet";
+    await booking.save();
+
+    // 6. Gửi thông báo (tương tự logic thanh toán online)
+    await booking.populate("facility", "name");
+    await createNotification({
+      userId: user._id.toString(),
+      type: "payment",
+      title: "Thanh toán thành công",
+      message: `Thanh toán bằng ví cho mã ${booking.bookingCode} tại ${booking.facility.name} đã thành công.`,
+      metadata: {
+        bookingId: booking._id.toString(),
+        paymentMethod: "wallet",
+      },
+    });
+
+    emitToUser(user._id.toString(), "booking:status:updated", {
+      booking: booking.toObject(),
+      status: "confirmed",
+      message: "Thanh toán bằng ví thành công!",
+    });
+
+    processBookingRewards(booking);
+
+    res.json({
+      success: true,
+      message: "Thanh toán bằng ví thành công",
+      data: booking,
+    });
+  })
+);
+
+export default router;
