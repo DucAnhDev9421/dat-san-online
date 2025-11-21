@@ -525,3 +525,105 @@ export const drinksMenu = [
   { id: 'drink007', name: 'Trà ô long', price: 15000 },
 ];
 
+// Trong file mockData.js
+
+// Trong file data/mockData.js
+
+// Trong file data/mockData.js
+
+// Trong file data/mockData.js
+
+export const serviceData = [
+  {
+    id: "cat_drinks",
+    name: "Nước uống",
+    items: [
+      { _id: "d1", name: "Nước suối", price: 10000, type: "sale", imageUrl: "https://th.bing.com/th/id/OIP.ocW_rXNgqN4B71hjPxB8PAHaHa?w=175&h=180&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1" },
+      { _id: "d2", name: "Nước tăng lực", price: 15000, type: "sale", imageUrl: "https://th.bing.com/th/id/OIP.F2iRwRCT6vpUdt7pxhI4TgHaFj?w=251&h=188&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1" },
+      { _id: "d3", name: "Sting dâu", price: 15000, type: "sale", imageUrl: "https://th.bing.com/th/id/OIP.hS4JT37JJe30GK-ww4zmAwHaHa?w=179&h=180&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1" },
+      { _id: "d4", name: "Trà đá", price: 5000, type: "sale", imageUrl: "https://th.bing.com/th/id/OIP.sgTuAin9aVLZ3PiqyIgARAHaHa?w=197&h=197&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1" },
+      { _id: "d5", name: "Coca Cola", price: 15000, type: "sale", imageUrl: "https://kamereo.vn/blog/wp-content/uploads/2024/10/cac-loai-nuoc-ngot-1.jpg" },
+      { _id: "d6", name: "Fanta", price: 15000, type: "sale", imageUrl: "https://kamereo.vn/blog/wp-content/uploads/2024/10/cac-loai-nuoc-ngot-2.jpg" },
+      { _id: "d7", name: "Fuze Tea", price: 15000, type: "sale", imageUrl: "https://kamereo.vn/blog/wp-content/uploads/2024/10/cac-loai-nuoc-ngot-3.jpg" },
+      { _id: "d8", name: "PlayMore", price: 15000, type: "sale", imageUrl: "https://kamereo.vn/blog/wp-content/uploads/2024/10/cac-loai-nuoc-ngot-4.jpg" },
+      { _id: "d9", name: "Pepsi", price: 15000, type: "sale", imageUrl: "https://kamereo.vn/blog/wp-content/uploads/2024/10/cac-loai-nuoc-ngot-5.jpg" },
+      { _id: "d10", name: "7UP", price: 15000, type: "sale", imageUrl: "https://kamereo.vn/blog/wp-content/uploads/2024/10/cac-loai-nuoc-ngot-6.jpg" },
+    ],
+  },
+  {
+    id: "cat_snacks",
+    name: "Đồ ăn vặt",
+    items: [
+      { _id: "f1", name: "Bánh tráng trộn", price: 15000, type: "sale", imageUrl: "https://img.tripi.vn/cdn-cgi/image/width=700,height=700/https://gcs.tripi.vn/public-tripi/tripi-feed/img/473810Hxp/banh-tran-tron-882786.jpg" },
+      { _id: "f2", name: "Bắp xào", price: 10000, type: "sale", imageUrl: "https://img.tripi.vn/cdn-cgi/image/width=700,height=700/https://gcs.tripi.vn/public-tripi/tripi-feed/img/473810ivs/bap-xao-882792.jpg" },
+      { _id: "f3", name: "Bánh snack", price: 10000, type: "sale", imageUrl: "https://th.bing.com/th/id/OIP.MFgSkgmNcnBkxCQ_8APUJAHaHa?w=196&h=196&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1" },
+      { _id: "f4", name: "Trứng luộc", price: 7000, type: "sale", imageUrl: "https://www.bing.com/th/id/OIP.n6lBSbWSge0vysNZThlsHwHaEo?w=266&h=180&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1" },
+      { _id: "f5", name: "Bánh Flan", price: 7000, type: "sale", imageUrl: "https://img.tripi.vn/cdn-cgi/image/width=700,height=700/https://gcs.tripi.vn/public-tripi/tripi-feed/img/473810GjO/banh-flan-882807.jpg" },
+      { _id: "f6", name: "Bánh mì bò lá lốt", price: 7000, type: "sale", imageUrl: "https://img.tripi.vn/cdn-cgi/image/width=700,height=700/https://gcs.tripi.vn/public-tripi/tripi-feed/img/473810geT/banh-mi-bo-la-lot-882799.jpg" },
+      { _id: "f7", name: "Bánh khoai mỡ chiên", price: 7000, type: "sale", imageUrl: "https://img.tripi.vn/cdn-cgi/image/width=700,height=700/https://gcs.tripi.vn/public-tripi/tripi-feed/img/473810nBz/banh-khoai-mo-chien-882803.jpg" },
+      { _id: "f8", name: "Bánh khọt", price: 7000, type: "sale", imageUrl: "https://img.tripi.vn/cdn-cgi/image/width=700,height=700/https://gcs.tripi.vn/public-tripi/tripi-feed/img/473810eQY/banh-khot-882794.jpg" },
+      { _id: "f9", name: "Cacao đá chấm bánh mì", price: 7000, type: "sale", imageUrl: "https://img.tripi.vn/cdn-cgi/image/width=700,height=700/https://gcs.tripi.vn/public-tripi/tripi-feed/img/473810aZU/cacao-da-cham-banh-mi-882797.jpg" },
+      { _id: "f10", name: "Gỏi chân gà sốt Thái", price: 7000, type: "sale", imageUrl: "https://img.tripi.vn/cdn-cgi/image/width=700,height=700/https://gcs.tripi.vn/public-tripi/tripi-feed/img/473810eFM/goi-chan-ga-sot-thai-882788.jpg" },
+    ],
+  },
+  {
+    id: "cat_rentals",
+    name: "Thuê đồ & Dụng cụ",
+    items: [
+      // --- DỤNG CỤ BÓNG ĐÁ ---
+      { _id: "r_fb_shoes", name: "Giày đá bóng", price: 30000, type: "rental", imageUrl: "https://th.bing.com/th/id/OIP.02YY9pGnJ9PXHwZJkDbtOwHaE8?w=277&h=184&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1", sportType: "football" },
+      { _id: "r_fb_gloves", name: "Găng tay thủ môn", price: 20000, type: "rental", imageUrl: "https://th.bing.com/th/id/OIP.l1XWBYy37YlZxQ5XdjZtHgHaEK?w=333&h=187&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1", sportType: "football" },
+      { _id: "r_fb_bib", name: "Áo Bib (1 áo)", price: 5000, type: "rental", imageUrl: "https://th.bing.com/th/id/OIP.D6yuofrzHnp1jNqsQFQiFgHaHa?w=199&h=199&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1", sportType: "football" },
+      { _id: "r_fb_shin", name: "Bọc ống đồng", price: 10000, type: "rental", imageUrl: "https://th.bing.com/th/id/OIP.FjMiNhbyXV8wssOtantQcgHaFy?w=247&h=193&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1", sportType: "football" },
+      { _id: "r_fb_tape", name: "Băng quấn (Cổ tay/Đầu gối)", price: 15000, type: "sale", imageUrl: "https://th.bing.com/th/id/OIP.Hg102z_BBuooWq0LhPpMTwHaHa?w=180&h=180&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1", sportType: "football" },
+      { _id: "r_fb_referee", name: "Thuê Trọng tài (1 trận)", price: 200000, type: "service", imageUrl: "https://th.bing.com/th/id/OIP.lGB1ZG8D_yT8ebs4Zx2nfwHaFa?w=256&h=187&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1", sportType: "football" },
+      { _id: "r_fb_whistle", name: "Còi trọng tài", price: 25000, type: "sale", imageUrl: "https://th.bing.com/th/id/OIP.-PPDArj2SAI3ILoIwOuWhQHaHa?w=209&h=209&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1", sportType: "football" },
+      { _id: "r_fb_ball", name: "Bóng đá (1 trái)", price: 50000, type: "rental", imageUrl: "https://th.bing.com/th/id/OIP.EVJ1EvxXb6zfdYW2e4iM7wHaE6?w=253&h=180&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1", sportType: "football" },
+
+      // --- DỤNG CỤ BÓNG RỔ ---
+      { _id: "r_bb_ball", name: "Bóng rổ", price: 30000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1519861531473-92002a281d56?w=400&q=80", sportType: "basketball" },
+      { _id: "r_bb_bib", name: "Áo bib (phân biệt đội)", price: 5000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1593341643440-1e5b1b36f7e4?w=400&q=80", sportType: "basketball" },
+      { _id: "r_bb_shoes", name: "Giày bóng rổ", price: 50000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1515287315486-45546556b6d2?w=400&q=80", sportType: "basketball" },
+      { _id: "r_bb_bands", name: "Băng cổ tay / Băng đầu gối", price: 15000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1594488550186-5309d431ba27?w=400&q=80", sportType: "basketball" },
+      { _id: "r_bb_mouthguard", name: "Miếng bảo vệ răng", price: 20000, type: "sale", imageUrl: "https://images.unsplash.com/photo-1601061326160-561c28b72a6b?w=400&q=80", sportType: "basketball" },
+      { _id: "r_bb_scoreboard", name: "Bảng điểm điện tử", price: 100000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1517649763942-321385573677?w=400&q=80", sportType: "basketball" },
+
+      // --- DỤNG CỤ TENNIS (Cập nhật) ---
+      { _id: "r_tn_racket", name: "Vợt tennis", price: 50000, type: "rental", imageUrl: "https://images.unsplash.com/photo-162124505973-c1e1c1c1c1c1?w=400&q=80", sportType: "tennis" },
+      { _id: "r_tn_ball", name: "Bóng Tennis (1 hộp)", price: 120000, type: "sale", imageUrl: "https://images.unsplash.com/photo-1553778263-73a83bab9b0c?w=400&q=80", sportType: "tennis" },
+      { _id: "r_tn_shoes", name: "Giày tennis", price: 50000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1606902220745-a4a33c8a5ff5?w=400&q=80", sportType: "tennis" },
+      { _id: "r_tn_machine", name: "Máy bắn bóng", price: 150000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1604313506161-9f93f60fde0d?w=400&q=80", sportType: "tennis" },
+
+      // --- DỤNG CỤ PICKLEBALL (Cập nhật) ---
+      { _id: "r_pb_paddle", name: "Vợt pickleball", price: 40000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?w=400&q=80", sportType: "pickleball" },
+      { _id: "r_pb_ball", name: "Bóng nhựa (Pickleball)", price: 15000, type: "sale", imageUrl: "https://images.unsplash.com/photo-1611082154782-b133e9b0b4db?w=400&q=80", sportType: "pickleball" },
+      { _id: "r_pb_bib", name: "Áo bib (Pickleball)", price: 5000, type: "rental", imageUrl: "https://plus.unsplash.com/premium_photo-1664302478562-63e86290b197?w=400&q=80", sportType: "pickleball" },
+      { _id: "r_pb_shoes", name: "Giày thể thao (Pickleball)", price: 40000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1594912953041-e9e9e9e9e9e9?w=400&q=80", sportType: "pickleball" },
+      
+      // --- DỤNG CỤ BÓNG BÀN (Mới) ---
+      { _id: "r_tt_paddle", name: "Vợt bóng bàn", price: 20000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1543306979-0d3f23f114c0?w=400&q=80", sportType: "tabletennis" },
+      { _id: "r_tt_ball", name: "Bóng bàn (1 trái)", price: 5000, type: "sale", imageUrl: "https://images.unsplash.com/photo-1550971032-841da8d0111f?w=400&q=80", sportType: "tabletennis" },
+      { _id: "r_tt_net", name: "Lưới bàn", price: 10000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1520625316870-62181b539a2b?w=400&q=80", sportType: "tabletennis" },
+      { _id: "r_tt_machine", name: "Máy bắn bóng bàn", price: 100000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1604313506161-9f93f60fde0d?w=400&q=80", sportType: "tabletennis" },
+      
+      // --- DỤNG CỤ BÓNG CHUYỀN ---
+      { _id: "r_vb_1", name: "Bóng chuyền", price: 25000, type: "rental", imageUrl: "https://images.unsplash.com/photo-1517649763942-321385573677?w=400&q=80", sportType: "volleyball" },
+
+      // --- DỤNG CỤ CHUNG (ALL) ---
+      { _id: "r_all_1", name: "Khăn lạnh", price: 5000, type: "sale", imageUrl: "https://th.bing.com/th/id/OIP.nTFSZLjzabM9e7BWYWl2vwHaHa?w=191&h=191&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1", sportType: "all" },
+      { _id: "r_all_2", name: "Bình xịt giảm đau", price: 80000, type: "sale", imageUrl: "https://th.bing.com/th/id/OIP.4Vihcx88jL5INgKwxr5BigHaHa?w=178&h=180&c=7&r=0&o=7&cb=ucfimg2&dpr=1.3&pid=1.7&rm=3&ucfimg=1", sportType: "all" },
+    ],
+  },
+];
+
+export const sportCategories = [
+  { key: "football", name: "Bóng đá" },
+  { key: "basketball", name: "Bóng rổ" },
+  { key: "tennis", name: "Tennis" },
+  { key: "pickleball", name: "Pickleball" },
+  { key: "tabletennis", name: "Bóng bàn" },
+  { key: "volleyball", name: "Bóng chuyền" },
+];
+
+
+

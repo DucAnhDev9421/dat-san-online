@@ -23,28 +23,32 @@ export default function InfoSection() {
   ]
 
   return (
-    <Card className="info-section-card">
-      <CardHeader>
-        <CardTitle className="info-section-title">
-          <Gift className="info-icon" /> 
-          Hướng dẫn sử dụng mã khuyến mãi
-        </CardTitle>
-        <CardDescription className="info-section-description" />
-      </CardHeader>
-      <CardContent>
-        <div className="info-steps-grid">
-          {steps.map((step) => (
-            <div key={step.number} className="info-step">
-              <div className="step-number">
-                {step.number}
-              </div>
-              <h3 className="step-title">{step.title}</h3>
-              <p className="step-description">{step.description}</p>
+    <div className="info-section-wrapper">
+      <div className="info-section-container">
+        <Card className="info-section-card">
+          <CardHeader>
+            <CardTitle className="info-section-title">
+              <Gift className="info-icon" /> 
+              Hướng dẫn sử dụng mã khuyến mãi
+            </CardTitle>
+            <CardDescription className="info-section-description" />
+          </CardHeader>
+          <CardContent>
+            <div className="info-steps-grid">
+              {steps.map((step) => (
+                <div key={step.number} className="info-step">
+                  <div className="step-number">
+                    {step.number}
+                  </div>
+                  <h3 className="step-title">{step.title}</h3>
+                  <p className="step-description">{step.description}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   )
 }
 

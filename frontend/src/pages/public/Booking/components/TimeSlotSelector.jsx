@@ -18,16 +18,19 @@ export default function TimeSlotSelector({
   lockedSlots = {},
   onSlotLock,
   onSlotUnlock,
-  currentUserId
+  currentUserId,
+  bookedSlots = new Set()
 }) {
   const { isMobile, isTablet } = useDeviceType()
   const [showDatePicker, { toggle: toggleDatePicker, setFalse: closeDatePicker }] = useToggle(false)
   const [bookedTimes, setBookedTimes] = useState([])
   const [timeSlots, setTimeSlots] = useState([])
+  const [originalTimeSlots, setOriginalTimeSlots] = useState([]) // Store original availability from API
   const [loadingAvailability, setLoadingAvailability] = useState(false)
+  const [showSkeleton, setShowSkeleton] = useState(false)
   
   const datePickerRef = useClickOutside(() => closeDatePicker(), showDatePicker)
-
+  
   // Fetch availability from API when court or date changes
   useEffect(() => {
     const fetchAvailability = async () => {
@@ -60,11 +63,26 @@ export default function TimeSlotSelector({
       }
 
       setLoadingAvailability(true)
+      setShowSkeleton(true)
+      
+      // Add minimum delay to show skeleton loading (improve UX)
+      const minLoadingTime = 300 // 300ms minimum loading time
+      const startTime = Date.now()
+      
       try {
         // Format date to YYYY-MM-DD in local timezone (not UTC)
         const dateStr = formatDateToYYYYMMDD(selectedDate)
         
         const result = await bookingApi.getAvailability(selectedCourt, dateStr)
+        
+        // Calculate remaining time to meet minimum loading time
+        const elapsedTime = Date.now() - startTime
+        const remainingTime = Math.max(0, minLoadingTime - elapsedTime)
+        
+        // Wait for remaining time if needed
+        if (remainingTime > 0) {
+          await new Promise(resolve => setTimeout(resolve, remainingTime))
+        }
         
         if (result.success && result.data) {
           const slots = result.data.slots || []
@@ -72,15 +90,23 @@ export default function TimeSlotSelector({
           // Transform API response to timeSlots format
           const transformedSlots = slots.map(slot => {
             const [startTime, endTime] = slot.slot.split('-')
+            const timeSlotStr = `${startTime}-${endTime}`
+            const dateStr = formatDateToYYYYMMDD(selectedDate)
+            const lockKey = selectedCourt ? `${selectedCourt}_${dateStr}_${timeSlotStr}` : null
+            
+            // Check if slot is in bookedSlots (from socket events)
+            const isBookedFromSocket = lockKey && bookedSlots.has(lockKey)
+            
             return {
               time: startTime,
               endTime: endTime,
               price: slot.price || venuePrice || 200000,
-              available: slot.available
+              available: isBookedFromSocket ? false : slot.available
             }
           })
 
           setTimeSlots(transformedSlots)
+          setOriginalTimeSlots(transformedSlots) // Store original availability
           
           // Pass time slots data to parent component for price calculation
           if (onTimeSlotsDataChange) {
@@ -121,11 +147,41 @@ export default function TimeSlotSelector({
         setBookedTimes([])
       } finally {
         setLoadingAvailability(false)
+        // Small delay before hiding skeleton for smooth transition
+        setTimeout(() => {
+          setShowSkeleton(false)
+        }, 150)
       }
     }
 
     fetchAvailability()
   }, [selectedCourt, selectedDate, venuePrice])
+
+  // Update timeSlots when bookedSlots changes (from socket events)
+  useEffect(() => {
+    if (!selectedCourt || !selectedDate || timeSlots.length === 0 || originalTimeSlots.length === 0) return
+    
+    const dateStr = formatDateToYYYYMMDD(selectedDate)
+    
+    setTimeSlots(prev => prev.map((slot, index) => {
+      const timeSlotStr = `${slot.time}-${slot.endTime}`
+      const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
+      const isBookedFromSocket = bookedSlots.has(lockKey)
+      
+      // Find original slot from API
+      const originalSlot = originalTimeSlots.find(os => os.time === slot.time && os.endTime === slot.endTime)
+      const originalAvailable = originalSlot ? originalSlot.available : slot.available
+      
+      // If slot is booked from socket, mark as unavailable
+      if (isBookedFromSocket) {
+        return { ...slot, available: false }
+      }
+      
+      // If slot is not in bookedSlots anymore (cancelled), restore original availability
+      // This handles the case where slot was booked via socket and then cancelled
+      return { ...slot, available: originalAvailable }
+    }))
+  }, [bookedSlots, selectedCourt, selectedDate, originalTimeSlots])
 
   const handleSlotClick = (timeSlot) => {
     // Require court to be selected before allowing slot selection
@@ -145,7 +201,7 @@ export default function TimeSlotSelector({
       toast.warning('Slot này đang được người khác giữ chỗ')
       return
     }
-
+    
     if (selectedSlots.includes(slotKey)) {
       // Unlock slot when user deselects
       if (onSlotUnlock && slotLock?.isLockedByMe) {
@@ -176,6 +232,16 @@ export default function TimeSlotSelector({
   }
 
   const isSlotBooked = (timeSlot) => {
+    // Check if slot is in bookedSlots (from socket events)
+    if (selectedCourt) {
+      const dateStr = formatDateToYYYYMMDD(selectedDate)
+      const timeSlotStr = `${timeSlot.time}-${timeSlot.endTime}`
+      const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
+      if (bookedSlots.has(lockKey)) {
+        return true
+      }
+    }
+    
     // Use available property from API if available, otherwise fallback to bookedTimes
     if (timeSlot.hasOwnProperty('available')) {
       return !timeSlot.available
@@ -411,21 +477,72 @@ export default function TimeSlotSelector({
 
         {/* Time Slots Grid */}
         <div style={{ marginBottom: '20px' }}>
-          {loadingAvailability && (
+          {(loadingAvailability || showSkeleton) && (
             <div style={{
-              textAlign: 'center',
-              padding: '20px',
-              color: '#6b7280',
-              fontSize: '14px'
+              display: 'grid',
+              gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)',
+              gap: '12px'
             }}>
-              Đang tải thông tin khung giờ...
+              {Array.from({ length: 16 }).map((_, index) => (
+                <div
+                  key={`skeleton-${index}`}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '16px 12px',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    background: '#f9fafb',
+                    minHeight: '90px',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {/* Skeleton shimmer effect */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: '-100%',
+                      width: '100%',
+                      height: '100%',
+                      background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent)',
+                      animation: 'shimmer 1.5s infinite'
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: '60%',
+                      height: '16px',
+                      background: '#e5e7eb',
+                      borderRadius: '4px',
+                      position: 'relative',
+                      zIndex: 1
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: '40%',
+                      height: '14px',
+                      background: '#e5e7eb',
+                      borderRadius: '4px',
+                      position: 'relative',
+                      zIndex: 1
+                    }}
+                  />
+                </div>
+              ))}
             </div>
           )}
-          {!loadingAvailability && (
+          {!loadingAvailability && !showSkeleton && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)',
-            gap: '12px'
+            gap: '12px',
+            animation: 'fadeIn 0.3s ease-in'
           }}>
             {timeSlots.map((slot) => {
               const status = getSlotStatus(slot)
@@ -497,6 +614,29 @@ export default function TimeSlotSelector({
           </div>
           )}
         </div>
+        
+        {/* Add CSS animations */}
+        <style>{`
+          @keyframes shimmer {
+            0% {
+              left: -100%;
+            }
+            100% {
+              left: 100%;
+            }
+          }
+          
+          @keyframes fadeIn {
+            from {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `}</style>
         
         {/* Legend */}
         <div style={{

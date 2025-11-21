@@ -84,6 +84,50 @@ export const userApi = {
   },
 
   /**
+   * Get user favorites
+   * GET /api/users/favorites
+   * @returns {Promise} List of favorite facilities
+   */
+  getFavorites: async () => {
+    try {
+      const response = await api.get('/users/favorites');
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Add facility to favorites
+   * POST /api/users/favorites/:facilityId
+   * @param {string} facilityId - Facility ID
+   * @returns {Promise} Success message
+   */
+  addFavorite: async (facilityId) => {
+    try {
+      const response = await api.post(`/users/favorites/${facilityId}`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Remove facility from favorites
+   * DELETE /api/users/favorites/:facilityId
+   * @param {string} facilityId - Facility ID
+   * @returns {Promise} Success message
+   */
+  removeFavorite: async (facilityId) => {
+    try {
+      const response = await api.delete(`/users/favorites/${facilityId}`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
    * Change password
    * PUT /api/users/change-password
    * @param {string} currentPassword

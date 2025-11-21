@@ -110,6 +110,39 @@ export const uploadCourtImage = multer({
   }
 });
 
+// Configure Cloudinary Storage for League images
+const leagueStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'booking-sport/leagues',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [
+      { width: 1200, height: 600, crop: 'fill' },
+      { quality: 'auto' }
+    ],
+    public_id: (req, file) => {
+      const leagueId = req.params.id || 'league';
+      const timestamp = Date.now();
+      return `league_${leagueId}_${timestamp}`;
+    }
+  }
+});
+
+// Configure multer for League images
+export const uploadLeagueImage = multer({
+  storage: leagueStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
 // Cloudinary utility functions
 export const cloudinaryUtils = {
   // Upload image and return URL

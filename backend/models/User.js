@@ -75,21 +75,13 @@ const userSchema = new mongoose.Schema(
       min: 0,
     },
 
-    // ================== REFERRAL (Đã sửa vị trí) ==================
-    referralCode: {
-      type: String,
-      unique: true,
-      sparse: true,
-      trim: true,
-      uppercase: true,
-    },
-    referredBy: {
+    // Sân yêu thích
+    favorites: [{
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
+      ref: 'Facility'
+    }],
 
-    // ================== TRẠNG THÁI TÀI KHOẢN ==================
+    // Trạng thái tài khoản
     isActive: {
       type: Boolean,
       default: false,

@@ -68,6 +68,21 @@ const bookingSchema = new mongoose.Schema(
       min: [0, "Tổng tiền không được âm"],
     },
 
+    // Mã khuyến mãi (nếu có)
+    promotionCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: null,
+    },
+
+    // Số tiền giảm giá từ khuyến mãi
+    discountAmount: {
+      type: Number,
+      default: 0,
+      min: [0, "Số tiền giảm giá không được âm"],
+    },
+
     // Thông tin liên hệ
     contactInfo: {
       name: {

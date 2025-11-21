@@ -1,16 +1,33 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import useDeviceType from '../../../../hook/use-device-type'
 import useMobile from '../../../../hook/use-mobile'
 import { formatDate } from '../utils/dateHelpers'
-import { Calendar, Clock, DollarSign, CheckCircle, Tag, MapPin, Grid3x3 } from 'lucide-react'
+import { Calendar, Clock, DollarSign, CheckCircle, Tag, MapPin, Grid3x3, X } from 'lucide-react'
+import { promotionApi } from '../../../../api/promotionApi'
 
-export default function BookingSummary({ selectedDate, selectedSlots, selectedCourt, selectedFieldType, courts, timeSlotsData, onBookNow }) {
+export default function BookingSummary({ 
+  selectedDate, 
+  selectedSlots, 
+  selectedCourt, 
+  selectedFieldType, 
+  courts, 
+  timeSlotsData, 
+  onBookNow,
+  venueId,
+  onPromotionChange // Callback to pass promotion data to parent
+}) {
   const { isMobile, isTablet } = useDeviceType()
   const isSmallMobile = useMobile(480)
   const isVerySmallMobile = useMobile(360)
+  const [searchParams] = useSearchParams()
+  
   const [promoCode, setPromoCode] = useState('')
-  const [discount, setDiscount] = useState(0)
+  const [appliedPromotion, setAppliedPromotion] = useState(null)
+  const [discountAmount, setDiscountAmount] = useState(0)
   const [promoApplied, setPromoApplied] = useState(false)
+  const [validating, setValidating] = useState(false)
 
   // Get selected court data
   const selectedCourtData = courts?.find(c => (c.id || c._id) === selectedCourt)
@@ -36,29 +53,167 @@ export default function BookingSummary({ selectedDate, selectedSlots, selectedCo
     return courtPrice * selectedSlots.length
   }
 
+  // Check for promo code in URL params
+  useEffect(() => {
+    const promoFromUrl = searchParams.get('promo')
+    if (promoFromUrl && !promoApplied && venueId) {
+      setPromoCode(promoFromUrl.toUpperCase())
+      // Auto-apply promo from URL
+      const applyPromo = async () => {
+        try {
+          setValidating(true)
+          const result = await promotionApi.validatePromotionCode(
+            promoFromUrl.toUpperCase(),
+            venueId || null,
+            null
+          )
+
+          if (result.success && result.data.valid && result.data.promotion) {
+            const promotion = result.data.promotion
+            const subtotal = calculateTotal()
+            const discount = calculateDiscount(promotion, subtotal)
+
+            setAppliedPromotion(promotion)
+            setDiscountAmount(discount)
+            setPromoApplied(true)
+
+            if (onPromotionChange) {
+              onPromotionChange({
+                code: promoFromUrl.toUpperCase(),
+                promotion: promotion,
+                discountAmount: discount
+              })
+            }
+
+            toast.success(`Áp dụng mã khuyến mãi "${promoFromUrl.toUpperCase()}" thành công!`)
+          }
+        } catch (error) {
+          console.error('Error validating promotion from URL:', error)
+        } finally {
+          setValidating(false)
+        }
+      }
+      
+      // Delay to ensure component is fully mounted
+      setTimeout(applyPromo, 100)
+    }
+  }, [searchParams, venueId])
+
+  // Calculate discount amount based on promotion
+  const calculateDiscount = (promotion, subtotal) => {
+    if (!promotion) return 0
+
+    if (promotion.discountType === 'percentage') {
+      const discount = (subtotal * promotion.discountValue) / 100
+      return Math.round(discount)
+    } else {
+      // fixed amount
+      return Math.min(promotion.discountValue, subtotal)
+    }
+  }
+
   // Handle promo code apply
-  const handleApplyPromo = () => {
-    const promotions = {
-      'CUOITUAN50': 0.5, // 50% off
-      'SOM30': 0.3, // 30% off
-      'TANG1H': 0.33, // ~33% off (1 free hour)
-      'VIP20': 0.2 // 20% off
+  const handleApplyPromo = async (code = null) => {
+    const codeToValidate = code || promoCode.trim().toUpperCase()
+    
+    if (!codeToValidate) {
+      toast.error('Vui lòng nhập mã khuyến mãi')
+      return
     }
 
-    const promoDiscount = promotions[promoCode.toUpperCase()]
-    if (promoDiscount) {
-      setDiscount(promoDiscount)
-      setPromoApplied(true)
-    } else {
-      alert('Mã khuyến mãi không hợp lệ')
+    try {
+      setValidating(true)
+      
+      // Validate promotion code with API
+      const result = await promotionApi.validatePromotionCode(
+        codeToValidate,
+        venueId || null,
+        null // area - can be enhanced later
+      )
+
+      if (result.success && result.data.valid && result.data.promotion) {
+        const promotion = result.data.promotion
+        const subtotal = calculateTotal()
+        const discount = calculateDiscount(promotion, subtotal)
+
+        setAppliedPromotion(promotion)
+        setDiscountAmount(discount)
+        setPromoApplied(true)
+        setPromoCode(codeToValidate)
+
+        // Notify parent component
+        if (onPromotionChange) {
+          onPromotionChange({
+            code: codeToValidate,
+            promotion: promotion,
+            discountAmount: discount
+          })
+        }
+
+        toast.success(`Áp dụng mã khuyến mãi "${codeToValidate}" thành công!`)
+      } else {
+        const reason = result.data?.reason || 'Mã khuyến mãi không hợp lệ'
+        toast.error(reason)
+        setAppliedPromotion(null)
+        setDiscountAmount(0)
+        setPromoApplied(false)
+        
+        if (onPromotionChange) {
+          onPromotionChange(null)
+        }
+      }
+    } catch (error) {
+      console.error('Error validating promotion:', error)
+      toast.error(error.message || 'Có lỗi xảy ra khi kiểm tra mã khuyến mãi')
+      setAppliedPromotion(null)
+      setDiscountAmount(0)
+      setPromoApplied(false)
+      
+      if (onPromotionChange) {
+        onPromotionChange(null)
+      }
+    } finally {
+      setValidating(false)
     }
+  }
+
+  // Handle remove promotion
+  const handleRemovePromo = () => {
+    setPromoCode('')
+    setAppliedPromotion(null)
+    setDiscountAmount(0)
+    setPromoApplied(false)
+    
+    if (onPromotionChange) {
+      onPromotionChange(null)
+    }
+    
+    toast.info('Đã xóa mã khuyến mãi')
   }
 
   // Calculate final total with discount
   const finalTotal = () => {
     const total = calculateTotal()
-    return Math.round(total * (1 - discount))
+    return Math.max(0, total - discountAmount)
   }
+
+  // Update discount when total changes
+  useEffect(() => {
+    if (appliedPromotion && promoApplied) {
+      const subtotal = calculateTotal()
+      const newDiscount = calculateDiscount(appliedPromotion, subtotal)
+      setDiscountAmount(newDiscount)
+      
+      if (onPromotionChange) {
+        onPromotionChange({
+          code: promoCode,
+          promotion: appliedPromotion,
+          discountAmount: newDiscount
+        })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSlots, timeSlotsData, appliedPromotion, promoApplied, promoCode])
 
   return (
     <div style={{
@@ -215,30 +370,62 @@ export default function BookingSummary({ selectedDate, selectedSlots, selectedCo
               }}
             />
             <button
-              onClick={handleApplyPromo}
-              disabled={promoApplied || !promoCode}
+              onClick={() => handleApplyPromo()}
+              disabled={promoApplied || !promoCode.trim() || validating}
               className="promo-code-button"
               style={{
                 flex: '0 0 auto',
                 padding: isVerySmallMobile ? '6px 8px' : isSmallMobile ? '8px' : isMobile ? '8px 12px' : '10px 16px',
-                background: promoApplied || !promoCode ? '#d1d5db' : '#10b981',
+                background: promoApplied || !promoCode.trim() || validating ? '#d1d5db' : '#10b981',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '6px',
                 fontSize: isVerySmallMobile ? '11px' : isSmallMobile ? '12px' : isMobile ? '13px' : '14px',
                 fontWeight: '500',
-                cursor: promoApplied || !promoCode ? 'not-allowed' : 'pointer',
+                cursor: promoApplied || !promoCode.trim() || validating ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
                 transition: 'all 0.2s'
               }}
             >
-              {promoApplied ? 'Đã áp dụng' : 'Áp dụng'}
+              {validating ? 'Đang kiểm tra...' : promoApplied ? 'Đã áp dụng' : 'Áp dụng'}
             </button>
           </div>
-          {promoApplied && (
-            <div style={{ marginTop: '8px', fontSize: '13px', color: '#059669', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <CheckCircle size={14} />
-              Giảm {Math.round(discount * 100)}%
+          {promoApplied && appliedPromotion && (
+            <div style={{ 
+              marginTop: '8px', 
+              padding: '8px 12px',
+              background: '#e6f9f0',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+                <CheckCircle size={14} style={{ color: '#059669' }} />
+                <div style={{ fontSize: '13px', color: '#059669' }}>
+                  <div style={{ fontWeight: '600' }}>{appliedPromotion.name}</div>
+                  <div style={{ fontSize: '12px', opacity: 0.8 }}>
+                    {appliedPromotion.discountType === 'percentage' 
+                      ? `Giảm ${appliedPromotion.discountValue}%`
+                      : `Giảm ${appliedPromotion.discountValue.toLocaleString('vi-VN')} VNĐ`}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleRemovePromo}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: '#6b7280'
+                }}
+                title="Xóa mã khuyến mãi"
+              >
+                <X size={14} />
+              </button>
             </div>
           )}
         </div>
@@ -256,11 +443,11 @@ export default function BookingSummary({ selectedDate, selectedSlots, selectedCo
           </span>
         </div>
         
-        {promoApplied && (
+        {promoApplied && discountAmount > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '14px', color: '#059669' }}>Giảm giá:</span>
             <span style={{ fontSize: '14px', fontWeight: '500', color: '#059669' }}>
-              -{(calculateTotal() * discount).toLocaleString('vi-VN')} VNĐ
+              -{discountAmount.toLocaleString('vi-VN')} VNĐ
             </span>
           </div>
         )}

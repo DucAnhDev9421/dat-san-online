@@ -280,12 +280,12 @@
 }
 
 .search-button {
-  padding: 16px 32px;
+  padding: 16px 24px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
   border: none;
   border-radius: 12px;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.3s;
@@ -293,8 +293,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-width: 180px;
+  gap: 8px;
+  height: 56px;
 }
 
 .search-button:hover:not(:disabled) {

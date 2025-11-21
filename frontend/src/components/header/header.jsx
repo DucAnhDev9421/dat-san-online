@@ -203,6 +203,11 @@ function Header() {
     navigate('/wallet')
   }
 
+  const handleTournamentManagementClick = () => {
+    closeUserMenu()
+    navigate('/profile/tournaments')
+  }
+
   // Helper function to get notification icon
   const getNotificationIcon = (type) => {
     const iconMap = {
@@ -350,6 +355,7 @@ function Header() {
                 onSettingsClick={handleSettingsClick}
                 onBookingHistoryClick={handleBookingHistoryClick}
                 onTopUpClick={handleTopUpClick}
+                onTournamentManagementClick={handleTournamentManagementClick}
               />
             </div>
           ) : (

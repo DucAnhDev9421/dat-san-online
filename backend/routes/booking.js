@@ -5,6 +5,7 @@ import Booking from "../models/Booking.js";
 import Court from "../models/Court.js";
 import Facility from "../models/Facility.js";
 import User from "../models/User.js";
+import Promotion from "../models/Promotion.js";
 import {
   authenticateToken,
   authorize,
@@ -277,8 +278,16 @@ router.get("/availability", async (req, res, next) => {
  */
 router.post("/", authenticateToken, async (req, res, next) => {
   try {
-    const { courtId, facilityId, date, timeSlots, contactInfo, totalAmount } =
-      req.body;
+    const {
+      courtId,
+      facilityId,
+      date,
+      timeSlots,
+      contactInfo,
+      totalAmount,
+      promotionCode,
+      discountAmount,
+    } = req.body;
 
     // Validation
     if (!courtId || !facilityId || !date || !timeSlots || !contactInfo) {
@@ -328,11 +337,45 @@ router.post("/", authenticateToken, async (req, res, next) => {
       });
     }
 
+    // Validate and process promotion code if provided
+    let promotion = null;
+    let finalDiscountAmount = discountAmount || 0;
+    
+    if (promotionCode) {
+      promotion = await Promotion.findOne({ code: promotionCode.toUpperCase() });
+      
+      if (!promotion) {
+        return res.status(400).json({
+          success: false,
+          message: "Mã khuyến mãi không tồn tại",
+        });
+      }
+
+      // Validate promotion using isValid method
+      const validation = promotion.isValid(facilityId, null);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: validation.reason || "Mã khuyến mãi không hợp lệ",
+        });
+      }
+
+      // Calculate discount amount if not provided
+      if (!discountAmount || discountAmount === 0) {
+        // Use totalAmount (subtotal) to calculate discount
+        const discountCalc = promotion.calculateDiscount(totalAmount || (court.price * timeSlots.length));
+        finalDiscountAmount = discountCalc.discountAmount;
+      }
+    }
+
     // Calculate total amount if not provided
     let calculatedAmount = totalAmount;
     if (!calculatedAmount) {
       calculatedAmount = court.price * timeSlots.length;
     }
+
+    // Apply discount to total amount
+    const finalAmount = Math.max(0, calculatedAmount - finalDiscountAmount);
 
     // Create booking
     const booking = new Booking({
@@ -342,12 +385,20 @@ router.post("/", authenticateToken, async (req, res, next) => {
       date: bookingDate,
       timeSlots,
       contactInfo,
-      totalAmount: calculatedAmount,
+      totalAmount: finalAmount,
+      promotionCode: promotionCode ? promotionCode.toUpperCase() : null,
+      discountAmount: finalDiscountAmount,
       status: "pending",
       paymentStatus: "pending",
     });
 
     await booking.save();
+
+    // Increment promotion usage count if promotion was used
+    if (promotion) {
+      promotion.usageCount = (promotion.usageCount || 0) + 1;
+      await promotion.save();
+    }
 
     // Sinh mã QR chứa bookingId (có thể mở rộng thông tin nếu cần)
     let qrPayload = { bookingId: booking._id.toString() };
@@ -844,6 +895,7 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
       courtId: booking.court._id?.toString() || booking.court.toString(),
       status,
       date: booking.date,
+      timeSlots: status === 'cancelled' ? booking.timeSlots : undefined, // Include timeSlots when cancelled
     });
 
     res.json({
@@ -933,18 +985,27 @@ router.patch(
         },
       });
 
-      res.json({
-        success: true,
-        message: "Đã hủy booking thành công",
-        data: {
-          booking,
-          refundAmount,
-          refundStatus: refundAmount > 0 ? "processing" : "not_eligible",
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
+    // Notify facility room about cancelled booking slots
+    const courtId = booking.court._id?.toString() || booking.court.toString();
+    emitToFacility(facilityId, 'booking:slot:cancelled', {
+      bookingId: booking._id,
+      facilityId,
+      courtId,
+      date: booking.date,
+      timeSlots: booking.timeSlots,
+    });
+
+    res.json({
+      success: true,
+      message: "Đã hủy booking thành công",
+      data: {
+        booking,
+        refundAmount,
+        refundStatus: refundAmount > 0 ? "processing" : "not_eligible",
+      },
+    });
+  } catch (error) {
+    next(error);
   }
 );
 

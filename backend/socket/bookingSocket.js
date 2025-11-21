@@ -116,16 +116,80 @@ const unlockSlot = (courtId, date, timeSlot, userId) => {
 
 /**
  * Unlock all slots for a user
+ * Returns array of unlocked slots with their details
  */
 const unlockUserSlots = (userId) => {
-  let unlockedCount = 0;
+  const unlockedSlots = [];
   for (const [key, lock] of lockedSlots.entries()) {
     if (lock.userId === userId) {
+      unlockedSlots.push({
+        courtId: lock.courtId,
+        date: lock.date,
+        timeSlot: lock.timeSlot,
+        key: key
+      });
       lockedSlots.delete(key);
-      unlockedCount++;
     }
   }
-  return unlockedCount;
+  return unlockedSlots;
+};
+
+/**
+ * Get all locked slots for a court (and optionally a specific date)
+ */
+const getLockedSlotsForCourt = (courtId, date = null) => {
+  const now = Date.now();
+  const lockedSlotsList = [];
+  
+  for (const [key, lock] of lockedSlots.entries()) {
+    // Skip expired locks
+    if (lock.expiresAt < now) {
+      continue;
+    }
+    
+    // Check if this lock is for the requested court
+    if (lock.courtId === courtId || key.startsWith(`${courtId}_`)) {
+      // If date is specified, filter by date
+      if (date) {
+        let lockDateStr;
+        if (typeof lock.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(lock.date)) {
+          lockDateStr = lock.date;
+        } else {
+          const d = new Date(lock.date);
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          lockDateStr = `${year}-${month}-${day}`;
+        }
+        
+        let requestedDateStr;
+        if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          requestedDateStr = date;
+        } else {
+          const d = new Date(date);
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          requestedDateStr = `${year}-${month}-${day}`;
+        }
+        
+        if (lockDateStr !== requestedDateStr) {
+          continue;
+        }
+      }
+      
+      lockedSlotsList.push({
+        courtId: lock.courtId,
+        date: lock.date,
+        timeSlot: lock.timeSlot,
+        lockedBy: lock.userId,
+        lockedAt: lock.lockedAt,
+        expiresAt: lock.expiresAt,
+      });
+    }
+  }
+  
+  return lockedSlotsList;
 };
 
 /**
@@ -222,8 +286,6 @@ export default function bookingSocket(io) {
             unlockedBy: socket.userId,
           });
         }
-
-        console.log(`🔓 Slot unlocked: User ${socket.userId} unlocked ${courtId} on ${date} at ${timeSlot}`);
       } catch (error) {
         console.error('Error in booking:unlock:', error);
         socket.emit('booking:unlock:error', { message: 'Failed to unlock slot' });
@@ -231,10 +293,33 @@ export default function bookingSocket(io) {
     });
 
     // Unlock all user's slots
-    socket.on('booking:unlock:all', () => {
-      const unlockedCount = unlockUserSlots(socket.userId);
-      socket.emit('booking:unlock:all:success', { unlockedCount });
-      console.log(`🔓 Unlocked ${unlockedCount} slots for user ${socket.userId}`);
+    socket.on('booking:unlock:all', async () => {
+      const unlockedSlots = unlockUserSlots(socket.userId);
+      
+      // Emit success to user
+      socket.emit('booking:unlock:all:success', { unlockedCount: unlockedSlots.length });
+      
+      // Broadcast each unlocked slot to other users
+      for (const slot of unlockedSlots) {
+        try {
+          // Get court to find facility
+          const court = await Court.findById(slot.courtId).populate('facility').lean();
+          const facilityId = court?.facility?._id?.toString() || court?.facility?.toString();
+          
+          // Notify others in facility room that slot is unlocked
+          if (facilityId) {
+            socket.to(`facility_${facilityId}`).to(`court_${slot.courtId}`).emit('booking:slot:unlocked', {
+              courtId: slot.courtId,
+              date: slot.date,
+              timeSlot: slot.timeSlot,
+              unlockedBy: socket.userId,
+            });
+          }
+        } catch (error) {
+          console.error(`Error broadcasting unlock for slot ${slot.key}:`, error);
+        }
+      }
+      
     });
 
     // Confirm booking (create actual booking)
@@ -334,11 +419,32 @@ export default function bookingSocket(io) {
       }
     });
 
-    // Handle disconnect - unlock all user's slots
-    socket.on('disconnect', () => {
-      const unlockedCount = unlockUserSlots(socket.userId);
-      if (unlockedCount > 0) {
-        console.log(`🔓 User ${socket.userId} disconnected - unlocked ${unlockedCount} slots`);
+    // Handle disconnect - unlock all user's slots and broadcast
+    socket.on('disconnect', async () => {
+      const unlockedSlots = unlockUserSlots(socket.userId);
+      
+      if (unlockedSlots.length > 0) {
+        // Broadcast each unlocked slot to other users
+        for (const slot of unlockedSlots) {
+          try {
+            // Get court to find facility
+            const court = await Court.findById(slot.courtId).populate('facility').lean();
+            const facilityId = court?.facility?._id?.toString() || court?.facility?.toString();
+            
+            // Notify others in facility room that slot is unlocked
+            if (facilityId) {
+              // Use io to broadcast since socket is disconnected
+              io.to(`facility_${facilityId}`).to(`court_${slot.courtId}`).emit('booking:slot:unlocked', {
+                courtId: slot.courtId,
+                date: slot.date,
+                timeSlot: slot.timeSlot,
+                unlockedBy: socket.userId,
+              });
+            }
+          } catch (error) {
+            console.error(`Error broadcasting unlock for slot ${slot.key} on disconnect:`, error);
+          }
+        }
       }
     });
   });
@@ -346,4 +452,4 @@ export default function bookingSocket(io) {
   console.log('✅ Booking socket handlers initialized');
 }
 
-export { lockSlot, unlockSlot, isSlotLocked, unlockUserSlots };
+export { lockSlot, unlockSlot, isSlotLocked, unlockUserSlots, getLockedSlotsForCourt };

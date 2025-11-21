@@ -1,5 +1,6 @@
 // routes/user.js
 import express from "express";
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import Facility from "../models/Facility.js";
 import { authenticateToken, requireAdmin } from "../middleware/auth.js";
@@ -375,6 +376,170 @@ router.delete("/avatar", async (req, res, next) => {
       success: true,
       message: "Xóa ảnh đại diện thành công.",
       data: { user: updatedUser }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// =============================================
+// ===== FAVORITES ROUTES (PHẢI ĐẶT TRƯỚC /:userId) =====
+// =============================================
+
+/**
+ * GET /api/users/favorites
+ * Lấy danh sách sân yêu thích của user hiện tại
+ */
+router.get("/favorites", async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate({
+        path: 'favorites',
+        select: '-owner -createdAt -updatedAt',
+        populate: {
+          path: 'types',
+          select: 'name'
+        }
+      })
+      .select('favorites');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        favorites: user.favorites || [],
+        count: user.favorites?.length || 0
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/users/favorites/:facilityId
+ * Thêm sân vào danh sách yêu thích
+ */
+router.post("/favorites/:facilityId", async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+
+    // Validate facilityId
+    if (!mongoose.Types.ObjectId.isValid(facilityId)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID sân không hợp lệ",
+      });
+    }
+
+    // Kiểm tra facility có tồn tại không
+    const facility = await Facility.findById(facilityId);
+    if (!facility) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy sân",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Kiểm tra đã có trong favorites chưa
+    if (user.favorites && user.favorites.includes(facilityId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Sân đã có trong danh sách yêu thích",
+      });
+    }
+
+    // Thêm vào favorites
+    if (!user.favorites) {
+      user.favorites = [];
+    }
+    user.favorites.push(facilityId);
+    await user.save();
+
+    logAudit("ADD_FAVORITE", req.user._id, req, {
+      facilityId: facilityId,
+      facilityName: facility.name
+    });
+
+    res.json({
+      success: true,
+      message: "Đã thêm sân vào danh sách yêu thích",
+      data: {
+        facilityId: facilityId,
+        favoritesCount: user.favorites.length
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/users/favorites/:facilityId
+ * Xóa sân khỏi danh sách yêu thích
+ */
+router.delete("/favorites/:facilityId", async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+
+    // Validate facilityId
+    if (!mongoose.Types.ObjectId.isValid(facilityId)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID sân không hợp lệ",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Kiểm tra có trong favorites không
+    if (!user.favorites || !user.favorites.includes(facilityId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Sân không có trong danh sách yêu thích",
+      });
+    }
+
+    // Xóa khỏi favorites
+    user.favorites = user.favorites.filter(
+      (id) => id.toString() !== facilityId
+    );
+    await user.save();
+
+    const facility = await Facility.findById(facilityId);
+
+    logAudit("REMOVE_FAVORITE", req.user._id, req, {
+      facilityId: facilityId,
+      facilityName: facility?.name || 'Unknown'
+    });
+
+    res.json({
+      success: true,
+      message: "Đã xóa sân khỏi danh sách yêu thích",
+      data: {
+        facilityId: facilityId,
+        favoritesCount: user.favorites.length
+      },
     });
   } catch (error) {
     next(error);

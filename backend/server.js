@@ -6,6 +6,14 @@ import cookieParser from "cookie-parser";
 import session from "express-session";
 import passport from "passport";
 import { initializeSocket } from "./socket/index.js";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+dotenv.config();
+
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.error("❌ MongoDB error:", err));
+
 
 // Import configurations
 import { config, validateConfig } from "./config/config.js";
@@ -30,8 +38,10 @@ import courtTypeRoutes from "./routes/courtType.js";
 import reviewRoutes from "./routes/review.js";
 import notificationRoutes from "./routes/notification.js";
 import provinceRoutes from "./routes/province.js";
+import promotionRoutes from "./routes/promotion.js";
 import analyticsRoutes from "./routes/analytics.js";
 import walletRouters from "./routes/wallet.js";
+import leagueRoutes from "./routes/league.js";
 import User from "./models/User.js";
 import loyaltyRoutes from "./routes/loyalty.js";
 import referralRoutes from "./routes/referral.js";
@@ -106,6 +116,10 @@ app.get("/health", (req, res) => {
   });
 });
 
+app.get("/", (req, res) => {
+  res.send("✅ Backend is live and healthy!");
+});
+
 // Favicon handler - prevent 404 errors for browser favicon requests
 app.get("/favicon.ico", (req, res) => {
   res.status(204).end();
@@ -125,10 +139,12 @@ app.use("/api/court-types", courtTypeRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/provinces", provinceRoutes);
+app.use("/api/promotions", promotionRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/wallet", walletRouters);
 app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/referrals", referralRoutes);
+app.use("/api/leagues", leagueRoutes);
 // 404 handler
 app.use(notFound);
 
