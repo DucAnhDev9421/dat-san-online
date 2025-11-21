@@ -2,6 +2,13 @@ import mongoose from "mongoose";
 
 const rewardSchema = new mongoose.Schema(
   {
+    // Cơ sở cung cấp phần thưởng
+    facility: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Facility",
+      required: true,
+    },
+    //  Tên phần thưởng
     name: { type: String, required: true },
     description: { type: String },
     pointCost: { type: Number, required: true, min: 1 },

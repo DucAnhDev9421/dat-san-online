@@ -1178,19 +1178,35 @@ router.post(
       description: `Thanh toan don ${booking.bookingCode}`,
     });
 
-    // 4. Tạo bản ghi Payment (để đồng bộ)
+    // 4. Tạo hoặc Cập nhật bản ghi Payment
     const paymentId = `WALLET_${booking._id}_${new Date().getTime()}`;
-    await Payment.create({
-      user: user._id,
-      booking: booking._id,
-      amount: totalAmount,
-      method: "wallet",
-      status: "success",
-      paymentId: paymentId,
-      transactionId: paymentId, // Tự gán
-      orderInfo: `Thanh toan bang vi cho ${booking.bookingCode}`,
-      paidAt: new Date(),
-    });
+
+    // Kiểm tra xem đã có payment nào cho booking này chưa
+    let payment = await Payment.findOne({ booking: booking._id });
+
+    if (payment) {
+      // Nếu đã có (ví dụ do tạo QR trước đó), thì cập nhật lại thành wallet
+      payment.method = "wallet";
+      payment.status = "success";
+      payment.paymentId = paymentId;
+      payment.transactionId = paymentId;
+      payment.orderInfo = `Thanh toan bang vi cho ${booking.bookingCode}`;
+      payment.paidAt = new Date();
+      await payment.save();
+    } else {
+      // Nếu chưa có thì tạo mới
+      await Payment.create({
+        user: user._id,
+        booking: booking._id,
+        amount: totalAmount,
+        method: "wallet",
+        status: "success",
+        paymentId: paymentId,
+        transactionId: paymentId,
+        orderInfo: `Thanh toan bang vi cho ${booking.bookingCode}`,
+        paidAt: new Date(),
+      });
+    }
 
     // 5. Cập nhật Booking
     booking.paymentStatus = "paid";

@@ -23,7 +23,7 @@ const paymentSchema = new mongoose.Schema(
     // Phương thức (sẽ dùng ở Giai đoạn 2)
     method: {
       type: String,
-      enum: ["cash", "vnpay", "momo", "payos"],
+      enum: ["cash", "vnpay", "momo", "payos", "wallet"],
       required: true,
     },
     // Trạng thái thanh toán
