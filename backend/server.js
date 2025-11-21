@@ -33,6 +33,8 @@ import provinceRoutes from "./routes/province.js";
 import analyticsRoutes from "./routes/analytics.js";
 import walletRouters from "./routes/wallet.js";
 import User from "./models/User.js";
+import loyaltyRoutes from "./routes/loyalty.js";
+import referralRoutes from "./routes/referral.js";
 
 const app = express();
 
@@ -125,6 +127,8 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/provinces", provinceRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/wallet", walletRouters);
+app.use("/api/loyalty", loyaltyRoutes);
+app.use("/api/referrals", referralRoutes);
 // 404 handler
 app.use(notFound);
 
