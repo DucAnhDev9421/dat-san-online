@@ -4,7 +4,7 @@ import { leagueApi } from '../../../api/leagueApi'
 
 const TournamentContext = createContext(null)
 
-export const useTournament = () => {
+const useTournament = () => {
   const context = useContext(TournamentContext)
   if (!context) {
     throw new Error('useTournament must be used within TournamentProvider')
@@ -12,7 +12,7 @@ export const useTournament = () => {
   return context
 }
 
-export const TournamentProvider = ({ children }) => {
+const TournamentProvider = ({ children }) => {
   const { id } = useParams()
   const [tournament, setTournament] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -31,6 +31,7 @@ export const TournamentProvider = ({ children }) => {
           name: league.name,
           format: league.format,
           sport: league.sport,
+          creator: league.creator || null, // Include creator object
           creatorName: league.creatorName || (league.creator?.name || league.creator?.email),
           image: league.image || '/sports-meeting.webp',
           banner: league.banner || league.image || '/sports-meeting.webp',
@@ -38,6 +39,8 @@ export const TournamentProvider = ({ children }) => {
           endDate: league.endDate,
           location: league.location || '',
           address: league.address || '',
+          facility: league.facility || null, // Include facility with owner
+          approvalStatus: league.approvalStatus || null,
           participants: league.participants || 0,
           maxParticipants: league.maxParticipants || 0,
           prize: league.prize || '',
@@ -49,6 +52,7 @@ export const TournamentProvider = ({ children }) => {
           phone: league.phone || '',
           tournamentType: league.tournamentType,
           membersPerTeam: league.membersPerTeam,
+          type: league.type || 'PRIVATE', // Map type from backend
           teams: league.teams || [],
           matches: league.matches || []
         }
@@ -91,3 +95,4 @@ export const TournamentProvider = ({ children }) => {
   )
 }
 
+export { useTournament, TournamentProvider }

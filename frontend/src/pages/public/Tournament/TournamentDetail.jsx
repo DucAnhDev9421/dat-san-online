@@ -2,6 +2,7 @@ import React from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { Users, Eye } from 'lucide-react'
 import { TournamentProvider, useTournament } from './TournamentContext'
+import { useAuth } from '../../../contexts/AuthContext'
 import TournamentRoutes from './TournamentRoutes'
 import '../../../styles/TournamentDetail.css'
 
@@ -10,6 +11,7 @@ const TournamentDetailContent = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { tournament, loading } = useTournament()
+  const { user } = useAuth()
 
   const getStatusBadge = (status) => {
     const badges = {
@@ -25,6 +27,8 @@ const TournamentDetailContent = () => {
   const getCurrentTab = () => {
     const path = location.pathname
     if (path.includes('/custom')) return 'custom'
+    if (path.includes('/register')) return 'register'
+    if (path.includes('/registrations')) return 'registrations'
     if (path.includes('/teams')) return 'teams'
     if (path.includes('/standings')) return 'standings'
     if (path.includes('/schedule')) return 'schedule'
@@ -34,6 +38,27 @@ const TournamentDetailContent = () => {
   
   // Kiểm tra format giải đấu
   const isRoundRobin = tournament?.format === 'Vòng tròn' || tournament?.format === 'round-robin'
+
+  // Kiểm tra quyền: chỉ owner của sân hoặc người tạo giải mới thấy tab "Đội tham gia" và "Tùy chỉnh"
+  const canManageTournament = React.useMemo(() => {
+    if (!user || !tournament) return false
+    
+    const userId = user._id || user.id
+    const creatorId = tournament.creator?._id || tournament.creator?.id || tournament.creator
+    const facilityOwnerId = tournament.facility?.owner?._id || tournament.facility?.owner?.id || tournament.facility?.owner
+    
+    // Kiểm tra nếu là người tạo giải
+    if (creatorId && String(creatorId) === String(userId)) {
+      return true
+    }
+    
+    // Kiểm tra nếu là owner của facility
+    if (facilityOwnerId && String(facilityOwnerId) === String(userId)) {
+      return true
+    }
+    
+    return false
+  }, [user, tournament])
 
   const currentTab = getCurrentTab()
 
@@ -142,6 +167,22 @@ const TournamentDetailContent = () => {
               Tổng quan
               {currentTab === 'overview' && <span className="tab-indicator"></span>}
             </button>
+            {tournament?.registrationDeadline && new Date(tournament.registrationDeadline) > new Date() && (
+              <button 
+                className={`hero-tab-button ${currentTab === 'register' ? 'active' : ''}`}
+                onClick={() => handleTabClick('register')}
+              >
+                Đăng ký thi đấu
+                {currentTab === 'register' && <span className="tab-indicator"></span>}
+              </button>
+            )}
+            <button 
+              className={`hero-tab-button ${currentTab === 'registrations' ? 'active' : ''}`}
+              onClick={() => handleTabClick('registrations')}
+            >
+              Danh sách đăng ký
+              {currentTab === 'registrations' && <span className="tab-indicator"></span>}
+            </button>
             <button 
               className={`hero-tab-button ${currentTab === 'schedule' ? 'active' : ''}`}
               onClick={() => handleTabClick('schedule')}
@@ -158,20 +199,24 @@ const TournamentDetailContent = () => {
                 {currentTab === 'standings' && <span className="tab-indicator"></span>}
               </button>
             )}
-            <button 
-              className={`hero-tab-button ${currentTab === 'teams' ? 'active' : ''}`}
-              onClick={() => handleTabClick('teams')}
-            >
-              Đội tham gia
-              {currentTab === 'teams' && <span className="tab-indicator"></span>}
-            </button>
-            <button 
-              className={`hero-tab-button ${currentTab === 'custom' ? 'active' : ''}`}
-              onClick={() => handleTabClick('custom')}
-            >
-              Tùy chỉnh
-              {currentTab === 'custom' && <span className="tab-indicator"></span>}
-            </button>
+            {canManageTournament && (
+              <button 
+                className={`hero-tab-button ${currentTab === 'teams' ? 'active' : ''}`}
+                onClick={() => handleTabClick('teams')}
+              >
+                Đội tham gia
+                {currentTab === 'teams' && <span className="tab-indicator"></span>}
+              </button>
+            )}
+            {canManageTournament && (
+              <button 
+                className={`hero-tab-button ${currentTab === 'custom' ? 'active' : ''}`}
+                onClick={() => handleTabClick('custom')}
+              >
+                Tùy chỉnh
+                {currentTab === 'custom' && <span className="tab-indicator"></span>}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import { leagueApi } from '../../api/leagueApi'
 import TournamentFilterBar from './Tournament/components/TournamentFilterBar'
 import TournamentViewControls from './Tournament/components/TournamentViewControls'
 import TournamentGrid from './Tournament/components/TournamentGrid'
@@ -20,143 +21,65 @@ const Tournament = () => {
     sort: 'default' // default, updated, views
   })
 
-  // Mock data - sẽ thay thế bằng API call sau
+  // Fetch public tournaments from API
   useEffect(() => {
     const fetchTournaments = async () => {
       try {
         setLoading(true)
-        // TODO: Thay thế bằng API call thực tế
-        // const result = await tournamentApi.getTournaments()
         
-        // Mock data
-        const mockTournaments = [
-          {
-            id: 1,
-            name: 'Giải Bóng Đá Cúp Mùa Hè 2025',
-            sport: 'Bóng đá',
-            format: 'single-elimination',
-            image: '/sports-meeting.webp',
-            startDate: '2025-06-01',
-            endDate: '2025-07-15',
-            location: 'Hà Nội',
-            participants: 32,
-            maxParticipants: 32,
-            prize: '50,000,000 VNĐ',
-            status: 'upcoming',
-            description: 'Giải đấu bóng đá lớn nhất mùa hè với giải thưởng hấp dẫn',
-            registrationDeadline: '2025-05-25',
-            views: 1250,
-            createdAt: '2025-01-15',
-            updatedAt: '2025-01-20'
-          },
-          {
-            id: 2,
-            name: 'Giải Bóng Rổ Thanh Niên',
-            sport: 'Bóng rổ',
-            format: 'round-robin',
-            image: '/all-sports-banner.webp',
-            startDate: '2025-05-15',
-            endDate: '2025-06-30',
-            location: 'TP. Hồ Chí Minh',
-            participants: 24,
-            maxParticipants: 24,
-            prize: '30,000,000 VNĐ',
-            status: 'upcoming',
-            description: 'Giải đấu dành cho các đội bóng rổ trẻ tuổi',
-            registrationDeadline: '2025-05-10',
-            views: 980,
-            createdAt: '2025-01-10',
-            updatedAt: '2025-01-18'
-          },
-          {
-            id: 3,
-            name: 'Giải Bóng Chuyền Cộng Đồng',
-            sport: 'Bóng chuyền',
-            format: 'single-elimination',
-            image: '/pngtree-sports-poster-background.jpg',
-            startDate: '2025-04-20',
-            endDate: '2025-05-20',
-            location: 'Đà Nẵng',
-            participants: 16,
-            maxParticipants: 16,
-            prize: '20,000,000 VNĐ',
-            status: 'ongoing',
-            description: 'Giải đấu bóng chuyền cộng đồng thân thiện',
-            registrationDeadline: '2025-04-15',
-            views: 2100,
-            createdAt: '2025-01-05',
-            updatedAt: '2025-01-22'
-          },
-          {
-            id: 4,
-            name: 'Giải Bóng Đá Mini 5x5',
-            sport: 'Bóng đá',
-            format: 'round-robin',
-            image: '/sports-meeting.webp',
-            startDate: '2025-07-01',
-            endDate: '2025-07-31',
-            location: 'Hải Phòng',
-            participants: 0,
-            maxParticipants: 16,
-            prize: '15,000,000 VNĐ',
-            status: 'upcoming',
-            description: 'Giải đấu bóng đá mini sân 5x5',
-            registrationDeadline: '2025-06-25',
-            views: 650,
-            createdAt: '2025-01-20',
-            updatedAt: '2025-01-20'
-          },
-          {
-            id: 5,
-            name: 'Giải Bóng Rổ 3x3',
-            sport: 'Bóng rổ',
-            format: 'single-elimination',
-            image: '/all-sports-banner.webp',
-            startDate: '2025-08-01',
-            endDate: '2025-08-20',
-            location: 'Cần Thơ',
-            participants: 8,
-            maxParticipants: 16,
-            prize: '25,000,000 VNĐ',
-            status: 'upcoming',
-            description: 'Giải đấu bóng rổ 3x3 đường phố',
-            registrationDeadline: '2025-07-25',
-            views: 1450,
-            createdAt: '2025-01-18',
-            updatedAt: '2025-01-21'
-          },
-          {
-            id: 6,
-            name: 'Giải Bóng Đá Nữ',
-            sport: 'Bóng đá',
-            format: 'round-robin',
-            image: '/pngtree-sports-poster-background.jpg',
-            startDate: '2025-09-01',
-            endDate: '2025-09-30',
-            location: 'Hà Nội',
-            participants: 12,
-            maxParticipants: 16,
-            prize: '40,000,000 VNĐ',
-            status: 'upcoming',
-            description: 'Giải đấu bóng đá dành riêng cho nữ',
-            registrationDeadline: '2025-08-25',
-            views: 1890,
-            createdAt: '2025-01-12',
-            updatedAt: '2025-01-19'
-          }
-        ]
+        // Map frontend filters to API params
+        const apiParams = {
+          page: 1,
+          limit: 100, // Lấy nhiều để filter ở frontend
+          ...(filters.status !== 'all' && { status: filters.status }),
+          ...(filters.sport !== 'all' && { sport: filters.sport }),
+          ...(filters.format !== 'all' && { format: filters.format }),
+          ...(searchQuery.trim() && { search: searchQuery.trim() }),
+          ...(filters.sort !== 'default' && { sort: filters.sort === 'updated' ? 'updated' : filters.sort === 'views' ? 'views' : 'createdAt' })
+        }
         
-        setTournaments(mockTournaments)
+        const result = await leagueApi.getPublicLeagues(apiParams)
+        
+        if (result.success) {
+          // Map API data to frontend format
+          const mappedTournaments = (result.data || []).map(league => ({
+            id: league._id || league.id,
+            name: league.name,
+            sport: league.sport,
+            format: league.format === 'Loại Trực Tiếp' ? 'single-elimination' : 
+                    league.format === 'Vòng tròn' ? 'round-robin' : league.format,
+            image: league.image || league.banner || '/sports-meeting.webp',
+            startDate: league.startDate,
+            endDate: league.endDate,
+            location: league.location || league.facility?.name || '',
+            address: league.address || league.facility?.address || '',
+            participants: league.participants || 0,
+            maxParticipants: league.maxParticipants || 0,
+            prize: league.prize || '',
+            status: league.status || 'upcoming',
+            description: league.description || league.fullDescription || '',
+            registrationDeadline: league.registrationDeadline,
+            views: league.views || 0,
+            createdAt: league.createdAt,
+            updatedAt: league.updatedAt,
+            creatorName: league.creatorName || league.creator?.name || league.creator?.email || ''
+          }))
+          
+          setTournaments(mappedTournaments)
+        } else {
+          throw new Error(result.message || 'Không thể tải danh sách giải đấu')
+        }
       } catch (error) {
         console.error('Error fetching tournaments:', error)
-        toast.error('Có lỗi xảy ra khi tải danh sách giải đấu')
+        toast.error(error.message || 'Có lỗi xảy ra khi tải danh sách giải đấu')
+        setTournaments([])
       } finally {
         setLoading(false)
       }
     }
 
     fetchTournaments()
-  }, [])
+  }, [filters.status, filters.sport, filters.format, filters.sort])
 
   // Filter and sort tournaments
   const filteredTournaments = useMemo(() => {

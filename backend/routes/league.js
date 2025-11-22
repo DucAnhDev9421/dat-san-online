@@ -2,17 +2,410 @@
 import express from "express";
 import mongoose from "mongoose";
 import League from "../models/League.js";
+import Facility from "../models/Facility.js";
+import Court from "../models/Court.js";
 import {
   authenticateToken,
   requireAdmin,
+  authorize,
 } from "../middleware/auth.js";
 import { logAudit } from "../utils/auditLogger.js";
-import { uploadLeagueImage } from "../config/cloudinary.js";
+import { uploadLeagueImage, uploadTeamLogo, cloudinaryUtils } from "../config/cloudinary.js";
+import ExcelJS from "exceljs";
+import multer from "multer";
 
 const router = express.Router();
 
+// Public route để lấy danh sách giải đấu public (không cần đăng nhập)
+/**
+ * GET /api/leagues/public
+ * Lấy danh sách giải đấu công khai
+ * Public (không cần đăng nhập)
+ */
+router.get("/public", async (req, res, next) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 20, 
+      status, 
+      sport, 
+      format,
+      search,
+      sort = 'createdAt' // createdAt, views, startDate
+    } = req.query;
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Build query
+    // Lấy giải đấu PUBLIC và:
+    // - Đã được approve (approvalStatus: "approved")
+    // - Hoặc chưa có approvalStatus (null) - giải không cần duyệt
+    // - Hoặc có approvalStatus: "pending" nhưng không có facility (owner tự tạo, không cần duyệt)
+    const query = {
+      type: "PUBLIC",
+      $or: [
+        { approvalStatus: "approved" },
+        { approvalStatus: null },
+        { 
+          approvalStatus: "pending",
+          facility: null // Giải do owner tạo không có facility (tự quản lý)
+        }
+      ]
+    };
+    
+    // Filter by status
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    // Filter by sport
+    if (sport && sport !== 'all') {
+      query.sport = sport;
+    }
+    
+    // Filter by format
+    if (format && format !== 'all') {
+      const formatMapping = {
+        'single-elimination': 'Loại Trực Tiếp',
+        'round-robin': 'Vòng tròn',
+        'knockout': 'Loại Trực Tiếp'
+      };
+      query.format = formatMapping[format] || format;
+    }
+    
+    // Search by name
+    if (search && search.trim()) {
+      query.name = { $regex: search.trim(), $options: 'i' };
+    }
+    
+    // Build sort
+    let sortOption = {};
+    switch (sort) {
+      case 'views':
+        sortOption = { views: -1 };
+        break;
+      case 'startDate':
+        sortOption = { startDate: 1 };
+        break;
+      case 'updated':
+        sortOption = { updatedAt: -1 };
+        break;
+      default:
+        sortOption = { createdAt: -1 };
+    }
+    
+    const leagues = await League.find(query)
+      .populate("creator", "name email avatar")
+      .populate("facility", "name address")
+      .select("-teams -matches") // Không trả về teams và matches để giảm dữ liệu
+      .sort(sortOption)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+    
+    const total = await League.countDocuments(query);
+    
+    res.json({
+      success: true,
+      data: leagues,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/leagues/:id/register/template
+ * Tải file mẫu Excel để thêm thành viên khi đăng ký
+ * Public (cần đăng nhập)
+ */
+router.get("/:id/register/template", authenticateToken, async (req, res, next) => {
+  try {
+    const league = await League.findById(req.params.id);
+    if (!league) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy giải đấu",
+      });
+    }
+
+    const isFootball = league.sport === 'Bóng đá';
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Danh sách thành viên');
+
+    // Định nghĩa cột dựa trên môn thể thao
+    if (isFootball) {
+      worksheet.columns = [
+        { header: 'Số áo', key: 'jerseyNumber', width: 15 },
+        { header: 'Họ tên đầy đủ', key: 'name', width: 30 },
+        { header: 'Số điện thoại', key: 'phone', width: 20 },
+        { header: 'Vị trí thi đấu', key: 'position', width: 25 }
+      ];
+    } else {
+      worksheet.columns = [
+        { header: 'Họ tên đầy đủ', key: 'name', width: 30 },
+        { header: 'Số điện thoại', key: 'phone', width: 20 },
+        { header: 'Vị trí thi đấu', key: 'position', width: 25 }
+      ];
+    }
+
+    // Style header
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    // Thêm dữ liệu mẫu
+    if (isFootball) {
+      worksheet.addRow(['1', 'Nguyễn Văn A', '0123456789', 'Thủ môn']);
+      worksheet.addRow(['2', 'Trần Thị B', '0987654321', 'Hậu vệ']);
+      worksheet.addRow(['3', 'Lê Văn C', '0111222333', 'Tiền vệ']);
+      worksheet.addRow(['4', 'Phạm Thị D', '0444555666', 'Tiền đạo']);
+    } else {
+      worksheet.addRow(['Nguyễn Văn A', '0123456789', 'Khác']);
+      worksheet.addRow(['Trần Thị B', '0987654321', 'Khác']);
+      worksheet.addRow(['Lê Văn C', '0111222333', 'Khác']);
+      worksheet.addRow(['Phạm Thị D', '0444555666', 'Khác']);
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="mau-danh-sach-thanh-vien.xlsx"');
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/leagues/:id/register
+ * Đăng ký tham gia giải đấu (tạo đội mới)
+ * Public (cần đăng nhập)
+ */
+router.post("/:id/register", authenticateToken, async (req, res, next) => {
+  try {
+    const leagueId = req.params.id;
+    const userId = req.user._id;
+    const { teamData, members } = req.body;
+
+    const league = await League.findById(leagueId);
+    if (!league) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy giải đấu",
+      });
+    }
+
+    // Kiểm tra giải đấu có cho phép đăng ký không
+    if (!league.registrationDeadline || new Date(league.registrationDeadline) < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "Đã hết hạn đăng ký",
+      });
+    }
+
+    // Kiểm tra số đội đã đăng ký
+    if (league.participants >= league.maxParticipants) {
+      return res.status(400).json({
+        success: false,
+        message: "Giải đấu đã đủ số đội tham gia",
+      });
+    }
+
+    // Kiểm tra user đã đăng ký chưa
+    const existingTeam = league.teams.find(team => 
+      team.contactPhone === teamData.contactPhone || 
+      (team.members && team.members.some(m => m.phone === teamData.contactPhone))
+    );
+
+    if (existingTeam) {
+      return res.status(400).json({
+        success: false,
+        message: "Bạn đã đăng ký tham gia giải đấu này",
+      });
+    }
+
+    // Tạo team ID mới
+    const newTeamId = league.teams.length > 0 
+      ? Math.max(...league.teams.map(t => t.id || 0)) + 1 
+      : 1;
+
+    // Tạo đội mới
+    const newTeam = {
+      id: newTeamId,
+      teamNumber: teamData.teamNumber || `#${newTeamId}`,
+      contactPhone: teamData.contactPhone || '',
+      contactName: teamData.contactName || '',
+      logo: null,
+      logoPublicId: null,
+      registrationStatus: "pending", // Mặc định là đang xét
+      registeredAt: new Date(),
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      members: members || []
+    };
+
+    // Thêm đội vào danh sách
+    league.teams.push(newTeam);
+    league.participants = league.teams.length;
+
+    await league.save();
+
+    // Log audit
+    await logAudit(
+      "REGISTER_TO_LEAGUE",
+      userId,
+      req,
+      {
+        leagueId: leagueId,
+        leagueName: league.name,
+        teamId: newTeamId,
+        teamName: teamData.teamNumber
+      }
+    );
+
+    res.json({
+      success: true,
+      message: "Đăng ký tham gia giải đấu thành công",
+      data: {
+        team: newTeam,
+        league: league
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Tất cả các route ở đây đều yêu cầu đăng nhập
 router.use(authenticateToken);
+
+// Cấu hình multer cho upload file Excel
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv'
+    ];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Chỉ chấp nhận file Excel (.xlsx, .xls) hoặc CSV'));
+    }
+  }
+});
+
+/**
+ * POST /api/leagues/:id/register/parse-members
+ * Parse Excel file để lấy danh sách thành viên khi đăng ký
+ * Public (cần đăng nhập)
+ */
+router.post("/:id/register/parse-members", authenticateToken, upload.single("file"), async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Không có file được upload",
+      });
+    }
+
+    const league = await League.findById(req.params.id);
+    if (!league) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy giải đấu",
+      });
+    }
+
+    const isFootball = league.sport === 'Bóng đá';
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+
+    const worksheet = workbook.getWorksheet(1) || workbook.worksheets[0];
+    if (!worksheet) {
+      return res.status(400).json({
+        success: false,
+        message: "File Excel không hợp lệ",
+      });
+    }
+
+    const members = [];
+    const minMembers = league.membersPerTeam || 0;
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // Skip header
+
+      let member = {
+        name: '',
+        phone: '',
+        position: '',
+        jerseyNumber: '',
+        avatar: null
+      };
+
+      if (isFootball) {
+        const jerseyNumber = row.getCell(1).value?.toString()?.trim() || '';
+        const name = row.getCell(2).value?.toString()?.trim() || '';
+        const phone = row.getCell(3).value?.toString()?.trim() || '';
+        const position = row.getCell(4).value?.toString()?.trim() || '';
+
+        if (name) {
+          member.jerseyNumber = jerseyNumber;
+          member.name = name;
+          member.phone = phone;
+          member.position = position;
+          members.push(member);
+        }
+      } else {
+        const name = row.getCell(1).value?.toString()?.trim() || '';
+        const phone = row.getCell(2).value?.toString()?.trim() || '';
+        const position = row.getCell(3).value?.toString()?.trim() || '';
+
+        if (name) {
+          member.name = name;
+          member.phone = phone;
+          member.position = position;
+          members.push(member);
+        }
+      }
+    });
+
+    if (members.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "File không chứa dữ liệu hợp lệ",
+      });
+    }
+
+    if (members.length < minMembers) {
+      return res.status(400).json({
+        success: false,
+        message: `Cần ít nhất ${minMembers} thành viên. File chỉ có ${members.length} thành viên.`,
+      });
+    }
+
+    res.json({
+      success: true,
+      data: members,
+      message: `Đã parse ${members.length} thành viên từ file`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * Middleware kiểm tra quyền sở hữu (Chỉ người tạo giải đấu)
@@ -130,6 +523,16 @@ router.get("/:id", async (req, res, next) => {
 
     const league = await League.findById(req.params.id)
       .populate("creator", "name email avatar")
+      .populate({
+        path: "facility",
+        select: "name address owner",
+        populate: {
+          path: "owner",
+          select: "name email _id"
+        }
+      })
+      .populate("courtId", "name")
+      .populate("approvedBy", "name email")
       .lean();
 
     if (!league) {
@@ -181,6 +584,7 @@ router.post("/", async (req, res, next) => {
       registrationDeadline,
       teams,
       matches,
+      type, // PUBLIC or PRIVATE
     } = req.body;
 
     // Validation
@@ -225,7 +629,8 @@ router.post("/", async (req, res, next) => {
         : null,
       teams: teams || [],
       matches: matches || [],
-      type: "PRIVATE",
+      type: type || "PRIVATE", // Nhận type từ request body, mặc định là PRIVATE
+      approvalStatus: req.body.facility ? "pending" : undefined, // Nếu có facility thì chờ duyệt
     });
 
     await newLeague.save();
@@ -285,6 +690,7 @@ router.put("/:id", checkOwnership, async (req, res, next) => {
       registrationDeadline,
       teams,
       matches,
+      type, // PUBLIC or PRIVATE
     } = req.body;
 
     const updateData = {};
@@ -340,6 +746,31 @@ router.put("/:id", checkOwnership, async (req, res, next) => {
         : null;
     if (teams !== undefined) updateData.teams = teams;
     if (matches !== undefined) updateData.matches = matches;
+    if (type !== undefined) {
+      if (!["PUBLIC", "PRIVATE"].includes(type)) {
+        return res.status(400).json({
+          success: false,
+          message: "Type không hợp lệ (phải là 'PUBLIC' hoặc 'PRIVATE')",
+        });
+      }
+      updateData.type = type;
+    }
+    if (req.body.facility !== undefined) {
+      if (req.body.facility === null || req.body.facility === '') {
+        updateData.facility = null;
+      } else {
+        updateData.facility = req.body.facility;
+      }
+    }
+    if (req.body.approvalStatus !== undefined) {
+      if (!["pending", "approved", "rejected"].includes(req.body.approvalStatus)) {
+        return res.status(400).json({
+          success: false,
+          message: "Trạng thái duyệt không hợp lệ (phải là 'pending', 'approved', hoặc 'rejected')",
+        });
+      }
+      updateData.approvalStatus = req.body.approvalStatus;
+    }
 
     // Kiểm tra ngày hợp lệ nếu có cả startDate và endDate
     if (updateData.startDate && updateData.endDate) {
@@ -437,6 +868,113 @@ router.delete("/:id", checkOwnershipOrAdmin, async (req, res, next) => {
 });
 
 /**
+ * DELETE /api/leagues/:id/teams/:teamId
+ * Xóa một đội khỏi giải đấu
+ * User (người tạo)
+ */
+router.delete("/:id/teams/:teamId", checkOwnership, async (req, res, next) => {
+  try {
+    const leagueId = req.params.id;
+    const teamIdParam = req.params.teamId;
+    const teamId = parseInt(teamIdParam);
+    const isTeamIdNumber = !isNaN(teamId);
+
+    const league = await League.findById(leagueId);
+
+    if (!league) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy giải đấu",
+      });
+    }
+
+    const minTeams = 4;
+    const validTeams = league.teams.filter(
+      (team) => team.teamNumber || team.contactPhone || team.contactName
+    );
+    
+    if (validTeams.length > 0 && validTeams.length <= minTeams) {
+      return res.status(400).json({
+        success: false,
+        message: `Phải có ít nhất ${minTeams} đội tham gia`,
+      });
+    }
+    
+    if (league.teams.length === 0 && league.maxParticipants <= minTeams) {
+      return res.status(400).json({
+        success: false,
+        message: `Phải có ít nhất ${minTeams} đội`,
+      });
+    }
+
+    const teamIndex = league.teams.findIndex(
+      (team) => {
+        if (isTeamIdNumber) {
+          const teamIdNum = typeof team.id === 'number' ? team.id : (team.id ? parseInt(team.id) : null);
+          if (teamIdNum !== null && !isNaN(teamIdNum) && teamIdNum === teamId) {
+            return true;
+          }
+        }
+        
+        const teamIdStr = team._id?.toString();
+        if (teamIdStr && teamIdStr === teamIdParam) {
+          return true;
+        }
+        
+        return false;
+      }
+    );
+
+    if (teamIndex === -1) {
+      if (isTeamIdNumber && league.maxParticipants > minTeams) {
+        league.maxParticipants = Math.max(minTeams, league.maxParticipants - 1);
+        await league.save();
+        
+        await logAudit("DELETE_TEAM", req.user._id, req, {
+          leagueId: leagueId,
+          leagueName: league.name,
+          teamId: teamId,
+          action: "decreased_maxParticipants",
+        });
+
+        return res.json({
+          success: true,
+          message: "Xóa đội thành công (giảm số đội tối đa)",
+          data: league,
+        });
+      }
+      
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy đội",
+      });
+    }
+
+    league.teams.splice(teamIndex, 1);
+    
+    if (league.maxParticipants > minTeams && league.teams.length < league.maxParticipants) {
+      league.maxParticipants = Math.max(minTeams, league.teams.length);
+    }
+    
+    await league.save();
+
+    await logAudit("DELETE_TEAM", req.user._id, req, {
+      leagueId: leagueId,
+      leagueName: league.name,
+      teamId: teamId,
+    });
+
+    res.json({
+      success: true,
+      message: "Xóa đội thành công",
+      data: league,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/leagues/:id/upload
  * Upload image cho giải đấu
  * User (người tạo)
@@ -490,6 +1028,2298 @@ router.post(
           imageUrl: imageUrl,
           league: updatedLeague,
         },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/leagues/:id/teams/template
+ * Tải file mẫu Excel cho danh sách đội
+ * User (người tạo)
+ */
+router.get("/:id/teams/template", checkOwnership, async (req, res, next) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Danh sách đội');
+
+    worksheet.columns = [
+      { header: 'Tên đội', key: 'teamNumber', width: 20 },
+      { header: 'SĐT liên hệ', key: 'contactPhone', width: 20 },
+      { header: 'Tên người liên hệ', key: 'contactName', width: 30 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    worksheet.addRow({ teamNumber: '#1', contactPhone: '0123456789', contactName: 'Nguyễn Văn A' });
+    worksheet.addRow({ teamNumber: '#2', contactPhone: '0987654321', contactName: 'Trần Thị B' });
+    worksheet.addRow({ teamNumber: '#3', contactPhone: '0111222333', contactName: 'Lê Văn C' });
+    worksheet.addRow({ teamNumber: '#4', contactPhone: '0444555666', contactName: 'Phạm Thị D' });
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="mau-danh-sach-doi.xlsx"'
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/leagues/:id/teams/import
+ * Import danh sách đội từ file Excel
+ * User (người tạo)
+ */
+router.post(
+  "/:id/teams/import",
+  checkOwnership,
+  upload.single("file"),
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Không có file được upload",
+        });
+      }
+
+      const league = await League.findById(req.params.id);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(req.file.buffer);
+
+      const worksheet = workbook.getWorksheet(1) || workbook.worksheets[0];
+      if (!worksheet) {
+        return res.status(400).json({
+          success: false,
+          message: "File Excel không hợp lệ",
+        });
+      }
+
+      const teams = [];
+      const minTeams = 4;
+
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+
+        const teamNumber = row.getCell(1).value?.toString()?.trim() || '';
+        const contactPhone = row.getCell(2).value?.toString()?.trim() || '';
+        const contactName = row.getCell(3).value?.toString()?.trim() || '';
+
+        if (teamNumber || contactPhone || contactName) {
+          teams.push({
+            id: teams.length + 1,
+            teamNumber: teamNumber || `#${teams.length + 1}`,
+            contactPhone: contactPhone,
+            contactName: contactName,
+            logo: null,
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            members: []
+          });
+        }
+      });
+
+      if (teams.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "File không chứa dữ liệu hợp lệ",
+        });
+      }
+
+      if (teams.length < minTeams) {
+        return res.status(400).json({
+          success: false,
+          message: `Phải có ít nhất ${minTeams} đội`,
+        });
+      }
+
+      league.teams = teams;
+      league.maxParticipants = Math.max(league.maxParticipants, teams.length);
+      await league.save();
+
+      await logAudit("IMPORT_TEAMS", req.user._id, req, {
+        leagueId: req.params.id,
+        leagueName: league.name,
+        teamsCount: teams.length,
+      });
+
+      res.json({
+        success: true,
+        message: `Đã import ${teams.length} đội thành công`,
+        data: league,
+      });
+    } catch (error) {
+      if (error.message.includes('Chỉ chấp nhận')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+);
+
+/**
+ * PUT /api/leagues/:id/teams/:teamId/members/:memberIndex
+ * Cập nhật thông tin thành viên
+ * User (người tạo)
+ */
+router.put(
+  "/:id/teams/:teamId/members/:memberIndex",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const teamIdParam = req.params.teamId;
+      const memberIndex = parseInt(req.params.memberIndex);
+      const { jerseyNumber, name, phone, position, avatar } = req.body;
+
+      if (isNaN(memberIndex) || memberIndex < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Chỉ số thành viên không hợp lệ",
+        });
+      }
+
+      const league = await League.findById(leagueId);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      const teamId = parseInt(teamIdParam);
+      const isTeamIdNumber = !isNaN(teamId);
+
+      const teamIndex = league.teams.findIndex((team) => {
+        if (isTeamIdNumber) {
+          const teamIdNum = typeof team.id === 'number' ? team.id : (team.id ? parseInt(team.id) : null);
+          if (teamIdNum !== null && !isNaN(teamIdNum) && teamIdNum === teamId) {
+            return true;
+          }
+        }
+        const teamIdStr = team._id?.toString();
+        if (teamIdStr && teamIdStr === teamIdParam) {
+          return true;
+        }
+        return false;
+      });
+
+      if (teamIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy đội",
+        });
+      }
+
+      const team = league.teams[teamIndex];
+      if (!team.members || !Array.isArray(team.members)) {
+        team.members = [];
+      }
+
+      if (memberIndex >= team.members.length) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy thành viên",
+        });
+      }
+
+      // Cập nhật thông tin thành viên
+      const updatedMember = { ...team.members[memberIndex] };
+      
+      if (jerseyNumber !== undefined) updatedMember.jerseyNumber = jerseyNumber;
+      if (name !== undefined) updatedMember.name = name;
+      if (phone !== undefined) updatedMember.phone = phone;
+      if (position !== undefined) updatedMember.position = position;
+      if (avatar !== undefined) updatedMember.avatar = avatar;
+
+      team.members[memberIndex] = updatedMember;
+      league.teams[teamIndex] = team;
+
+      await league.save();
+
+      await logAudit("UPDATE_MEMBER", req.user._id, req, {
+        leagueId: leagueId,
+        leagueName: league.name,
+        teamId: teamIdParam,
+        memberIndex: memberIndex,
+        memberName: updatedMember.name,
+      });
+
+      res.json({
+        success: true,
+        message: "Cập nhật thành viên thành công",
+        data: league,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/leagues/:id/teams/:teamId/members/:memberIndex
+ * Xóa thành viên khỏi đội
+ * User (người tạo)
+ */
+router.delete(
+  "/:id/teams/:teamId/members/:memberIndex",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const teamIdParam = req.params.teamId;
+      const memberIndex = parseInt(req.params.memberIndex);
+
+      if (isNaN(memberIndex) || memberIndex < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Chỉ số thành viên không hợp lệ",
+        });
+      }
+
+      const league = await League.findById(leagueId);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      const teamId = parseInt(teamIdParam);
+      const isTeamIdNumber = !isNaN(teamId);
+
+      const teamIndex = league.teams.findIndex((team) => {
+        if (isTeamIdNumber) {
+          const teamIdNum = typeof team.id === 'number' ? team.id : (team.id ? parseInt(team.id) : null);
+          if (teamIdNum !== null && !isNaN(teamIdNum) && teamIdNum === teamId) {
+            return true;
+          }
+        }
+        const teamIdStr = team._id?.toString();
+        if (teamIdStr && teamIdStr === teamIdParam) {
+          return true;
+        }
+        return false;
+      });
+
+      if (teamIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy đội",
+        });
+      }
+
+      const team = league.teams[teamIndex];
+      if (!team.members || !Array.isArray(team.members)) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy thành viên",
+        });
+      }
+
+      if (memberIndex >= team.members.length) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy thành viên",
+        });
+      }
+
+      const memberName = team.members[memberIndex]?.name || '';
+
+      // Xóa thành viên
+      team.members.splice(memberIndex, 1);
+      league.teams[teamIndex] = team;
+
+      await league.save();
+
+      await logAudit("DELETE_MEMBER", req.user._id, req, {
+        leagueId: leagueId,
+        leagueName: league.name,
+        teamId: teamIdParam,
+        memberIndex: memberIndex,
+        memberName: memberName,
+      });
+
+      res.json({
+        success: true,
+        message: "Xóa thành viên thành công",
+        data: league,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/leagues/:id/teams/:teamId/members/template
+ * Tải file mẫu Excel để thêm thành viên
+ * User (người tạo)
+ */
+router.get(
+  "/:id/teams/:teamId/members/template",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const league = await League.findById(req.params.id);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      const isFootball = league.sport === 'Bóng đá';
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Danh sách thành viên');
+
+      // Định nghĩa cột dựa trên môn thể thao
+      if (isFootball) {
+        worksheet.columns = [
+          { header: 'Số áo', key: 'jerseyNumber', width: 15 },
+          { header: 'Họ tên đầy đủ', key: 'name', width: 30 },
+          { header: 'Số điện thoại', key: 'phone', width: 20 },
+          { header: 'Vị trí thi đấu', key: 'position', width: 25 }
+        ];
+      } else {
+        worksheet.columns = [
+          { header: 'Họ tên đầy đủ', key: 'name', width: 30 },
+          { header: 'Số điện thoại', key: 'phone', width: 20 },
+          { header: 'Vị trí thi đấu', key: 'position', width: 25 }
+        ];
+      }
+
+      // Style header
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Thêm dữ liệu mẫu
+      if (isFootball) {
+        worksheet.addRow(['1', 'Nguyễn Văn A', '0123456789', 'Thủ môn']);
+        worksheet.addRow(['2', 'Trần Thị B', '0987654321', 'Hậu vệ']);
+        worksheet.addRow(['3', 'Lê Văn C', '0111222333', 'Tiền vệ']);
+        worksheet.addRow(['4', 'Phạm Thị D', '0444555666', 'Tiền đạo']);
+      } else {
+        worksheet.addRow(['Nguyễn Văn A', '0123456789', 'Khác']);
+        worksheet.addRow(['Trần Thị B', '0987654321', 'Khác']);
+        worksheet.addRow(['Lê Văn C', '0111222333', 'Khác']);
+        worksheet.addRow(['Phạm Thị D', '0444555666', 'Khác']);
+      }
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename="mau-danh-sach-thanh-vien.xlsx"');
+
+      await workbook.xlsx.write(res);
+      res.end();
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/leagues/:id/teams/:teamId/members/import
+ * Import danh sách thành viên từ file Excel
+ * User (người tạo)
+ */
+router.post(
+  "/:id/teams/:teamId/members/import",
+  checkOwnership,
+  upload.single("file"),
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Không có file được upload",
+        });
+      }
+
+      const league = await League.findById(req.params.id);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      const teamIdParam = req.params.teamId;
+      const teamId = parseInt(teamIdParam);
+      const isTeamIdNumber = !isNaN(teamId);
+
+      const teamIndex = league.teams.findIndex((team) => {
+        if (isTeamIdNumber) {
+          const teamIdNum = typeof team.id === 'number' ? team.id : (team.id ? parseInt(team.id) : null);
+          if (teamIdNum !== null && !isNaN(teamIdNum) && teamIdNum === teamId) {
+            return true;
+          }
+        }
+        const teamIdStr = team._id?.toString();
+        if (teamIdStr && teamIdStr === teamIdParam) {
+          return true;
+        }
+        return false;
+      });
+
+      if (teamIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy đội",
+        });
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(req.file.buffer);
+
+      const worksheet = workbook.getWorksheet(1) || workbook.worksheets[0];
+      if (!worksheet) {
+        return res.status(400).json({
+          success: false,
+          message: "File Excel không hợp lệ",
+        });
+      }
+
+      const isFootball = league.sport === 'Bóng đá';
+      const members = [];
+
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return; // Skip header
+
+        let jerseyNumber = '';
+        let name = '';
+        let phone = '';
+        let position = '';
+
+        if (isFootball) {
+          jerseyNumber = row.getCell(1).value?.toString()?.trim() || '';
+          name = row.getCell(2).value?.toString()?.trim() || '';
+          phone = row.getCell(3).value?.toString()?.trim() || '';
+          position = row.getCell(4).value?.toString()?.trim() || '';
+        } else {
+          name = row.getCell(1).value?.toString()?.trim() || '';
+          phone = row.getCell(2).value?.toString()?.trim() || '';
+          position = row.getCell(3).value?.toString()?.trim() || '';
+        }
+
+        if (name) {
+          const member = {
+            name: name,
+            phone: phone || '',
+            position: position || '',
+            avatar: null
+          };
+
+          if (isFootball && jerseyNumber) {
+            member.jerseyNumber = jerseyNumber;
+          }
+
+          members.push(member);
+        }
+      });
+
+      if (members.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "File không chứa dữ liệu hợp lệ",
+        });
+      }
+
+      // Thêm thành viên vào đội
+      const team = league.teams[teamIndex];
+      if (!team.members || !Array.isArray(team.members)) {
+        team.members = [];
+      }
+
+      team.members = [...team.members, ...members];
+      league.teams[teamIndex] = team;
+
+      await league.save();
+
+      await logAudit("IMPORT_MEMBERS", req.user._id, req, {
+        leagueId: req.params.id,
+        leagueName: league.name,
+        teamId: teamIdParam,
+        membersCount: members.length,
+      });
+
+      res.json({
+        success: true,
+        message: `Đã import ${members.length} thành viên thành công`,
+        data: league,
+      });
+    } catch (error) {
+      if (error.message.includes('Chỉ chấp nhận')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/leagues/:id/teams/:teamId/logo
+ * Upload logo cho đội
+ * User (người tạo)
+ */
+router.post(
+  "/:id/teams/:teamId/logo",
+  checkOwnership,
+  uploadTeamLogo.single("logo"),
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Không có file ảnh được upload",
+        });
+      }
+
+      const leagueId = req.params.id;
+      const teamIdParam = req.params.teamId;
+      const logoUrl = req.file.path; // Cloudinary URL
+      const logoPublicId = req.file.filename; // Cloudinary public_id
+
+      const league = await League.findById(leagueId);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      const teamId = parseInt(teamIdParam);
+      const isTeamIdNumber = !isNaN(teamId);
+
+      const teamIndex = league.teams.findIndex((team) => {
+        if (isTeamIdNumber) {
+          const teamIdNum = typeof team.id === 'number' ? team.id : (team.id ? parseInt(team.id) : null);
+          if (teamIdNum !== null && !isNaN(teamIdNum) && teamIdNum === teamId) {
+            return true;
+          }
+        }
+        const teamIdStr = team._id?.toString();
+        if (teamIdStr && teamIdStr === teamIdParam) {
+          return true;
+        }
+        return false;
+      });
+
+      if (teamIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy đội",
+        });
+      }
+
+      const team = league.teams[teamIndex];
+      
+      // Xóa logo cũ từ Cloudinary nếu có
+      if (team.logoPublicId) {
+        try {
+          await cloudinaryUtils.deleteImage(team.logoPublicId);
+        } catch (deleteError) {
+        }
+      }
+
+      // Cập nhật logo mới
+      team.logo = logoUrl;
+      team.logoPublicId = logoPublicId;
+      league.teams[teamIndex] = team;
+
+      await league.save();
+
+      await logAudit("UPLOAD_TEAM_LOGO", req.user._id, req, {
+        leagueId: leagueId,
+        leagueName: league.name,
+        teamId: teamIdParam,
+        teamNumber: team.teamNumber,
+      });
+
+      res.json({
+        success: true,
+        message: "Upload logo thành công",
+        data: {
+          logo: logoUrl,
+          league: league,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/leagues/:id/teams/:teamId/logo
+ * Xóa logo của đội
+ * User (người tạo)
+ */
+router.delete(
+  "/:id/teams/:teamId/logo",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const teamIdParam = req.params.teamId;
+
+      const league = await League.findById(leagueId);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      const teamId = parseInt(teamIdParam);
+      const isTeamIdNumber = !isNaN(teamId);
+
+      const teamIndex = league.teams.findIndex((team) => {
+        if (isTeamIdNumber) {
+          const teamIdNum = typeof team.id === 'number' ? team.id : (team.id ? parseInt(team.id) : null);
+          if (teamIdNum !== null && !isNaN(teamIdNum) && teamIdNum === teamId) {
+            return true;
+          }
+        }
+        const teamIdStr = team._id?.toString();
+        if (teamIdStr && teamIdStr === teamIdParam) {
+          return true;
+        }
+        return false;
+      });
+
+      if (teamIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy đội",
+        });
+      }
+
+      const team = league.teams[teamIndex];
+
+      // Xóa logo từ Cloudinary nếu có
+      if (team.logoPublicId) {
+        try {
+          await cloudinaryUtils.deleteImage(team.logoPublicId);
+        } catch (deleteError) {
+        }
+      }
+
+      // Xóa logo trong database
+      team.logo = null;
+      team.logoPublicId = null;
+      league.teams[teamIndex] = team;
+
+      await league.save();
+
+      await logAudit("DELETE_TEAM_LOGO", req.user._id, req, {
+        leagueId: leagueId,
+        leagueName: league.name,
+        teamId: teamIdParam,
+        teamNumber: team.teamNumber,
+      });
+
+      res.json({
+        success: true,
+        message: "Xóa logo thành công",
+        data: league,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/leagues/:id/draw-matches
+ * Bốc thăm ngẫu nhiên các cặp đấu
+ * User (người tạo)
+ */
+router.post(
+  "/:id/draw-matches",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const { stage = "round1", clearExisting = false } = req.body;
+
+      const league = await League.findById(leagueId);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      // Lấy danh sách đội hợp lệ (có thông tin đầy đủ)
+      const validTeams = league.teams.filter(
+        (team) => team.teamNumber || team.contactPhone || team.contactName
+      );
+
+      if (validTeams.length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: "Cần ít nhất 2 đội để bốc thăm",
+        });
+      }
+
+      // Xáo trộn ngẫu nhiên danh sách đội
+      const shuffledTeams = [...validTeams].sort(() => Math.random() - 0.5);
+
+      // Kiểm tra format giải đấu
+      const isRoundRobin = league.format === 'Vòng tròn' || league.format === 'round-robin' || stage === 'round-robin';
+
+      // Chia thành các cặp đấu
+      const matches = [];
+      let hasBye = false;
+      let byeTeam = null;
+
+      if (isRoundRobin) {
+        // Round-robin: tạo tất cả các cặp đấu (mỗi đội đấu với tất cả đội khác)
+        let matchNumber = 1;
+        for (let i = 0; i < shuffledTeams.length; i++) {
+          for (let j = i + 1; j < shuffledTeams.length; j++) {
+            matches.push({
+              stage: stage,
+              matchNumber: matchNumber++,
+              team1Id: shuffledTeams[i].id !== null && shuffledTeams[i].id !== undefined ? shuffledTeams[i].id : shuffledTeams[i]._id,
+              team2Id: shuffledTeams[j].id !== null && shuffledTeams[j].id !== undefined ? shuffledTeams[j].id : shuffledTeams[j]._id,
+              date: null,
+              time: null,
+              score1: null,
+              score2: null,
+            });
+          }
+        }
+      } else {
+        // Single-elimination: tạo matches cho vòng đầu tiên và tự động tạo matches cho tất cả các vòng tiếp theo
+        const numTeams = shuffledTeams.length;
+        const numMatches = Math.floor(numTeams / 2);
+        hasBye = numTeams % 2 === 1;
+
+        // Helper function: Tính toán stage dựa trên số đội
+        const calculateStage = (numTeamsInRound) => {
+          if (numTeamsInRound === 2) {
+            return 'final';
+          } else if (numTeamsInRound === 4) {
+            return 'semi';
+          } else if (numTeamsInRound === 8) {
+            return 'round3';
+          } else if (numTeamsInRound === 16) {
+            return 'round4';
+          } else {
+            // Tính round number
+            let roundNum = 1;
+            let tempTeams = numTeamsInRound;
+            while (tempTeams > 16) {
+              tempTeams = Math.floor(tempTeams / 2);
+              roundNum++;
+            }
+            if (tempTeams === 16) {
+              return 'round4';
+            } else if (tempTeams === 8) {
+              return 'round3';
+            } else if (tempTeams === 4) {
+              return 'semi';
+            } else {
+              return `round${roundNum}`;
+            }
+          }
+        };
+
+        // Tính toán tất cả các vòng cần thiết
+        const allRounds = [];
+        let currentTeams = numTeams;
+        
+        while (currentTeams > 1) {
+          const currentNumMatches = Math.floor(currentTeams / 2);
+          const currentStage = calculateStage(currentTeams);
+          
+          allRounds.push({
+            stage: currentStage,
+            numMatches: currentNumMatches,
+            numTeams: currentTeams
+          });
+          
+          currentTeams = currentNumMatches;
+        }
+
+        // Tạo matches cho tất cả các vòng
+        allRounds.forEach((round, roundIndex) => {
+          if (roundIndex === 0) {
+            // Vòng đầu tiên: gán teams thật
+            for (let i = 0; i < round.numMatches; i++) {
+              const team1 = shuffledTeams[i * 2];
+              const team2 = shuffledTeams[i * 2 + 1];
+              
+              matches.push({
+                stage: round.stage,
+                matchNumber: i + 1,
+                team1Id: team1.id !== null && team1.id !== undefined ? team1.id : team1._id,
+                team2Id: team2.id !== null && team2.id !== undefined ? team2.id : team2._id,
+                date: null,
+                time: null,
+                score1: null,
+                score2: null,
+              });
+            }
+          } else {
+            // Các vòng sau: tạo matches với teamId = null (sẽ được cập nhật sau khi có kết quả)
+            for (let i = 0; i < round.numMatches; i++) {
+              matches.push({
+                stage: round.stage,
+                matchNumber: i + 1,
+                team1Id: null, // Sẽ được cập nhật sau khi có kết quả vòng trước
+                team2Id: null, // Sẽ được cập nhật sau khi có kết quả vòng trước
+                date: null,
+                time: null,
+                score1: null,
+                score2: null,
+              });
+            }
+          }
+        });
+
+        // Nếu có đội lẻ, thêm thông tin vào response
+        if (hasBye) {
+          byeTeam = shuffledTeams[shuffledTeams.length - 1];
+        }
+      }
+
+      // Cập nhật matches trong league
+      let updatedMatches;
+      if (clearExisting) {
+        // Xóa tất cả matches của stage hiện tại, giữ lại các stage khác
+        updatedMatches = (league.matches || []).filter(m => m.stage !== stage);
+        updatedMatches = [...updatedMatches, ...matches];
+      } else {
+        // Thêm matches mới, loại bỏ trùng lặp
+        updatedMatches = [...(league.matches || []), ...matches];
+        // Loại bỏ các match trùng lặp (cùng stage và matchNumber)
+        const matchMap = new Map();
+        updatedMatches.forEach(match => {
+          const key = `${match.stage}_${match.matchNumber}`;
+          if (!matchMap.has(key)) {
+            matchMap.set(key, match);
+          }
+        });
+        updatedMatches = Array.from(matchMap.values());
+      }
+
+      league.matches = updatedMatches;
+      await league.save();
+
+      await logAudit("DRAW_MATCHES", req.user._id, req, {
+        leagueId: leagueId,
+        leagueName: league.name,
+        stage: stage,
+        matchesCount: matches.length,
+        teamsCount: validTeams.length,
+        hasBye: hasBye,
+      });
+
+      res.json({
+        success: true,
+        message: `Đã bốc thăm ${matches.length} cặp đấu thành công${hasBye ? ` (1 đội được bye)` : ''}`,
+        data: {
+          league: league,
+          matches: matches,
+          byeTeam: byeTeam ? {
+            id: byeTeam.id || byeTeam._id,
+            teamNumber: byeTeam.teamNumber
+          } : null,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PUT /api/leagues/:id/matches/schedule
+ * Cập nhật lịch đấu (date, time) cho các matches
+ * User (người tạo)
+ */
+router.put(
+  "/:id/matches/schedule",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const { schedules } = req.body;
+
+      if (!Array.isArray(schedules)) {
+        return res.status(400).json({
+          success: false,
+          message: "Dữ liệu lịch đấu không hợp lệ",
+        });
+      }
+
+      const league = await League.findById(leagueId);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+
+      let updatedCount = 0;
+      const notFoundMatches = [];
+      
+      schedules.forEach(({ stage, matchNumber, date, time }) => {
+        // Tìm match với nhiều cách so sánh
+        const matchIndex = league.matches.findIndex((m) => {
+          const stageMatch = m.stage === stage;
+          const numberMatch = m.matchNumber === matchNumber || 
+                             m.matchNumber === parseInt(matchNumber) ||
+                             parseInt(m.matchNumber) === matchNumber;
+          return stageMatch && numberMatch;
+        });
+
+        if (matchIndex !== -1) {
+          if (date !== undefined) {
+            league.matches[matchIndex].date = date ? new Date(date) : null;
+          }
+          if (time !== undefined) {
+            league.matches[matchIndex].time = time || null;
+          }
+          updatedCount++;
+        } else {
+          notFoundMatches.push({ stage, matchNumber });
+        }
+      });
+
+      if (updatedCount === 0 && schedules.length > 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy matches để cập nhật. Vui lòng bốc thăm trước.",
+          details: {
+            requested: schedules,
+            notFound: notFoundMatches,
+            availableMatches: league.matches.map(m => ({
+              stage: m.stage,
+              matchNumber: m.matchNumber
+            }))
+          }
+        });
+      }
+
+      await league.save();
+
+      await logAudit("UPDATE_MATCH_SCHEDULE", req.user._id, req, {
+        leagueId: leagueId,
+        leagueName: league.name,
+        schedulesCount: schedules.length,
+      });
+
+      res.json({
+        success: true,
+        message: "Cập nhật lịch đấu thành công",
+        data: league,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PUT /api/leagues/:id/matches/result
+ * Cập nhật kết quả trận đấu (score1, score2)
+ * Tự động tính winner và cập nhật vào vòng tiếp theo (single-elimination)
+ * Cập nhật thống kê teams (wins, draws, losses) cho round-robin
+ * User (người tạo)
+ */
+router.put(
+  "/:id/matches/result",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const { stage, matchNumber, score1, score2 } = req.body;
+
+      if (stage === undefined || matchNumber === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: "Thiếu thông tin stage hoặc matchNumber",
+        });
+      }
+
+      if (score1 === undefined || score2 === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: "Thiếu thông tin kết quả (score1, score2)",
+        });
+      }
+
+      const league = await League.findById(leagueId);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      // Tìm match
+      const matchIndex = league.matches.findIndex((m) => {
+        const stageMatch = m.stage === stage;
+        const numberMatch = m.matchNumber === matchNumber || 
+                           m.matchNumber === parseInt(matchNumber) ||
+                           parseInt(m.matchNumber) === matchNumber;
+        return stageMatch && numberMatch;
+      });
+
+      if (matchIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy trận đấu",
+        });
+      }
+
+      const match = league.matches[matchIndex];
+      const oldScore1 = match.score1;
+      const oldScore2 = match.score2;
+
+      // Cập nhật kết quả
+      match.score1 = score1 !== null && score1 !== undefined ? parseInt(score1) : null;
+      match.score2 = score2 !== null && score2 !== undefined ? parseInt(score2) : null;
+
+      // Kiểm tra format giải đấu
+      const isRoundRobin = league.format === 'Vòng tròn' || league.format === 'round-robin' || stage === 'round-robin';
+
+      if (isRoundRobin) {
+        // Round-robin: Cập nhật thống kê teams
+        const team1Id = match.team1Id;
+        const team2Id = match.team2Id;
+
+        // Tìm teams
+        const team1Index = league.teams.findIndex(t => 
+          (t.id === team1Id) || (t._id && t._id.toString() === team1Id?.toString())
+        );
+        const team2Index = league.teams.findIndex(t => 
+          (t.id === team2Id) || (t._id && t._id.toString() === team2Id?.toString())
+        );
+
+        // Nếu có kết quả cũ, trừ đi thống kê cũ
+        if (oldScore1 !== null && oldScore2 !== null && team1Index !== -1 && team2Index !== -1) {
+          const oldTeam1 = league.teams[team1Index];
+          const oldTeam2 = league.teams[team2Index];
+
+          if (oldScore1 > oldScore2) {
+            oldTeam1.wins = Math.max(0, (oldTeam1.wins || 0) - 1);
+            oldTeam2.losses = Math.max(0, (oldTeam2.losses || 0) - 1);
+          } else if (oldScore1 < oldScore2) {
+            oldTeam1.losses = Math.max(0, (oldTeam1.losses || 0) - 1);
+            oldTeam2.wins = Math.max(0, (oldTeam2.wins || 0) - 1);
+          } else {
+            oldTeam1.draws = Math.max(0, (oldTeam1.draws || 0) - 1);
+            oldTeam2.draws = Math.max(0, (oldTeam2.draws || 0) - 1);
+          }
+        }
+
+        // Cập nhật thống kê mới
+        if (match.score1 !== null && match.score2 !== null && team1Index !== -1 && team2Index !== -1) {
+          const team1 = league.teams[team1Index];
+          const team2 = league.teams[team2Index];
+
+          if (!team1.wins) team1.wins = 0;
+          if (!team1.draws) team1.draws = 0;
+          if (!team1.losses) team1.losses = 0;
+          if (!team2.wins) team2.wins = 0;
+          if (!team2.draws) team2.draws = 0;
+          if (!team2.losses) team2.losses = 0;
+
+          if (match.score1 > match.score2) {
+            team1.wins += 1;
+            team2.losses += 1;
+          } else if (match.score1 < match.score2) {
+            team1.losses += 1;
+            team2.wins += 1;
+          } else {
+            team1.draws += 1;
+            team2.draws += 1;
+          }
+
+          league.teams[team1Index] = team1;
+          league.teams[team2Index] = team2;
+        }
+      } else {
+        // Single-elimination: Tự động tính winner và cập nhật vào vòng tiếp theo
+        if (match.score1 !== null && match.score2 !== null) {
+          const winnerId = match.score1 > match.score2 ? match.team1Id : 
+                           match.score1 < match.score2 ? match.team2Id : null;
+
+          if (winnerId) {
+            // Xác định vòng tiếp theo
+            let nextStage = null;
+            if (stage === 'round1') {
+              // Tính số đội ở vòng hiện tại
+              const currentRoundMatches = league.matches.filter(m => m.stage === stage);
+              const numTeamsInCurrentRound = currentRoundMatches.length * 2;
+              
+              if (numTeamsInCurrentRound === 4) {
+                nextStage = 'semi';
+              } else if (numTeamsInCurrentRound === 8) {
+                nextStage = 'round3';
+              } else if (numTeamsInCurrentRound === 16) {
+                nextStage = 'round4';
+              } else if (numTeamsInCurrentRound > 16) {
+                // Tính vòng tiếp theo dựa trên số đội
+                const numMatches = currentRoundMatches.length;
+                if (numMatches === 8) nextStage = 'round4';
+                else if (numMatches === 16) nextStage = 'round3';
+                else if (numMatches === 32) nextStage = 'round2';
+                else nextStage = 'round2';
+              }
+            } else if (stage === 'round2') {
+              nextStage = 'round3';
+            } else if (stage === 'round3') {
+              nextStage = 'semi';
+            } else if (stage === 'round4') {
+              nextStage = 'semi';
+            } else if (stage === 'semi') {
+              nextStage = 'final';
+            }
+
+            if (nextStage) {
+              // Tìm match ở vòng tiếp theo mà winner sẽ tham gia
+              const nextRoundMatches = league.matches.filter(m => m.stage === nextStage);
+              
+              // Tính matchNumber cho vòng tiếp theo
+              // Match 1 và 2 của vòng hiện tại -> Match 1 của vòng tiếp theo
+              // Match 3 và 4 của vòng hiện tại -> Match 2 của vòng tiếp theo
+              const matchPosition = Math.ceil(match.matchNumber / 2);
+              const nextMatchNumber = matchPosition;
+
+              // Tìm hoặc tạo match ở vòng tiếp theo
+              let nextMatchIndex = league.matches.findIndex(m => 
+                m.stage === nextStage && m.matchNumber === nextMatchNumber
+              );
+
+              if (nextMatchIndex === -1) {
+                // Tạo match mới ở vòng tiếp theo
+                const nextMatch = {
+                  stage: nextStage,
+                  matchNumber: nextMatchNumber,
+                  team1Id: null,
+                  team2Id: null,
+                  date: null,
+                  time: null,
+                  score1: null,
+                  score2: null,
+                };
+
+                // Xác định vị trí team (team1 hoặc team2) dựa trên matchNumber hiện tại
+                if (match.matchNumber % 2 === 1) {
+                  // Match lẻ -> team1 ở vòng tiếp theo
+                  nextMatch.team1Id = winnerId;
+                } else {
+                  // Match chẵn -> team2 ở vòng tiếp theo
+                  nextMatch.team2Id = winnerId;
+                }
+
+                league.matches.push(nextMatch);
+              } else {
+                // Cập nhật match hiện có
+                const nextMatch = league.matches[nextMatchIndex];
+                
+                // Xác định vị trí team (team1 hoặc team2) dựa trên matchNumber hiện tại
+                if (match.matchNumber % 2 === 1) {
+                  // Match lẻ -> team1 ở vòng tiếp theo
+                  nextMatch.team1Id = winnerId;
+                } else {
+                  // Match chẵn -> team2 ở vòng tiếp theo
+                  nextMatch.team2Id = winnerId;
+                }
+
+                league.matches[nextMatchIndex] = nextMatch;
+              }
+            }
+          }
+        }
+      }
+
+      await league.save();
+
+      await logAudit("UPDATE_MATCH_RESULT", req.user._id, req, {
+        leagueId: leagueId,
+        leagueName: league.name,
+        stage: stage,
+        matchNumber: matchNumber,
+        score1: match.score1,
+        score2: match.score2,
+        format: league.format,
+      });
+
+      res.json({
+        success: true,
+        message: "Cập nhật kết quả trận đấu thành công",
+        data: league,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/leagues/:id/schedule/template
+ * Tải file mẫu Excel để thêm lịch đấu
+ * User (người tạo)
+ */
+router.get(
+  "/:id/schedule/template",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const league = await League.findById(req.params.id);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Lịch đấu');
+
+      worksheet.columns = [
+        { header: 'Vòng đấu', key: 'stage', width: 20 },
+        { header: 'Đội 1', key: 'team1', width: 30 },
+        { header: 'Đội 2', key: 'team2', width: 30 },
+        { header: 'Ngày thi đấu', key: 'date', width: 20 },
+        { header: 'Giờ thi đấu', key: 'time', width: 20 }
+      ];
+
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      const mapStageToStageName = (stage) => {
+        switch (stage) {
+          case 'final': return 'chung kết';
+          case 'semi': return 'bán kết';
+          case 'round3': return 'tứ kết';
+          case 'round4': return 'vòng 4';
+          case 'round2': return 'vòng 2';
+          case 'round1': return 'vòng 1';
+          case 'round-robin': return 'vòng tròn';
+          default: return stage;
+        }
+      };
+
+      const getTeamName = (teamId, teams) => {
+        if (teamId === null || teamId === undefined) return null;
+        
+        let teamIdStr = String(teamId);
+        let teamIdNum = null;
+        
+        if (typeof teamId === 'number') {
+          teamIdNum = teamId;
+        } else if (teamId && typeof teamId === 'object' && teamId.toString) {
+          teamIdStr = teamId.toString();
+          const parsed = parseInt(teamIdStr);
+          if (!isNaN(parsed)) {
+            teamIdNum = parsed;
+          }
+        } else {
+          const parsed = parseInt(teamId);
+          if (!isNaN(parsed)) {
+            teamIdNum = parsed;
+          }
+        }
+        
+        for (const team of teams) {
+          if (team.id !== null && team.id !== undefined) {
+            if (team.id === teamId) {
+              return team.teamNumber || `Đội #${team.id}`;
+            }
+            
+            if (teamIdNum !== null && typeof team.id === 'number' && team.id === teamIdNum) {
+              return team.teamNumber || `Đội #${team.id}`;
+            }
+            
+            if (String(team.id) === teamIdStr) {
+              return team.teamNumber || `Đội #${team.id}`;
+            }
+          }
+          
+          if (team._id) {
+            const tIdMongoStr = String(team._id);
+            if (tIdMongoStr === teamIdStr) {
+              return team.teamNumber || `Đội #${team.id || team._id}`;
+            }
+            
+            if (teamIdNum !== null && team._id.toString && String(team._id) === String(teamIdNum)) {
+              return team.teamNumber || `Đội #${team.id || team._id}`;
+            }
+          }
+        }
+        
+        return null;
+      };
+
+      const formatDate = (date) => {
+        if (!date) return '';
+        const d = new Date(date);
+        const day = d.getDate().toString().padStart(2, '0');
+        const month = (d.getMonth() + 1).toString().padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}-${month}-${year}`;
+      };
+
+      const formatTime = (time) => {
+        if (!time) return '';
+        return time.toString();
+      };
+
+      const isRoundRobin = league.format === 'Vòng tròn' || league.format === 'round-robin';
+      
+      if (league.matches && league.matches.length > 0) {
+        const sortedMatches = [...league.matches].sort((a, b) => {
+          const stageOrder = ['round1', 'round2', 'round3', 'round4', 'semi', 'final', 'round-robin'];
+          const stageA = stageOrder.indexOf(a.stage) !== -1 ? stageOrder.indexOf(a.stage) : 999;
+          const stageB = stageOrder.indexOf(b.stage) !== -1 ? stageOrder.indexOf(b.stage) : 999;
+          if (stageA !== stageB) return stageA - stageB;
+          return (a.matchNumber || 0) - (b.matchNumber || 0);
+        });
+
+        sortedMatches.forEach(match => {
+          const stageName = mapStageToStageName(match.stage);
+          let team1Name = '';
+          let team2Name = '';
+
+          const getPrevStage = (currentStage) => {
+            switch (currentStage) {
+              case 'final': return 'semi';
+              case 'semi': return 'round3';
+              case 'round3': return 'round4';
+              case 'round4': return 'round4';
+              default: return 'round1';
+            }
+          };
+
+          if (match.team1Id !== null && match.team1Id !== undefined) {
+            const foundTeam1Name = getTeamName(match.team1Id, league.teams);
+            team1Name = foundTeam1Name || `Đội #${match.team1Id}`;
+          } else {
+            const prevStage = getPrevStage(match.stage);
+            const prevStageName = mapStageToStageName(prevStage);
+            const prevMatchNumber = (match.matchNumber - 1) * 2 + 1;
+            team1Name = `W#${prevMatchNumber} ${prevStageName}`;
+          }
+
+          if (match.team2Id !== null && match.team2Id !== undefined) {
+            const foundTeam2Name = getTeamName(match.team2Id, league.teams);
+            team2Name = foundTeam2Name || `Đội #${match.team2Id}`;
+          } else {
+            const prevStage = getPrevStage(match.stage);
+            const prevStageName = mapStageToStageName(prevStage);
+            const prevMatchNumber = (match.matchNumber - 1) * 2 + 2;
+            team2Name = `W#${prevMatchNumber} ${prevStageName}`;
+          }
+
+          const dateStr = formatDate(match.date);
+          const timeStr = formatTime(match.time);
+
+          worksheet.addRow([stageName, team1Name, team2Name, dateStr, timeStr]);
+        });
+      } else {
+        const isRoundRobin = league.format === 'Vòng tròn' || league.format === 'round-robin';
+        
+        if (isRoundRobin) {
+          worksheet.addRow(['vòng tròn', 'Đội 1', 'Đội 2', '', '']);
+          worksheet.addRow(['vòng tròn', 'Đội 3', 'Đội 4', '', '']);
+        } else {
+          const numTeams = league.maxParticipants || 4;
+          if (numTeams === 2) {
+            worksheet.addRow(['chung kết', 'Đội 1', 'Đội 2', '', '']);
+          } else if (numTeams === 4) {
+            worksheet.addRow(['bán kết', 'Đội 1', 'Đội 2', '', '']);
+            worksheet.addRow(['bán kết', 'Đội 3', 'Đội 4', '', '']);
+            worksheet.addRow(['chung kết', 'W#1 bán kết', 'W#2 bán kết', '', '']);
+          } else if (numTeams === 8) {
+            worksheet.addRow(['tứ kết', 'Đội 1', 'Đội 2', '', '']);
+            worksheet.addRow(['tứ kết', 'Đội 3', 'Đội 4', '', '']);
+            worksheet.addRow(['tứ kết', 'Đội 5', 'Đội 6', '', '']);
+            worksheet.addRow(['tứ kết', 'Đội 7', 'Đội 8', '', '']);
+            worksheet.addRow(['bán kết', 'W#1 tứ kết', 'W#2 tứ kết', '', '']);
+            worksheet.addRow(['bán kết', 'W#3 tứ kết', 'W#4 tứ kết', '', '']);
+            worksheet.addRow(['chung kết', 'W#1 bán kết', 'W#2 bán kết', '', '']);
+          } else {
+            worksheet.addRow(['vòng 1', 'Đội 1', 'Đội 2', '', '']);
+            worksheet.addRow(['vòng 1', 'Đội 3', 'Đội 4', '', '']);
+          }
+        }
+      }
+
+      const dateColumn = worksheet.getColumn('date');
+      dateColumn.numFmt = '@';
+      
+      const timeColumn = worksheet.getColumn('time');
+      timeColumn.numFmt = '@';
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename="mau-lich-dau.xlsx"');
+
+      await workbook.xlsx.write(res);
+      res.end();
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/leagues/:id/schedule/import
+ * Import lịch đấu từ file Excel
+ * User (người tạo)
+ */
+router.post(
+  "/:id/schedule/import",
+  checkOwnership,
+  upload.single("file"),
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Không có file được upload",
+        });
+      }
+
+      const league = await League.findById(req.params.id);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(req.file.buffer);
+
+      const worksheet = workbook.getWorksheet(1) || workbook.worksheets[0];
+      if (!worksheet) {
+        return res.status(400).json({
+          success: false,
+          message: "File Excel không hợp lệ",
+        });
+      }
+
+      const isRoundRobin = league.format === 'Vòng tròn' || league.format === 'round-robin';
+      
+      const mapStageNameToStage = (stageName) => {
+        const normalized = stageName?.toLowerCase()?.trim() || '';
+        if (normalized === 'chung kết' || normalized === 'chungket') return 'final';
+        if (normalized === 'bán kết' || normalized === 'banket' || normalized === 'bán kết') return 'semi';
+        if (normalized === 'tứ kết' || normalized === 'tuket') return 'round3';
+        if (normalized === 'vòng tròn' || normalized === 'vongtron' || normalized === 'round-robin') return 'round-robin';
+        if (normalized.startsWith('vòng ')) {
+          const roundNum = parseInt(normalized.replace('vòng ', '').trim());
+          if (!isNaN(roundNum) && roundNum >= 1 && roundNum <= 4) {
+            return `round${roundNum}`;
+          }
+        }
+        return null;
+      };
+
+      const parseDate = (dateStr) => {
+        if (!dateStr) return null;
+        const str = dateStr.toString().trim();
+        const parts = str.split('-');
+        if (parts.length === 3) {
+          const day = parseInt(parts[0]);
+          const month = parseInt(parts[1]);
+          const year = parseInt(parts[2]);
+          if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+            const date = new Date(year, month - 1, day);
+            if (date.getDate() === day && date.getMonth() === month - 1 && date.getFullYear() === year) {
+              return date;
+            }
+          }
+        }
+        return null;
+      };
+
+      const parseTime = (timeStr) => {
+        if (!timeStr) return null;
+        const str = timeStr.toString().trim();
+        const parts = str.split(':');
+        if (parts.length === 2) {
+          const hour = parseInt(parts[0]);
+          const minute = parseInt(parts[1]);
+          if (!isNaN(hour) && !isNaN(minute) && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+            return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+          }
+        }
+        return null;
+      };
+
+      const findTeamIdByName = (teamName) => {
+        if (!teamName) return null;
+        const normalizedName = teamName.toString().trim();
+        
+        if (normalizedName.startsWith('W#') || normalizedName.startsWith('w#')) {
+          return null;
+        }
+
+        const team = league.teams.find(t => {
+          const teamNumber = t.teamNumber?.toString().trim() || '';
+          return teamNumber === normalizedName || 
+                 teamNumber === `Đội ${normalizedName}` ||
+                 teamNumber === `Đội #${normalizedName}` ||
+                 normalizedName === `Đội ${t.id}` ||
+                 normalizedName === `Đội #${t.id}`;
+        });
+
+        return team ? (team.id || team._id) : null;
+      };
+
+      const schedules = [];
+      const errors = [];
+      let rowNumber = 0;
+
+      worksheet.eachRow((row, rowNum) => {
+        rowNumber = rowNum;
+        if (rowNum === 1) return;
+
+        const stageName = row.getCell(1).value?.toString()?.trim() || '';
+        const team1Name = row.getCell(2).value?.toString()?.trim() || '';
+        const team2Name = row.getCell(3).value?.toString()?.trim() || '';
+        const dateStr = row.getCell(4).value?.toString()?.trim() || '';
+        const timeStr = row.getCell(5).value?.toString()?.trim() || '';
+
+        if (!stageName) {
+          errors.push(`Dòng ${rowNum}: Thiếu vòng đấu`);
+          return;
+        }
+
+        const stage = mapStageNameToStage(stageName);
+        if (!stage) {
+          errors.push(`Dòng ${rowNum}: Vòng đấu "${stageName}" không hợp lệ`);
+          return;
+        }
+
+        if (!team1Name && !team2Name) {
+          errors.push(`Dòng ${rowNum}: Thiếu tên đội`);
+          return;
+        }
+
+        const team1Id = findTeamIdByName(team1Name);
+        const team2Id = findTeamIdByName(team2Name);
+
+        if (team1Name && !team1Name.startsWith('W#') && !team1Name.startsWith('w#') && !team1Id) {
+          errors.push(`Dòng ${rowNum}: Không tìm thấy đội "${team1Name}"`);
+        }
+
+        if (team2Name && !team2Name.startsWith('W#') && !team2Name.startsWith('w#') && !team2Id) {
+          errors.push(`Dòng ${rowNum}: Không tìm thấy đội "${team2Name}"`);
+        }
+
+        const date = parseDate(dateStr);
+        const time = parseTime(timeStr);
+
+        if (dateStr && !date) {
+          errors.push(`Dòng ${rowNum}: Định dạng ngày không hợp lệ "${dateStr}". Yêu cầu: Ngày-tháng-năm (VD: 23-12-2000)`);
+        }
+
+        if (timeStr && !time) {
+          errors.push(`Dòng ${rowNum}: Định dạng giờ không hợp lệ "${timeStr}". Yêu cầu: Giờ:phút (VD: 23:18)`);
+        }
+
+        const stageMatches = league.matches.filter(m => m.stage === stage);
+        if (stageMatches.length === 0) {
+          errors.push(`Dòng ${rowNum}: Không tìm thấy trận đấu cho vòng "${stageName}". Vui lòng bốc thăm trước.`);
+          return;
+        }
+
+        let matchNumber = null;
+        
+        const isTeam1Winner = team1Name.startsWith('W#') || team1Name.startsWith('w#');
+        const isTeam2Winner = team2Name.startsWith('W#') || team2Name.startsWith('w#');
+        
+        if (team1Id && team2Id) {
+          const match = stageMatches.find(m => 
+            (m.team1Id === team1Id && m.team2Id === team2Id) ||
+            (m.team1Id === team2Id && m.team2Id === team1Id)
+          );
+          if (match) {
+            matchNumber = match.matchNumber;
+          }
+        } else if (isTeam1Winner && isTeam2Winner) {
+          const winner1MatchNum = parseInt(team1Name.replace(/^W#/i, '').split(' ')[0]);
+          const winner2MatchNum = parseInt(team2Name.replace(/^W#/i, '').split(' ')[0]);
+          
+          if (!isNaN(winner1MatchNum) && !isNaN(winner2MatchNum)) {
+            const minMatchNum = Math.min(winner1MatchNum, winner2MatchNum);
+            const nextMatchNumber = Math.ceil(minMatchNum / 2);
+            const foundMatch = stageMatches.find(m => m.matchNumber === nextMatchNumber);
+            if (foundMatch) {
+              matchNumber = foundMatch.matchNumber;
+            } else if (stageMatches.length === 1) {
+              matchNumber = stageMatches[0].matchNumber;
+            } else {
+              matchNumber = nextMatchNumber;
+            }
+          }
+        } else if (team1Id || team2Id) {
+          const match = stageMatches.find(m => 
+            m.team1Id === team1Id || m.team2Id === team1Id ||
+            m.team1Id === team2Id || m.team2Id === team2Id
+          );
+          if (match) {
+            matchNumber = match.matchNumber;
+          }
+        }
+
+        if (!matchNumber) {
+          if (stageMatches.length === 1) {
+            matchNumber = stageMatches[0].matchNumber;
+          } else {
+            errors.push(`Dòng ${rowNum}: Không xác định được số trận đấu. Vui lòng kiểm tra lại tên đội.`);
+            return;
+          }
+        }
+
+        schedules.push({
+          stage,
+          matchNumber,
+          date,
+          time
+        });
+      });
+
+      if (errors.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Có lỗi trong file Excel",
+          errors: errors
+        });
+      }
+
+      if (schedules.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Không có dữ liệu hợp lệ để import",
+        });
+      }
+
+      let updatedCount = 0;
+      const notFoundMatches = [];
+
+      schedules.forEach(({ stage, matchNumber, date, time }) => {
+        const matchIndex = league.matches.findIndex((m) => {
+          const stageMatch = m.stage === stage;
+          const numberMatch = m.matchNumber === matchNumber || 
+                             m.matchNumber === parseInt(matchNumber) ||
+                             parseInt(m.matchNumber) === matchNumber;
+          return stageMatch && numberMatch;
+        });
+
+        if (matchIndex !== -1) {
+          if (date !== null && date !== undefined) {
+            league.matches[matchIndex].date = date;
+          }
+          if (time !== null && time !== undefined) {
+            league.matches[matchIndex].time = time;
+          }
+          updatedCount++;
+        } else {
+          notFoundMatches.push({ stage, matchNumber });
+        }
+      });
+
+      if (updatedCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy matches để cập nhật. Vui lòng bốc thăm trước.",
+          details: {
+            requested: schedules,
+            notFound: notFoundMatches,
+            availableMatches: league.matches.map(m => ({
+              stage: m.stage,
+              matchNumber: m.matchNumber
+            }))
+          }
+        });
+      }
+
+      await league.save();
+
+      await logAudit(
+        "IMPORT_SCHEDULE",
+        req.user.id,
+        req,
+        {
+          leagueId: req.params.id,
+          leagueName: league.name,
+          schedulesCount: schedules.length,
+          updatedCount: updatedCount
+        }
+      );
+
+      res.json({
+        success: true,
+        message: `Đã import ${updatedCount}/${schedules.length} lịch đấu thành công`,
+        data: league,
+        details: {
+          total: schedules.length,
+          updated: updatedCount,
+          notFound: notFoundMatches
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/leagues/owner/pending
+ * Lấy danh sách giải đấu chờ duyệt của owner
+ * Owner (chủ sân)
+ */
+router.get(
+  "/owner/pending",
+  authenticateToken,
+  authorize("owner", "admin"),
+  async (req, res, next) => {
+    try {
+      const ownerId = req.user._id || req.user.id;
+      
+      const ownerFacilities = await Facility.find({ owner: ownerId }).select("_id name");
+      const facilityIds = ownerFacilities.map(f => f._id);
+      const facilityNames = ownerFacilities.map(f => f.name).filter(name => name);
+      
+      // Tìm các giải đấu có facility ID hoặc location (tên facility) trùng với facilities của owner
+      const pendingLeagues = await League.find({
+        $and: [
+          {
+            $or: [
+              { facility: { $in: facilityIds } },
+              ...(facilityNames.length > 0 ? [{ location: { $in: facilityNames } }] : [])
+            ]
+          },
+          { approvalStatus: "pending" }
+        ]
+      })
+        .populate("creator", "name email phone")
+        .populate("facility", "name address")
+        .populate("courtId", "name type")
+        .sort({ createdAt: -1 });
+      
+      res.json({
+        success: true,
+        data: pendingLeagues,
+        count: pendingLeagues.length
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/leagues/owner/all
+ * Lấy tất cả giải đấu của owner (đã duyệt, từ chối, chờ duyệt)
+ * Owner (chủ sân)
+ */
+router.get(
+  "/owner/all",
+  authenticateToken,
+  authorize("owner", "admin"),
+  async (req, res, next) => {
+    try {
+      const ownerId = req.user._id || req.user.id;
+      const { status, approvalStatus } = req.query;
+      
+      const ownerFacilities = await Facility.find({ owner: ownerId }).select("_id");
+      const facilityIds = ownerFacilities.map(f => f._id);
+      
+      const query = {
+        $or: [
+          { facility: { $in: facilityIds } },
+          { approvedBy: ownerId }
+        ]
+      };
+      
+      if (status) {
+        query.status = status;
+      }
+      
+      if (approvalStatus) {
+        query.approvalStatus = approvalStatus;
+      }
+      
+      const leagues = await League.find(query)
+        .populate("creator", "name email phone")
+        .populate("facility", "name address")
+        .populate("courtId", "name type")
+        .populate("approvedBy", "name email")
+        .sort({ createdAt: -1 });
+      
+      res.json({
+        success: true,
+        data: leagues,
+        count: leagues.length
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PUT /api/leagues/:id/approve
+ * Duyệt giải đấu
+ * Owner (chủ sân)
+ */
+router.put(
+  "/:id/approve",
+  authenticateToken,
+  authorize("owner", "admin"),
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const ownerId = req.user._id || req.user.id;
+      
+      const league = await League.findById(leagueId).populate("facility");
+      
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+      
+      // Nếu league chưa có facility nhưng có location, tìm facility theo tên
+      if (!league.facility && league.location) {
+        const facility = await Facility.findOne({
+          owner: ownerId,
+          name: league.location
+        });
+        
+        if (facility) {
+          league.facility = facility._id;
+        }
+      }
+      
+      // Kiểm tra quyền: nếu có facility, phải là owner của facility đó
+      if (league.facility) {
+        let facilityOwnerId;
+        if (typeof league.facility === 'object' && league.facility.owner) {
+          facilityOwnerId = league.facility.owner.toString();
+        } else {
+          // Nếu chưa populate, fetch lại
+          const facility = await Facility.findById(league.facility);
+          if (facility) {
+            facilityOwnerId = facility.owner.toString();
+          }
+        }
+        
+        if (facilityOwnerId && facilityOwnerId !== ownerId.toString() && req.user.role !== "admin") {
+          return res.status(403).json({
+            success: false,
+            message: "Không có quyền duyệt giải đấu này",
+          });
+        }
+      }
+      
+      league.approvalStatus = "approved";
+      league.approvedBy = ownerId;
+      league.approvedAt = new Date();
+      league.rejectionReason = null;
+      
+      await league.save();
+      
+      await logAudit(
+        "APPROVE_LEAGUE",
+        ownerId,
+        req,
+        {
+          leagueId: leagueId,
+          leagueName: league.name,
+        }
+      );
+      
+      res.json({
+        success: true,
+        message: "Đã duyệt giải đấu thành công",
+        data: league,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PUT /api/leagues/:id/reject
+ * Từ chối giải đấu
+ * Owner (chủ sân)
+ */
+router.put(
+  "/:id/reject",
+  authenticateToken,
+  authorize("owner", "admin"),
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const ownerId = req.user._id || req.user.id;
+      const { reason } = req.body;
+      
+      const league = await League.findById(leagueId).populate("facility");
+      
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+      
+      if (league.facility && league.facility.owner.toString() !== ownerId.toString() && req.user.role !== "admin") {
+        return res.status(403).json({
+          success: false,
+          message: "Không có quyền từ chối giải đấu này",
+        });
+      }
+      
+      league.approvalStatus = "rejected";
+      league.approvedBy = ownerId;
+      league.approvedAt = new Date();
+      league.rejectionReason = reason || null;
+      
+      await league.save();
+      
+      await logAudit(
+        "REJECT_LEAGUE",
+        ownerId,
+        req,
+        {
+          leagueId: leagueId,
+          leagueName: league.name,
+          reason: reason,
+        }
+      );
+      
+      res.json({
+        success: true,
+        message: "Đã từ chối giải đấu",
+        data: league,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PUT /api/leagues/:id/teams/:teamId/approve
+ * Chấp nhận đội đăng ký
+ * Owner (chủ sân) hoặc người tạo giải
+ */
+router.put(
+  "/:id/teams/:teamId/approve",
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const teamIdParam = req.params.teamId;
+      const userId = req.user._id || req.user.id;
+      
+      const league = await League.findById(leagueId).populate("facility");
+      
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+      
+      // Kiểm tra quyền: owner của facility hoặc người tạo giải
+      const isCreator = league.creator.toString() === userId.toString();
+      let isOwner = false;
+      
+      if (league.facility) {
+        let facilityOwnerId;
+        if (typeof league.facility === 'object' && league.facility.owner) {
+          facilityOwnerId = league.facility.owner.toString();
+        } else {
+          const facility = await Facility.findById(league.facility);
+          if (facility) {
+            facilityOwnerId = facility.owner.toString();
+          }
+        }
+        isOwner = facilityOwnerId && facilityOwnerId === userId.toString();
+      }
+      
+      if (!isCreator && !isOwner && req.user.role !== "admin") {
+        return res.status(403).json({
+          success: false,
+          message: "Không có quyền chấp nhận đội này",
+        });
+      }
+      
+      const teamId = parseInt(teamIdParam);
+      const isTeamIdNumber = !isNaN(teamId);
+      
+      const teamIndex = league.teams.findIndex((team) => {
+        if (isTeamIdNumber) {
+          const teamIdNum = typeof team.id === 'number' ? team.id : (team.id ? parseInt(team.id) : null);
+          if (teamIdNum !== null && !isNaN(teamIdNum) && teamIdNum === teamId) {
+            return true;
+          }
+        }
+        const teamIdStr = team._id?.toString();
+        if (teamIdStr && teamIdStr === teamIdParam) {
+          return true;
+        }
+        return false;
+      });
+      
+      if (teamIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy đội",
+        });
+      }
+      
+      league.teams[teamIndex].registrationStatus = "accepted";
+      await league.save();
+      
+      await logAudit(
+        "APPROVE_TEAM_REGISTRATION",
+        userId,
+        req,
+        {
+          leagueId: leagueId,
+          leagueName: league.name,
+          teamId: teamIdParam,
+          teamName: league.teams[teamIndex].teamNumber
+        }
+      );
+      
+      res.json({
+        success: true,
+        message: "Đã chấp nhận đội đăng ký",
+        data: league,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PUT /api/leagues/:id/teams/:teamId/reject
+ * Từ chối đội đăng ký
+ * Owner (chủ sân) hoặc người tạo giải
+ */
+router.put(
+  "/:id/teams/:teamId/reject",
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const teamIdParam = req.params.teamId;
+      const userId = req.user._id || req.user.id;
+      const { reason } = req.body;
+      
+      const league = await League.findById(leagueId).populate("facility");
+      
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+      
+      // Kiểm tra quyền: owner của facility hoặc người tạo giải
+      const isCreator = league.creator.toString() === userId.toString();
+      let isOwner = false;
+      
+      if (league.facility) {
+        let facilityOwnerId;
+        if (typeof league.facility === 'object' && league.facility.owner) {
+          facilityOwnerId = league.facility.owner.toString();
+        } else {
+          const facility = await Facility.findById(league.facility);
+          if (facility) {
+            facilityOwnerId = facility.owner.toString();
+          }
+        }
+        isOwner = facilityOwnerId && facilityOwnerId === userId.toString();
+      }
+      
+      if (!isCreator && !isOwner && req.user.role !== "admin") {
+        return res.status(403).json({
+          success: false,
+          message: "Không có quyền từ chối đội này",
+        });
+      }
+      
+      const teamId = parseInt(teamIdParam);
+      const isTeamIdNumber = !isNaN(teamId);
+      
+      const teamIndex = league.teams.findIndex((team) => {
+        if (isTeamIdNumber) {
+          const teamIdNum = typeof team.id === 'number' ? team.id : (team.id ? parseInt(team.id) : null);
+          if (teamIdNum !== null && !isNaN(teamIdNum) && teamIdNum === teamId) {
+            return true;
+          }
+        }
+        const teamIdStr = team._id?.toString();
+        if (teamIdStr && teamIdStr === teamIdParam) {
+          return true;
+        }
+        return false;
+      });
+      
+      if (teamIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy đội",
+        });
+      }
+      
+      league.teams[teamIndex].registrationStatus = "rejected";
+      if (reason) {
+        league.teams[teamIndex].rejectionReason = reason;
+      }
+      await league.save();
+      
+      await logAudit(
+        "REJECT_TEAM_REGISTRATION",
+        userId,
+        req,
+        {
+          leagueId: leagueId,
+          leagueName: league.name,
+          teamId: teamIdParam,
+          teamName: league.teams[teamIndex].teamNumber,
+          reason: reason
+        }
+      );
+      
+      res.json({
+        success: true,
+        message: "Đã từ chối đội đăng ký",
+        data: league,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PUT /api/leagues/:id/assign-court
+ * Chốt sân cho giải đấu
+ * Owner (chủ sân)
+ */
+router.put(
+  "/:id/assign-court",
+  authenticateToken,
+  authorize("owner", "admin"),
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const ownerId = req.user._id || req.user.id;
+      const { courtId } = req.body;
+      
+      if (!courtId) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng cung cấp courtId",
+        });
+      }
+      
+      const league = await League.findById(leagueId).populate("facility");
+      
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+      
+      if (league.facility && league.facility.owner.toString() !== ownerId.toString() && req.user.role !== "admin") {
+        return res.status(403).json({
+          success: false,
+          message: "Không có quyền chốt sân cho giải đấu này",
+        });
+      }
+      
+      const court = await Court.findById(courtId).populate("facility");
+      
+      if (!court) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy sân",
+        });
+      }
+      
+      if (court.facility.owner.toString() !== ownerId.toString() && req.user.role !== "admin") {
+        return res.status(403).json({
+          success: false,
+          message: "Không có quyền sử dụng sân này",
+        });
+      }
+      
+      league.courtId = courtId;
+      await league.save();
+      
+      await logAudit(
+        "ASSIGN_COURT_TO_LEAGUE",
+        ownerId,
+        req,
+        {
+          leagueId: leagueId,
+          leagueName: league.name,
+          courtId: courtId,
+          courtName: court.name,
+        }
+      );
+      
+      res.json({
+        success: true,
+        message: "Đã chốt sân cho giải đấu thành công",
+        data: league,
       });
     } catch (error) {
       next(error);

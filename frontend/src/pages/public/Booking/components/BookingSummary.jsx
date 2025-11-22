@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import useDeviceType from '../../../../hook/use-device-type'
 import useMobile from '../../../../hook/use-mobile'
 import { formatDate } from '../utils/dateHelpers'
 import { Calendar, Clock, DollarSign, CheckCircle, Tag, MapPin, Grid3x3, X, MessageCircle } from 'lucide-react'
 import { promotionApi } from '../../../../api/promotionApi'
+import ChatModal from './ChatModal'
+import useToggle from '../../../../hook/use-toggle'
 
 export default function BookingSummary({ 
   selectedDate, 
@@ -22,6 +24,8 @@ export default function BookingSummary({
   const isSmallMobile = useMobile(480)
   const isVerySmallMobile = useMobile(360)
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const [showChatModal, { toggle: toggleChatModal, setFalse: closeChatModal }] = useToggle(false)
   
   const [promoCode, setPromoCode] = useState('')
   const [appliedPromotion, setAppliedPromotion] = useState(null)
@@ -508,7 +512,7 @@ export default function BookingSummary({
             <button
               onClick={() => {
                 if (venueId) {
-                  window.open(`/chat?venue=${venueId}`, '_blank')
+                  toggleChatModal()
                 } else {
                   toast.info('Không tìm thấy thông tin chủ sân')
                 }
@@ -557,7 +561,12 @@ export default function BookingSummary({
         Bằng việc đặt sân, bạn đồng ý với điều khoản sử dụng của chúng tôi
       </p>
 
-      {/* CSS media queries đã được thay thế bằng useMobile hook */}
+      {/* Chat Modal */}
+      <ChatModal
+        isOpen={showChatModal}
+        onClose={closeChatModal}
+        venueId={venueId}
+      />
     </div>
   )
 }

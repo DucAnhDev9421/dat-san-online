@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Save, Trash2, List, FileUp } from 'lucide-react'
+import { Save, Trash2, List, FileUp, Plus } from 'lucide-react'
 import { toast } from 'react-toastify'
+import { leagueApi } from '../../../../../api/leagueApi'
+import { useTournament } from '../../TournamentContext'
 
 const TeamsManagementTab = ({ tournament }) => {
   const navigate = useNavigate()
   const { id } = useParams()
+  const { refreshTournament } = useTournament()
   const [teamsList, setTeamsList] = useState([])
   const [savingTeams, setSavingTeams] = useState(false)
+  const [deletingTeamId, setDeletingTeamId] = useState(null)
 
   useEffect(() => {
     // Lấy số lượng đội từ maxParticipants (mặc định 4 nếu không có)
@@ -29,7 +33,8 @@ const TeamsManagementTab = ({ tournament }) => {
           defaultTeams[index] = {
             ...defaultTeams[index],
             ...team,
-            id: team.id || index + 1,
+            id: team.id || team._id || index + 1,
+            _id: team._id || team.id,
             teamNumber: team.teamNumber || `#${index + 1}`
           }
         }
@@ -45,39 +50,147 @@ const TeamsManagementTab = ({ tournament }) => {
     ))
   }
 
+  const handleLogoChange = (teamId, e) => {
+    const file = e.target.files[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Kích thước ảnh không được vượt quá 5MB')
+        return
+      }
+      
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setTeamsList(prev => prev.map(team => 
+          team.id === teamId ? { ...team, logo: reader.result } : team
+        ))
+        toast.success('Đã thay đổi logo đội')
+      }
+      reader.onerror = () => {
+        toast.error('Không thể đọc file ảnh')
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const handleReorderTeam = (teamId, e) => {
     e?.preventDefault()
     e?.stopPropagation()
     if (id && teamId) {
-      navigate(`/tournament/${id}/teams/${teamId}`)
+      navigate(`/tournament/${id}/teams/${teamId}/info`)
     }
   }
 
-  const handleDeleteTeam = (teamId) => {
-    const minTeams = tournament?.maxParticipants || 4
+  const handleDeleteTeam = async (teamId) => {
+    const minTeams = 4
+    
     if (teamsList.length <= minTeams) {
       toast.error(`Phải có ít nhất ${minTeams} đội`)
       return
     }
-    setTeamsList(prev => prev.filter(team => team.id !== teamId))
+
+    try {
+      setDeletingTeamId(teamId)
+      await leagueApi.deleteTeam(id, teamId)
+      toast.success('Xóa đội thành công')
+      refreshTournament()
+    } catch (error) {
+      console.error('Error deleting team:', error)
+      toast.error(error.message || 'Không thể xóa đội')
+    } finally {
+      setDeletingTeamId(null)
+    }
   }
 
-  const handleDownloadSample = () => {
-    toast.info('Tính năng tải file mẫu đang được phát triển')
+  const handleDownloadSample = async () => {
+    try {
+      await leagueApi.downloadTeamTemplate(id)
+      toast.success('Đã tải file mẫu thành công')
+    } catch (error) {
+      console.error('Error downloading template:', error)
+      toast.error(error.message || 'Không thể tải file mẫu')
+    }
   }
 
   const handleImportFile = () => {
-    toast.info('Tính năng nhập file đang được phát triển')
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.xlsx,.xls,.csv'
+    input.onchange = async (e) => {
+      const file = e.target.files[0]
+      if (!file) return
+
+      try {
+        setSavingTeams(true)
+        await leagueApi.importTeams(id, file)
+        toast.success('Đã import danh sách đội thành công')
+        refreshTournament()
+      } catch (error) {
+        console.error('Error importing teams:', error)
+        toast.error(error.message || 'Không thể import danh sách đội')
+      } finally {
+        setSavingTeams(false)
+      }
+    }
+    input.click()
+  }
+
+  const handleAddTeam = async () => {
+    try {
+      const newTeamId = teamsList.length > 0 
+        ? Math.max(...teamsList.map(t => t.id || 0)) + 1 
+        : 1
+      
+      const newTeam = {
+        id: newTeamId,
+        teamNumber: `#${newTeamId}`,
+        contactPhone: '',
+        contactName: '',
+        logo: null
+      }
+      
+      const newMaxParticipants = teamsList.length + 1
+      
+      setTeamsList(prev => [...prev, newTeam])
+      
+      await leagueApi.updateLeague(id, {
+        maxParticipants: newMaxParticipants
+      })
+      
+      toast.success('Đã thêm đội mới')
+      refreshTournament()
+    } catch (error) {
+      console.error('Error adding team:', error)
+      toast.error(error.message || 'Không thể thêm đội')
+      setTeamsList(prev => prev.slice(0, -1))
+    }
   }
 
   const handleSaveTeams = async () => {
     try {
       setSavingTeams(true)
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      const teamsToSave = teamsList.map((team, index) => ({
+        id: team.id || index + 1,
+        teamNumber: team.teamNumber || `#${index + 1}`,
+        contactPhone: team.contactPhone || '',
+        contactName: team.contactName || '',
+        logo: team.logo || null,
+        wins: team.wins || 0,
+        draws: team.draws || 0,
+        losses: team.losses || 0,
+        members: team.members || []
+      }))
+      
+      await leagueApi.updateLeague(id, {
+        maxParticipants: teamsList.length,
+        teams: teamsToSave
+      })
+      
       toast.success('Đã lưu thông tin đội thành công')
+      refreshTournament()
     } catch (error) {
       console.error('Error saving teams:', error)
-      toast.error('Không thể lưu thông tin đội')
+      toast.error(error.message || 'Không thể lưu thông tin đội')
     } finally {
       setSavingTeams(false)
     }
@@ -110,16 +223,23 @@ const TeamsManagementTab = ({ tournament }) => {
       <div className="teams-management-list">
         {teamsList.map((team, index) => (
           <div key={team.id} className="team-management-item">
-            <div className="team-index-number">
-              {index + 1}
-            </div>
-            
             <div className="team-logo-container">
-              <img 
-                src={team.logo || '/team.png'} 
-                alt="Team" 
-                className="team-logo-shield"
-              />
+              <label className="team-logo-upload-label" title="Click để thay đổi logo">
+                <img 
+                  src={team.logo || '/team.png'} 
+                  alt="Team" 
+                  className="team-logo-shield"
+                />
+                <div className="team-index-badge">
+                  {index + 1}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleLogoChange(team.id, e)}
+                />
+              </label>
             </div>
             
             <div className="team-actions">
@@ -133,8 +253,12 @@ const TeamsManagementTab = ({ tournament }) => {
               </button>
               <button
                 className="team-action-btn team-action-delete"
-                onClick={() => handleDeleteTeam(team.id)}
+                onClick={() => {
+                  const teamIdToDelete = team._id || team.id
+                  handleDeleteTeam(teamIdToDelete)
+                }}
                 title="Xóa"
+                disabled={deletingTeamId === (team._id || team.id)}
               >
                 <Trash2 size={18} />
               </button>
@@ -165,6 +289,17 @@ const TeamsManagementTab = ({ tournament }) => {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="teams-management-footer">
+        <button
+          className="btn-add-team"
+          onClick={handleAddTeam}
+          type="button"
+        >
+          <Plus size={16} />
+          Thêm đội
+        </button>
       </div>
 
       <div className="teams-save-section">

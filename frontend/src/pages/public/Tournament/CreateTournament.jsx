@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Pencil, HelpCircle, X } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { categoryApi } from '../../../api/categoryApi'
@@ -13,6 +13,8 @@ import '../../../styles/CreateTournament.css'
 
 const CreateTournament = () => {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const facilityIdFromUrl = searchParams.get('facility')
   
   const [formData, setFormData] = useState({
     image: null,
@@ -27,9 +29,7 @@ const CreateTournament = () => {
     numParticipants: 2,
     membersPerTeam: 2, // số lượng người mỗi đội
     startDate: '',
-    startTime: '',
     endDate: '',
-    endTime: '',
     allowRegistration: false,
     registrationDeadline: ''
   })
@@ -130,6 +130,26 @@ const CreateTournament = () => {
     fetchFavorites()
   }, [])
 
+  // Load facility from URL params
+  useEffect(() => {
+    if (facilityIdFromUrl) {
+      const loadFacility = async () => {
+        try {
+          const result = await facilityApi.getFacilityById(facilityIdFromUrl)
+          if (result.success && result.data) {
+            const facility = result.data
+            setSelectedFacility(facility)
+            setFormData(prev => ({ ...prev, location: facility.name || '' }))
+            setFacilitySearchQuery(facility.name + (facility.address ? ` - ${facility.address}` : ''))
+          }
+        } catch (error) {
+          console.error('Error loading facility:', error)
+        }
+      }
+      loadFacility()
+    }
+  }, [facilityIdFromUrl])
+
   const tournamentFormats = [
     { id: 'single-elimination', icon: '⚔️', label: 'Loại trực tiếp' },
     { id: 'round-robin', icon: '🔁', label: 'Vòng tròn' }
@@ -217,20 +237,12 @@ const CreateTournament = () => {
       toast.error('Vui lòng chọn ngày bắt đầu')
       return
     }
-    if (!formData.startTime) {
-      toast.error('Vui lòng chọn giờ bắt đầu')
-      return
-    }
     if (!formData.endDate) {
       toast.error('Vui lòng chọn ngày kết thúc')
       return
     }
-    if (!formData.endTime) {
-      toast.error('Vui lòng chọn giờ kết thúc')
-      return
-    }
     // Validate date range
-    if (new Date(`${formData.endDate}T${formData.endTime}`) < new Date(`${formData.startDate}T${formData.startTime}`)) {
+    if (new Date(formData.endDate) < new Date(formData.startDate)) {
       toast.error('Ngày kết thúc phải sau ngày bắt đầu')
       return
     }
@@ -252,13 +264,14 @@ const CreateTournament = () => {
         'round-robin': 'Vòng tròn'
       }
 
-      // 2. Combine date + time thành ISO datetime
-      const startDateTime = `${formData.startDate}T${formData.startTime}:00`
-      const endDateTime = `${formData.endDate}T${formData.endTime}:00`
+      // 2. Combine date với time mặc định (00:00:00) thành ISO datetime
+      const startDateTime = `${formData.startDate}T00:00:00`
+      const endDateTime = `${formData.endDate}T23:59:59`
 
       // 3. Lấy thông tin facility
       const facilityName = selectedFacility?.name || ''
       const facilityAddress = selectedFacility?.address || ''
+      const facilityId = selectedFacility?._id || selectedFacility?.id || facilityIdFromUrl || null
 
       // 4. Prepare request body
       const requestBody = {
@@ -278,8 +291,15 @@ const CreateTournament = () => {
         registrationDeadline: formData.allowRegistration && formData.registrationDeadline
           ? `${formData.registrationDeadline}T00:00:00`
           : null,
+        type: formData.mode === 'public' ? 'PUBLIC' : 'PRIVATE', // Map mode to type
         teams: [],
         matches: []
+      }
+
+      // Nếu có facility ID, thêm vào request body
+      if (facilityId) {
+        requestBody.facility = facilityId
+        // Nếu có facility, giải đấu sẽ tự động có approvalStatus: "pending"
       }
 
       // 5. Create league first
@@ -448,19 +468,6 @@ const CreateTournament = () => {
                     />
                   </div>
 
-                  <div className="form-field">
-                    <label htmlFor="startTime">
-                      Giờ bắt đầu <span className="required">*</span>
-                    </label>
-                    <input
-                      type="time"
-                      id="startTime"
-                      name="startTime"
-                      value={formData.startTime}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
                 </div>
 
                 <div className="form-row-inline">
@@ -473,20 +480,6 @@ const CreateTournament = () => {
                       id="endDate"
                       name="endDate"
                       value={formData.endDate}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-field">
-                    <label htmlFor="endTime">
-                      Giờ kết thúc <span className="required">*</span>
-                    </label>
-                    <input
-                      type="time"
-                      id="endTime"
-                      name="endTime"
-                      value={formData.endTime}
                       onChange={handleInputChange}
                       required
                     />
