@@ -53,13 +53,18 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setLoading(true)
     setError('')
+
+    if (!formData.email || !formData.password) {
+      setError('Vui lòng điền đầy đủ thông tin bắt buộc')
+      return
+    }
+
+    setLoading(true)
 
     try {
       const result = await authService.login(formData.email, formData.password)
       
-      // Login successful - update auth context
       if (result.success && result.data.user) {
         login(result.data.user)
         navigate('/')

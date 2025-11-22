@@ -31,6 +31,7 @@ import ProfilePage from "./pages/public/ProfilePage";
 import ProfileRoutes from "./pages/public/ProfilePage/ProfileRoutes";
 import Booking from "./pages/public/Booking";
 import Payment from "./pages/public/Payment.jsx";
+import Chat from "./pages/public/Chat.jsx";
 import Wallet from "./pages/public/Wallet";
 import WalletSuccess from "./pages/public/Wallet/WalletSuccess.jsx";
 import WalletFailed from "./pages/public/Wallet/WalletFailed.jsx";
@@ -117,6 +118,16 @@ function App() {
               <Header />
               <Payment />
               <Footer />
+            </div>
+          } />
+
+          {/* Chat Route - With Header only */}
+          <Route path="/chat" element={
+            <div className="layout">
+              <Header />
+              <ProtectedRoute>
+                <Chat />
+              </ProtectedRoute>
             </div>
           } />
 

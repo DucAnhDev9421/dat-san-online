@@ -31,6 +31,22 @@ export const clearTokens = () => {
   localStorage.removeItem('refreshToken');
 };
 
+// Refresh token queue management
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  
+  failedQueue = [];
+};
+
 // Request interceptor - Add auth token to requests
 apiClient.interceptors.request.use(
   (config) => {
@@ -55,7 +71,22 @@ apiClient.interceptors.response.use(
 
     // Handle 401 Unauthorized - Token expired
     if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // Nếu đang refresh, đợi và retry sau
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(token => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return apiClient(originalRequest);
+          })
+          .catch(err => {
+            return Promise.reject(err);
+          });
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
         const refreshToken = getRefreshToken();
@@ -76,11 +107,15 @@ apiClient.interceptors.response.use(
             }
           }));
           
+          // Process queued requests
+          processQueue(null, accessToken);
+          
           // Retry original request with new token
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           return apiClient(originalRequest);
         } else {
           // No refresh token available
+          processQueue(error);
           clearTokens();
           if (window.location.pathname !== '/login') {
             window.location.href = '/login';
@@ -89,6 +124,7 @@ apiClient.interceptors.response.use(
         }
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
+        processQueue(refreshError);
         // Clear tokens and redirect to login
         clearTokens();
         
@@ -100,6 +136,8 @@ apiClient.interceptors.response.use(
           window.location.href = '/login';
         }
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
 

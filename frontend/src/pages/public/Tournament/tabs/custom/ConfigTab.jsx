@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Save, Plus, Minus, Pencil, Upload } from 'lucide-react'
+import { Save, Plus, Minus, Pencil, Upload, Send } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { categoryApi } from '../../../../../api/categoryApi'
 import { facilityApi } from '../../../../../api/facilityApi'
@@ -42,10 +42,22 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
   const [loadingFavorites, setLoadingFavorites] = useState(false)
   const [sportCategories, setSportCategories] = useState([])
   const [loadingCategories, setLoadingCategories] = useState(false)
+  const [isActivateModalOpen, setIsActivateModalOpen] = useState(false)
+  const [activating, setActivating] = useState(false)
+  const [activateFacilitySearchQuery, setActivateFacilitySearchQuery] = useState('')
+  const [activateFacilitySearchResults, setActivateFacilitySearchResults] = useState([])
+  const [loadingActivateFacilities, setLoadingActivateFacilities] = useState(false)
+  const [showActivateFacilityDropdown, setShowActivateFacilityDropdown] = useState(false)
+  const [selectedActivateFacility, setSelectedActivateFacility] = useState(null)
+  const [activateFavoriteFacilities, setActivateFavoriteFacilities] = useState([])
   
   const facilityDropdownRef = useClickOutside(() => {
     setShowFacilityDropdown(false)
   }, showFacilityDropdown)
+  
+  const activateFacilityDropdownRef = useClickOutside(() => {
+    setShowActivateFacilityDropdown(false)
+  }, showActivateFacilityDropdown)
 
   useEffect(() => {
     if (tournament) {
@@ -58,10 +70,13 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
         'Vòng tròn': 'round-robin'
       }
       
+      // Map type từ backend sang mode frontend
+      const mode = tournament.type === 'PUBLIC' ? 'public' : 'private'
+      
       setFormData({
         name: tournament.name || '',
         phone: tournament.phone || '',
-        mode: 'private', // Backend mặc định là PRIVATE
+        mode: mode,
         location: locationName || '',
         format: formatMapping[tournament.format] || tournament.format || 'single-elimination',
         sport: tournament.sport || '',
@@ -69,6 +84,18 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
       })
       setTournamentImage(tournament.image || null)
       setCoverImage(tournament.banner || tournament.image || null)
+      
+      // Nếu tournament có facility (đã populate), set selectedFacility
+      if (tournament.facility) {
+        if (typeof tournament.facility === 'object' && (tournament.facility._id || tournament.facility.id)) {
+          setSelectedFacility({
+            _id: tournament.facility._id || tournament.facility.id,
+            id: tournament.facility._id || tournament.facility.id,
+            name: tournament.facility.name || locationName || '',
+            address: tournament.facility.address || locationAddress || ''
+          })
+        }
+      }
       
       if (locationName || locationAddress) {
         setFacilitySearchQuery(locationName ? `${locationName}${locationAddress ? ` - ${locationAddress}` : ''}` : locationAddress || '')
@@ -112,6 +139,61 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
     }
     fetchFavorites()
   }, [])
+
+  useEffect(() => {
+    const fetchActivateFavorites = async () => {
+      try {
+        const result = await userApi.getFavorites()
+        if (result.success && result.data?.favorites) {
+          setActivateFavoriteFacilities(result.data.favorites)
+        } else {
+          setActivateFavoriteFacilities([])
+        }
+      } catch (error) {
+        console.error('Error fetching favorites:', error)
+        setActivateFavoriteFacilities([])
+      }
+    }
+    
+    if (isActivateModalOpen) {
+      fetchActivateFavorites()
+    }
+  }, [isActivateModalOpen])
+
+  useEffect(() => {
+    const searchActivateFacilities = async () => {
+      if (!activateFacilitySearchQuery.trim()) {
+        setActivateFacilitySearchResults([])
+        setShowActivateFacilityDropdown(false)
+        return
+      }
+
+      try {
+        setLoadingActivateFacilities(true)
+        const result = await facilityApi.getFacilities({ 
+          limit: 20, 
+          status: 'opening',
+          address: activateFacilitySearchQuery.trim()
+        })
+        if (result.success && result.data) {
+          const facilitiesList = result.data.facilities || result.data || []
+          setActivateFacilitySearchResults(facilitiesList)
+          setShowActivateFacilityDropdown(true)
+        }
+      } catch (error) {
+        console.error('Error searching facilities:', error)
+        setActivateFacilitySearchResults([])
+      } finally {
+        setLoadingActivateFacilities(false)
+      }
+    }
+
+    const debounceTimer = setTimeout(() => {
+      searchActivateFacilities()
+    }, 300)
+
+    return () => clearTimeout(debounceTimer)
+  }, [activateFacilitySearchQuery])
 
   useEffect(() => {
     const searchFacilities = async () => {
@@ -158,7 +240,8 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
 
   const handleFacilitySelect = (facility) => {
     setSelectedFacility(facility)
-    setFormData(prev => ({ ...prev, location: facility._id || facility.id }))
+    // Lưu tên facility vào location để hiển thị, nhưng facility ID sẽ được lưu riêng khi save
+    setFormData(prev => ({ ...prev, location: facility.name || '' }))
     setFacilitySearchQuery(facility.name + (facility.address ? ` - ${facility.address}` : ''))
     setShowFacilityDropdown(false)
   }
@@ -227,9 +310,32 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
         'knockout': 'Loại Trực Tiếp'
       }
       
-      // Lấy thông tin facility
-      const facilityName = selectedFacility?.name || formData.location || tournament?.location || ''
-      const facilityAddress = selectedFacility?.address || tournament?.address || ''
+      // Lấy thông tin facility - ưu tiên selectedFacility
+      let facilityId = null
+      let facilityName = ''
+      let facilityAddress = ''
+      
+      if (selectedFacility) {
+        // Nếu đã chọn facility trong form, dùng thông tin từ đó
+        facilityId = selectedFacility._id || selectedFacility.id
+        facilityName = selectedFacility.name || ''
+        facilityAddress = selectedFacility.address || ''
+      } else if (tournament?.facility) {
+        // Nếu tournament đã có facility, giữ nguyên
+        if (typeof tournament.facility === 'object' && (tournament.facility._id || tournament.facility.id)) {
+          facilityId = tournament.facility._id || tournament.facility.id
+          facilityName = tournament.facility.name || tournament.location || ''
+          facilityAddress = tournament.facility.address || tournament.address || ''
+        } else if (typeof tournament.facility === 'string') {
+          facilityId = tournament.facility
+          facilityName = tournament.location || ''
+          facilityAddress = tournament.address || ''
+        }
+      } else if (formData.location) {
+        // Nếu chỉ có location (tên), không có facility ID
+        facilityName = formData.location
+        facilityAddress = tournament?.address || ''
+      }
       
       // Prepare update data
       const updateData = {
@@ -240,8 +346,12 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
         description: formData.description.trim() || null,
         fullDescription: formData.description.trim() || null,
         location: facilityName,
-        address: facilityAddress
+        address: facilityAddress,
+        type: formData.mode === 'public' ? 'PUBLIC' : 'PRIVATE' // Map mode to type
       }
+      
+      // Luôn gửi facility ID nếu có (có thể là null để xóa facility)
+      updateData.facility = facilityId
       
       // Update tournament
       const result = await leagueApi.updateLeague(id, updateData)
@@ -277,6 +387,135 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
     }
   }
 
+  const handleActivateFacilitySelect = (facility) => {
+    setSelectedActivateFacility(facility)
+    setActivateFacilitySearchQuery(facility.name + (facility.address ? ` - ${facility.address}` : ''))
+    setShowActivateFacilityDropdown(false)
+  }
+
+  const handleActivateFacilitySearchChange = (e) => {
+    const value = e.target.value
+    setActivateFacilitySearchQuery(value)
+    if (!value.trim()) {
+      setSelectedActivateFacility(null)
+      setShowActivateFacilityDropdown(false)
+    }
+  }
+
+  const handleActivateClick = async () => {
+    // Kiểm tra xem đã có facility chưa
+    let facilityToUse = null
+    
+    // Ưu tiên 1: Facility đã được chọn trong form (selectedFacility) - khi đang edit
+    if (selectedFacility) {
+      facilityToUse = selectedFacility
+    }
+    // Ưu tiên 2: Tournament đã có facility (từ database) - đã populate
+    else if (tournament?.facility) {
+      // Nếu tournament.facility là object (đã populate), lấy thông tin từ đó
+      if (typeof tournament.facility === 'object' && (tournament.facility._id || tournament.facility.id)) {
+        facilityToUse = {
+          _id: tournament.facility._id || tournament.facility.id,
+          id: tournament.facility._id || tournament.facility.id,
+          name: tournament.facility.name || tournament.location || '',
+          address: tournament.facility.address || tournament.address || ''
+        }
+      }
+      // Nếu là ID string, cần fetch thông tin facility
+      else if (typeof tournament.facility === 'string') {
+        try {
+          const result = await facilityApi.getFacilityById(tournament.facility)
+          if (result.success && result.data) {
+            facilityToUse = result.data
+          }
+        } catch (error) {
+          console.error('Error fetching facility:', error)
+        }
+      }
+    }
+    // Ưu tiên 3: Nếu tournament có location (tên facility), tìm facility theo tên
+    else if (tournament?.location && tournament.location.trim()) {
+      try {
+        // Tìm facility theo tên
+        const result = await facilityApi.getFacilities({ 
+          name: tournament.location.trim(),
+          limit: 1
+        })
+        if (result.success && result.data) {
+          const facilities = result.data.facilities || result.data || []
+          if (facilities.length > 0) {
+            facilityToUse = facilities[0]
+          }
+        }
+      } catch (error) {
+        console.error('Error searching facility by name:', error)
+      }
+    }
+    // Ưu tiên 4: formData.location có thể là facility ID (ObjectId thường có 24 ký tự)
+    else if (formData.location && typeof formData.location === 'string' && formData.location.length === 24 && /^[a-fA-F0-9]{24}$/.test(formData.location)) {
+      // Có thể là ObjectId, thử fetch
+      try {
+        const result = await facilityApi.getFacilityById(formData.location)
+        if (result.success && result.data) {
+          facilityToUse = result.data
+        }
+      } catch (error) {
+        console.error('Error fetching facility:', error)
+      }
+    }
+    
+    // Nếu đã có facility, gửi luôn
+    if (facilityToUse) {
+      await handleActivate(facilityToUse)
+    } else {
+      // Chưa có facility, mở modal để chọn
+      setIsActivateModalOpen(true)
+    }
+  }
+
+  const handleActivate = async (facility = null) => {
+    const facilityToUse = facility || selectedActivateFacility
+    
+    if (!facilityToUse) {
+      toast.error('Vui lòng chọn cơ sở thể thao')
+      return
+    }
+
+    try {
+      setActivating(true)
+      
+      const facilityId = facilityToUse._id || facilityToUse.id
+      const facilityName = facilityToUse.name || tournament?.location || ''
+      const facilityAddress = facilityToUse.address || tournament?.address || ''
+      
+      const updateData = {
+        facility: facilityId,
+        location: facilityName,
+        address: facilityAddress,
+        approvalStatus: 'pending'
+      }
+      
+      const result = await leagueApi.updateLeague(id, updateData)
+      
+      if (result.success) {
+        toast.success('Đã gửi đơn đăng ký giải đấu cho chủ sân thành công')
+        setIsActivateModalOpen(false)
+        setSelectedActivateFacility(null)
+        setActivateFacilitySearchQuery('')
+        if (refreshTournament) {
+          refreshTournament()
+        }
+      } else {
+        throw new Error(result.message || 'Gửi đơn đăng ký thất bại')
+      }
+    } catch (error) {
+      console.error('Error activating league:', error)
+      toast.error(error.message || 'Không thể gửi đơn đăng ký')
+    } finally {
+      setActivating(false)
+    }
+  }
+
   const tournamentFormats = [
     { value: 'single-elimination', label: 'Loại trực tiếp' },
     { value: 'round-robin', label: 'Vòng tròn' },
@@ -284,20 +523,70 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
     { value: 'knockout', label: 'Loại trực tiếp' }
   ]
 
+  const canActivate = !tournament?.facility && tournament?.approvalStatus !== 'pending' && tournament?.approvalStatus !== 'approved'
+  const isPending = tournament?.approvalStatus === 'pending'
+  const isApproved = tournament?.approvalStatus === 'approved'
+
   if (!tournament) return null
 
   return (
     <div className="custom-tab-content">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2>Cấu hình giải đấu</h2>
-        {!isEditing && (
-          <button 
-            className="btn-edit"
-            onClick={() => setIsEditing(true)}
-          >
-            Chỉnh sửa
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {canActivate && !isEditing && (
+            <button 
+              className="btn-edit"
+              onClick={handleActivateClick}
+              disabled={activating}
+              style={{ backgroundColor: '#10b981', color: 'white', border: 'none', opacity: activating ? 0.6 : 1 }}
+            >
+              {activating ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: 'inline-block', marginRight: '4px', verticalAlign: 'middle' }}></div>
+                  Đang gửi...
+                </>
+              ) : (
+                <>
+                  <Send size={16} style={{ marginRight: '4px', display: 'inline-block', verticalAlign: 'middle' }} />
+                  Kích hoạt & Gửi đơn
+                </>
+              )}
+            </button>
+          )}
+          {isPending && !isEditing && (
+            <span style={{ 
+              padding: '8px 16px', 
+              backgroundColor: '#fef3c7', 
+              color: '#92400e', 
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}>
+              ⏳ Đang chờ chủ sân duyệt
+            </span>
+          )}
+          {isApproved && !isEditing && (
+            <span style={{ 
+              padding: '8px 16px', 
+              backgroundColor: '#d1fae5', 
+              color: '#065f46', 
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}>
+              ✓ Đã được duyệt
+            </span>
+          )}
+          {!isEditing && (
+            <button 
+              className="btn-edit"
+              onClick={() => setIsEditing(true)}
+            >
+              Chỉnh sửa
+            </button>
+          )}
+        </div>
       </div>
 
       {isEditing ? (
@@ -647,9 +936,7 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
                       <div className="info-row">
                         <strong>Chế độ:</strong>
                         <span>
-                          {tournament.mode === 'private' ? 'Riêng tư' : 
-                           tournament.mode === 'public' ? 'Công khai' : 
-                           'Chưa cập nhật'}
+                          {tournament.type === 'PUBLIC' ? 'Công khai' : 'Riêng tư'}
                         </span>
                       </div>
                       <div className="info-row">
@@ -699,6 +986,172 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {isActivateModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style={{ position: 'fixed' }}>
+          <div className="bg-white rounded-lg max-w-md w-full mx-4" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Kích hoạt & Gửi đơn đăng ký</h2>
+                <button
+                  onClick={() => {
+                    setIsActivateModalOpen(false)
+                    setSelectedActivateFacility(null)
+                    setActivateFacilitySearchQuery('')
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                  style={{ fontSize: '24px', lineHeight: '1', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Chọn cơ sở thể thao <span className="text-red-500">*</span>
+                  </label>
+                  <div className="facility-search-wrapper" ref={activateFacilityDropdownRef} style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      value={activateFacilitySearchQuery}
+                      onChange={handleActivateFacilitySearchChange}
+                      onFocus={() => {
+                        if (activateFacilitySearchResults.length > 0 || activateFavoriteFacilities.length > 0) {
+                          setShowActivateFacilityDropdown(true)
+                        }
+                      }}
+                      placeholder="Tìm theo tên cơ sở, quận huyện..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoComplete="off"
+                      style={{ width: '100%' }}
+                    />
+                    {loadingActivateFacilities && (
+                      <div className="text-sm text-gray-500 mt-1">Đang tìm...</div>
+                    )}
+                    {showActivateFacilityDropdown && (
+                      <div style={{
+                        position: 'absolute',
+                        zIndex: 10,
+                        width: '100%',
+                        marginTop: '4px',
+                        backgroundColor: 'white',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '6px',
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                        maxHeight: '240px',
+                        overflowY: 'auto'
+                      }}>
+                        {!activateFacilitySearchQuery.trim() && activateFavoriteFacilities.length > 0 && (
+                          <>
+                            <div className="px-3 py-2 text-xs font-semibold text-gray-500 bg-gray-50">
+                              Sân yêu thích
+                            </div>
+                            {activateFavoriteFacilities.map((facility) => (
+                              <div
+                                key={facility._id || facility.id}
+                                className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
+                                onClick={() => handleActivateFacilitySelect(facility)}
+                              >
+                                <div className="font-medium">
+                                  {facility.name}
+                                  <span className="text-yellow-500 ml-1">★</span>
+                                </div>
+                                {facility.address && (
+                                  <div className="text-sm text-gray-500">{facility.address}</div>
+                                )}
+                              </div>
+                            ))}
+                            {activateFacilitySearchResults.length > 0 && (
+                              <div className="border-t border-gray-200"></div>
+                            )}
+                          </>
+                        )}
+                        {activateFacilitySearchResults.length > 0 && (
+                          <>
+                            {!activateFacilitySearchQuery.trim() && activateFavoriteFacilities.length > 0 && (
+                              <div className="px-3 py-2 text-xs font-semibold text-gray-500 bg-gray-50">
+                                Kết quả tìm kiếm
+                              </div>
+                            )}
+                            {activateFacilitySearchResults.map((facility) => (
+                              <div
+                                key={facility._id || facility.id}
+                                className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                                onClick={() => handleActivateFacilitySelect(facility)}
+                              >
+                                <div className="font-medium">{facility.name}</div>
+                                {facility.address && (
+                                  <div className="text-sm text-gray-500">{facility.address}</div>
+                                )}
+                              </div>
+                            ))}
+                          </>
+                        )}
+                        {activateFacilitySearchQuery.trim() && !loadingActivateFacilities && activateFacilitySearchResults.length === 0 && (
+                          <div className="px-3 py-4 text-center text-gray-500 text-sm">
+                            Không tìm thấy cơ sở nào
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {selectedActivateFacility && (
+                    <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+                      <div className="text-sm font-medium text-green-800">
+                        Đã chọn: {selectedActivateFacility.name}
+                      </div>
+                      {selectedActivateFacility.address && (
+                        <div className="text-xs text-green-600 mt-1">
+                          {selectedActivateFacility.address}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-md">
+                  <strong>Lưu ý:</strong> Sau khi gửi đơn, chủ sân sẽ xem xét và duyệt giải đấu của bạn. 
+                  Bạn sẽ nhận được thông báo khi có kết quả.
+                </div>
+
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => {
+                      setIsActivateModalOpen(false)
+                      setSelectedActivateFacility(null)
+                      setActivateFacilitySearchQuery('')
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+                    disabled={activating}
+                    style={{ border: 'none', cursor: activating ? 'not-allowed' : 'pointer' }}
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={handleActivate}
+                    disabled={activating || !selectedActivateFacility}
+                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                    style={{ border: 'none' }}
+                  >
+                    {activating ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Đang gửi...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={16} />
+                        Gửi đơn đăng ký
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

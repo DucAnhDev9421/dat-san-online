@@ -8,7 +8,7 @@ const ScheduleTab = ({ tournament }) => {
   const isRoundRobin = tournament.format === 'Vòng tròn' || tournament.format === 'round-robin'
   const [selectedRoundIndex, setSelectedRoundIndex] = useState(null) // null = hiển thị tất cả
 
-  // Tính toán các vòng đấu dựa trên số đội
+  // Tính toán các vòng đấu dựa trên số đội hoặc matches từ database
   const rounds = useMemo(() => {
     const numTeams = tournament?.maxParticipants || 4
     
@@ -36,64 +36,185 @@ const ScheduleTab = ({ tournament }) => {
       return []
     }
 
-    const calculatedRounds = []
-    let currentTeams = teams
-    let roundNumber = 1
-    
-    // Tính toán các vòng đấu từ vòng đầu tiên đến chung kết (single-elimination)
-    while (currentTeams.length > 1) {
-      const numMatches = Math.floor(currentTeams.length / 2)
-      const seeds = []
+    // Tính toán tất cả các vòng cần thiết dựa trên số đội
+    const calculateAllRounds = () => {
+      const allRounds = []
+      let currentTeams = teams
+      let roundNumber = 1
       
-      for (let i = 0; i < numMatches; i++) {
-        const team1 = currentTeams[i * 2]
-        const team2 = currentTeams[i * 2 + 1]
+      while (currentTeams.length > 1) {
+        const numMatches = Math.floor(currentTeams.length / 2)
+        let roundTitle = ''
+        let stage = ''
         
-        seeds.push({
-          id: i + 1,
-          date: new Date().toLocaleDateString('vi-VN', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-          }),
-          teams: [
-            { 
-              name: team1?.teamNumber || `Đội #${team1?.id || i * 2 + 1}`, 
-              score: 0 
-            },
-            { 
-              name: team2?.teamNumber || `Đội #${team2?.id || i * 2 + 2}`, 
-              score: 0 
-            }
-          ]
+        if (currentTeams.length === 2) {
+          roundTitle = 'Chung Kết'
+          stage = 'final'
+        } else if (currentTeams.length === 4) {
+          roundTitle = 'Bán Kết'
+          stage = 'semi'
+        } else if (currentTeams.length === 8) {
+          roundTitle = 'Tứ Kết'
+          stage = 'round3'
+        } else {
+          roundTitle = `Vòng ${roundNumber}`
+          stage = `round${roundNumber}`
+        }
+        
+        allRounds.push({
+          title: roundTitle,
+          numMatches: numMatches,
+          roundNumber: roundNumber,
+          stage: stage
         })
+        
+        currentTeams = Array.from({ length: numMatches }, (_, index) => ({
+          id: `winner-${roundNumber}-${index + 1}`,
+          teamNumber: `W#${index + 1} ${roundTitle}`
+        }))
+        
+        roundNumber++
       }
       
-      // Đặt tên vòng đấu
-      let roundTitle = ''
-      if (currentTeams.length === 2) {
-        roundTitle = 'Chung Kết'
-      } else if (currentTeams.length === 4) {
-        roundTitle = 'Bán Kết'
-      } else if (currentTeams.length === 8) {
-        roundTitle = 'Tứ Kết'
+      return allRounds
+    }
+
+    const allRoundsStructure = calculateAllRounds()
+    
+    // Nhóm matches từ database theo stage
+    const matchesByStage = {}
+    if (tournament?.matches && tournament.matches.length > 0) {
+      tournament.matches.forEach(match => {
+        if (!matchesByStage[match.stage]) {
+          matchesByStage[match.stage] = []
+        }
+        matchesByStage[match.stage].push(match)
+      })
+    }
+
+    const calculatedRounds = []
+    
+    // Duyệt qua tất cả các vòng cần thiết
+    allRoundsStructure.forEach((roundStructure, roundIndex) => {
+      const stageMatches = matchesByStage[roundStructure.stage] || []
+      const sortedMatches = stageMatches.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
+      
+      const seeds = []
+      
+      // Nếu có matches cho vòng này, sử dụng chúng
+      if (sortedMatches.length > 0) {
+        sortedMatches.forEach(match => {
+          const team1 = teams.find(t => (t.id === match.team1Id) || (t._id?.toString() === match.team1Id?.toString()))
+          const team2 = teams.find(t => (t.id === match.team2Id) || (t._id?.toString() === match.team2Id?.toString()))
+          
+          // Nếu là vòng sau vòng đầu tiên và không có team (teamId = null), hiển thị winner placeholder
+          const previousRound = roundIndex > 0 ? allRoundsStructure[roundIndex - 1] : null
+          const previousRoundName = previousRound?.title || 'Vòng trước'
+          
+          let team1Name = 'TBD'
+          let team2Name = 'TBD'
+          
+          if (team1) {
+            team1Name = team1.teamNumber || `Đội #${team1.id}`
+          } else if (match.team1Id === null || match.team1Id === undefined) {
+            // Nếu teamId = null và là vòng sau, hiển thị winner placeholder
+            team1Name = roundIndex > 0 ? `W#${match.matchNumber} ${previousRoundName}` : 'TBD'
+          } else {
+            team1Name = `Đội #${match.team1Id}`
+          }
+          
+          if (team2) {
+            team2Name = team2.teamNumber || `Đội #${team2.id}`
+          } else if (match.team2Id === null || match.team2Id === undefined) {
+            // Nếu teamId = null và là vòng sau, hiển thị winner placeholder
+            team2Name = roundIndex > 0 ? `W#${match.matchNumber + 1} ${previousRoundName}` : 'TBD'
+          } else {
+            team2Name = `Đội #${match.team2Id}`
+          }
+          
+          seeds.push({
+            id: match.matchNumber || match.id,
+            date: match.date ? new Date(match.date).toLocaleDateString('vi-VN', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            }) : new Date().toLocaleDateString('vi-VN', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            }),
+            teams: [
+              { 
+                name: team1Name, 
+                score: match.score1 ?? 0 
+              },
+              { 
+                name: team2Name, 
+                score: match.score2 ?? 0 
+              }
+            ]
+          })
+        })
       } else {
-        roundTitle = `Vòng ${roundNumber}`
+        // Nếu không có matches, tạo placeholder seeds
+        // Nếu là vòng đầu tiên, dùng teams thật
+        // Nếu là vòng sau, dùng placeholder từ vòng trước (#W1, #W2, ...)
+        if (roundIndex === 0) {
+          // Vòng đầu tiên: sử dụng teams thật
+          for (let i = 0; i < roundStructure.numMatches; i++) {
+            const team1 = teams[i * 2]
+            const team2 = teams[i * 2 + 1]
+            
+            seeds.push({
+              id: i + 1,
+              date: new Date().toLocaleDateString('vi-VN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+              }),
+              teams: [
+                { 
+                  name: team1?.teamNumber || `Đội #${team1?.id || i * 2 + 1}` || 'TBD', 
+                  score: 0 
+                },
+                { 
+                  name: team2?.teamNumber || `Đội #${team2?.id || i * 2 + 2}` || 'TBD', 
+                  score: 0 
+                }
+              ]
+            })
+          }
+        } else {
+          // Vòng sau: sử dụng placeholder từ vòng trước
+          const previousRound = allRoundsStructure[roundIndex - 1]
+          for (let i = 0; i < roundStructure.numMatches; i++) {
+            seeds.push({
+              id: i + 1,
+              date: new Date().toLocaleDateString('vi-VN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+              }),
+              teams: [
+                { 
+                  name: `#W${i * 2 + 1} ${previousRound.title}`, 
+                  score: 0 
+                },
+                { 
+                  name: `#W${i * 2 + 2} ${previousRound.title}`, 
+                  score: 0 
+                }
+              ]
+            })
+          }
+        }
       }
       
       calculatedRounds.push({
-        title: roundTitle,
+        title: roundStructure.title,
         seeds: seeds
       })
-      
-      // Tạo winner placeholders cho vòng tiếp theo
-      currentTeams = Array.from({ length: numMatches }, (_, index) => ({
-        id: `winner-${roundNumber}-${index + 1}`,
-        teamNumber: `W#${index + 1} ${roundTitle}`
-      }))
-      
-      roundNumber++
-    }
+    })
     
     return calculatedRounds
   }, [tournament, isRoundRobin])
@@ -121,33 +242,69 @@ const ScheduleTab = ({ tournament }) => {
         })
       : defaultTeams
 
-    // Thuật toán chia round-robin thành các vòng (Round-Robin Tournament Algorithm)
-    // Với n đội: n-1 vòng (nếu n chẵn) hoặc n vòng (nếu n lẻ)
+    // Ưu tiên sử dụng matches từ database nếu có
+    if (tournament?.matches && tournament.matches.length > 0) {
+      const roundRobinMatches = tournament.matches.filter(m => m.stage === 'round-robin')
+      
+      if (roundRobinMatches.length > 0) {
+        // Nhóm matches theo vòng (giả sử matchNumber 1-6 là vòng 1, 7-12 là vòng 2, ...)
+        const matchesPerRound = Math.floor(numTeams / 2)
+        const rounds = []
+        const numRounds = Math.ceil(roundRobinMatches.length / matchesPerRound)
+        
+        for (let round = 0; round < numRounds; round++) {
+          const startIndex = round * matchesPerRound
+          const endIndex = startIndex + matchesPerRound
+          const roundMatches = roundRobinMatches
+            .slice(startIndex, endIndex)
+            .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
+            .map(match => {
+              const team1 = teams.find(t => (t.id === match.team1Id) || (t._id?.toString() === match.team1Id?.toString()))
+              const team2 = teams.find(t => (t.id === match.team2Id) || (t._id?.toString() === match.team2Id?.toString()))
+              
+              return {
+                id: match.matchNumber || match.id,
+                team1: team1 || { id: match.team1Id, teamNumber: `Đội #${match.team1Id}` },
+                team2: team2 || { id: match.team2Id, teamNumber: `Đội #${match.team2Id}` },
+                score1: match.score1 ?? 0,
+                score2: match.score2 ?? 0,
+                matchNumber: match.matchNumber || match.id,
+                date: match.date,
+                time: match.time
+              }
+            })
+          
+          rounds.push({
+            id: round + 1,
+            title: `VÒNG ${round + 1}`,
+            matches: roundMatches
+          })
+        }
+        
+        return rounds
+      }
+    }
+
+    // Fallback: Thuật toán chia round-robin thành các vòng (Round-Robin Tournament Algorithm)
     const rounds = []
     const numRounds = numTeams % 2 === 0 ? numTeams - 1 : numTeams
     const matchesPerRound = Math.floor(numTeams / 2)
     
-    // Tạo mảng đội để xoay vòng (đội đầu tiên cố định)
     let rotatingTeams = [...teams]
     
     for (let round = 0; round < numRounds; round++) {
       const roundMatches = []
       
-      // Đội đầu tiên (index 0) cố định
       const fixedTeam = rotatingTeams[0]
       const otherTeams = rotatingTeams.slice(1)
       
-      // Tạo các cặp đấu cho vòng này
-      // Đội đầu (cố định) đấu với đội cuối, đội thứ 2 đấu với đội gần cuối, ...
       for (let i = 0; i < matchesPerRound; i++) {
         let team1, team2
         
         if (i === 0) {
-          // Trận đầu: đội cố định vs đội cuối
           team1 = fixedTeam
           team2 = otherTeams[otherTeams.length - 1]
         } else {
-          // Các trận còn lại: đội thứ i vs đội đối diện
           team1 = otherTeams[i - 1]
           team2 = otherTeams[otherTeams.length - 1 - i]
         }
@@ -168,8 +325,6 @@ const ScheduleTab = ({ tournament }) => {
         matches: roundMatches
       })
       
-      // Xoay vòng: di chuyển đội cuối lên vị trí thứ 2 (sau đội đầu)
-      // [1, 2, 3, 4] -> [1, 4, 2, 3] -> [1, 3, 4, 2] -> ...
       if (round < numRounds - 1 && otherTeams.length > 0) {
         const lastTeam = otherTeams.pop()
         rotatingTeams = [rotatingTeams[0], lastTeam, ...otherTeams]

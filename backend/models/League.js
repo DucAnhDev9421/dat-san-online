@@ -136,6 +136,10 @@ const leagueSchema = new mongoose.Schema(
           type: String,
           default: null,
         },
+        logoPublicId: {
+          type: String,
+          default: null,
+        },
         contactPhone: {
           type: String,
           trim: true,
@@ -143,6 +147,15 @@ const leagueSchema = new mongoose.Schema(
         contactName: {
           type: String,
           trim: true,
+        },
+        registrationStatus: {
+          type: String,
+          enum: ["pending", "accepted", "rejected", "invited", "invitation_rejected"],
+          default: "pending",
+        },
+        registeredAt: {
+          type: Date,
+          default: Date.now,
         },
         wins: {
           type: Number,
@@ -158,6 +171,10 @@ const leagueSchema = new mongoose.Schema(
         },
         members: [
           {
+            jerseyNumber: {
+              type: String,
+              trim: true,
+            },
             name: {
               type: String,
               trim: true,
@@ -183,7 +200,7 @@ const leagueSchema = new mongoose.Schema(
       {
         stage: {
           type: String,
-          enum: ["semi", "final"],
+          enum: ["round1", "round2", "round3", "round4", "round-robin", "semi", "final"],
         },
         matchNumber: {
           type: Number,
@@ -215,6 +232,41 @@ const leagueSchema = new mongoose.Schema(
       type: String,
       enum: ["PRIVATE", "PUBLIC"],
       default: "PRIVATE",
+    },
+    // Cơ sở thể thao (nếu giải đấu được tổ chức tại cơ sở)
+    facility: {
+      type: Schema.Types.ObjectId,
+      ref: "Facility",
+      default: null,
+    },
+    // Trạng thái duyệt: pending (chờ duyệt), approved (đã duyệt), rejected (từ chối)
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
+    // Sân được chốt cho giải đấu
+    courtId: {
+      type: Schema.Types.ObjectId,
+      ref: "Court",
+      default: null,
+    },
+    // Người duyệt (owner)
+    approvedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    // Thời gian duyệt
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+    // Lý do từ chối (nếu có)
+    rejectionReason: {
+      type: String,
+      trim: true,
+      default: null,
     },
   },
   {

@@ -12,6 +12,7 @@ const Notifications = lazy(() => import("./pages/Notifications"));
 const Staff = lazy(() => import("./pages/Staff"));
 const ActivityLog = lazy(() => import("./pages/ActivityLog"));
 const Settings = lazy(() => import("./pages/Settings"));
+const Leagues = lazy(() => import("./pages/Leagues"));
 
 // Loading component
 const PageLoader = () => (
@@ -38,6 +39,7 @@ const OwnerRoutes = () => {
         <Route path="staff" element={<Staff />} />
         <Route path="activity" element={<ActivityLog />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="leagues" element={<Leagues />} />
         <Route path="*" element={<Navigate to="dashboard" replace />} />
       </Routes>
     </Suspense>

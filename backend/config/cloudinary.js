@@ -143,6 +143,40 @@ export const uploadLeagueImage = multer({
   }
 });
 
+// Configure Cloudinary Storage for Team logos
+const teamLogoStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'booking-sport/teams',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [
+      { width: 400, height: 400, crop: 'fill' },
+      { quality: 'auto' }
+    ],
+    public_id: (req, file) => {
+      const leagueId = req.params.id || 'league';
+      const teamId = req.params.teamId || 'team';
+      const timestamp = Date.now();
+      return `team_${leagueId}_${teamId}_${timestamp}`;
+    }
+  }
+});
+
+// Configure multer for Team logos
+export const uploadTeamLogo = multer({
+  storage: teamLogoStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
 // Cloudinary utility functions
 export const cloudinaryUtils = {
   // Upload image and return URL

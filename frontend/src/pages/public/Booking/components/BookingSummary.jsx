@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import useDeviceType from '../../../../hook/use-device-type'
 import useMobile from '../../../../hook/use-mobile'
 import { formatDate } from '../utils/dateHelpers'
-import { Calendar, Clock, DollarSign, CheckCircle, Tag, MapPin, Grid3x3, X } from 'lucide-react'
+import { Calendar, Clock, DollarSign, CheckCircle, Tag, MapPin, Grid3x3, X, MessageCircle } from 'lucide-react'
 import { promotionApi } from '../../../../api/promotionApi'
+import ChatModal from './ChatModal'
+import useToggle from '../../../../hook/use-toggle'
 
 export default function BookingSummary({ 
   selectedDate, 
@@ -22,6 +24,8 @@ export default function BookingSummary({
   const isSmallMobile = useMobile(480)
   const isVerySmallMobile = useMobile(360)
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const [showChatModal, { toggle: toggleChatModal, setFalse: closeChatModal }] = useToggle(false)
   
   const [promoCode, setPromoCode] = useState('')
   const [appliedPromotion, setAppliedPromotion] = useState(null)
@@ -468,40 +472,81 @@ export default function BookingSummary({
       {(() => {
         const isComplete = selectedFieldType && selectedCourt && selectedSlots.length > 0
         return (
-          <button
-            onClick={onBookNow}
-            disabled={!isComplete}
-            style={{
-              width: '100%',
-              background: isComplete ? '#374151' : '#9ca3af',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              fontSize: '14px',
-              fontWeight: '500',
-              cursor: isComplete ? 'pointer' : 'not-allowed',
-              transition: 'all 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
-            onMouseEnter={(e) => {
-              if (isComplete) {
-                e.target.style.background = '#1f2937'
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (isComplete) {
-                e.target.style.background = '#374151'
-              }
-            }}
-            title={!isComplete ? 'Vui lòng chọn đầy đủ: loại sân, sân và khung giờ' : ''}
-          >
-            <CheckCircle size={16} />
-            Xác nhận đặt sân
-          </button>
+          <>
+            <button
+              onClick={onBookNow}
+              disabled={!isComplete}
+              style={{
+                width: '100%',
+                background: isComplete ? '#374151' : '#9ca3af',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: isComplete ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                marginBottom: '12px'
+              }}
+              onMouseEnter={(e) => {
+                if (isComplete) {
+                  e.target.style.background = '#1f2937'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (isComplete) {
+                  e.target.style.background = '#374151'
+                }
+              }}
+              title={!isComplete ? 'Vui lòng chọn đầy đủ: loại sân, sân và khung giờ' : ''}
+            >
+              <CheckCircle size={16} />
+              Xác nhận đặt sân
+            </button>
+            
+            <button
+              onClick={() => {
+                if (venueId) {
+                  toggleChatModal()
+                } else {
+                  toast.info('Không tìm thấy thông tin chủ sân')
+                }
+              }}
+              style={{
+                width: '100%',
+                background: '#fff',
+                color: '#374151',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = '#f9fafb'
+                e.target.style.borderColor = '#d1d5db'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = '#fff'
+                e.target.style.borderColor = '#e5e7eb'
+              }}
+              title="Nhắn tin với chủ sân"
+            >
+              <MessageCircle size={16} />
+              Nhắn tin với chủ sân
+            </button>
+          </>
         )
       })()}
 
@@ -516,7 +561,12 @@ export default function BookingSummary({
         Bằng việc đặt sân, bạn đồng ý với điều khoản sử dụng của chúng tôi
       </p>
 
-      {/* CSS media queries đã được thay thế bằng useMobile hook */}
+      {/* Chat Modal */}
+      <ChatModal
+        isOpen={showChatModal}
+        onClose={closeChatModal}
+        venueId={venueId}
+      />
     </div>
   )
 }

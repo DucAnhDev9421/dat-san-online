@@ -1,14 +1,18 @@
 import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useTournament } from "./TournamentContext";
+import ProtectedManagementRoute from "./components/ProtectedManagementRoute";
 
 // Lazy load các component tabs
 const OverviewTab = lazy(() => import("./tabs/OverviewTab"));
 const ScheduleTab = lazy(() => import("./tabs/ScheduleTab"));
 const StandingsTab = lazy(() => import("./tabs/StandingsTab"));
 const TeamsTab = lazy(() => import("./tabs/TeamsTab"));
-const TeamEditPage = lazy(() => import("./tabs/TeamEditPage"));
+const TeamInfoPage = lazy(() => import("./tabs/TeamInfoPage"));
+const TeamMembersPage = lazy(() => import("./tabs/TeamMembersPage"));
 const CustomTab = lazy(() => import("./tabs/CustomTab"));
+const RegistrationTab = lazy(() => import("./tabs/RegistrationTab"));
+const RegistrationListTab = lazy(() => import("./tabs/RegistrationListTab"));
 
 // Loading component
 const PageLoader = () => (
@@ -53,11 +57,31 @@ const TournamentRoutes = () => {
       <Routes>
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview" element={<OverviewTab tournament={tournament} />} />
+        <Route path="register" element={<RegistrationTab tournament={tournament} />} />
+        <Route path="registrations" element={<RegistrationListTab tournament={tournament} />} />
         <Route path="schedule" element={<ScheduleTab tournament={tournament} />} />
         <Route path="standings" element={<StandingsTab tournament={tournament} />} />
-        <Route path="teams/:teamId" element={<TeamEditPage />} />
-        <Route path="teams" element={<TeamsTab tournament={tournament} />} />
-        <Route path="custom/*" element={<CustomTab tournament={tournament} />} />
+        <Route path="teams/:teamId/info" element={
+          <ProtectedManagementRoute>
+            <TeamInfoPage />
+          </ProtectedManagementRoute>
+        } />
+        <Route path="teams/:teamId/members" element={
+          <ProtectedManagementRoute>
+            <TeamMembersPage />
+          </ProtectedManagementRoute>
+        } />
+        <Route path="teams/:teamId" element={<Navigate to="info" replace />} />
+        <Route path="teams" element={
+          <ProtectedManagementRoute>
+            <TeamsTab tournament={tournament} />
+          </ProtectedManagementRoute>
+        } />
+        <Route path="custom/*" element={
+          <ProtectedManagementRoute>
+            <CustomTab tournament={tournament} />
+          </ProtectedManagementRoute>
+        } />
         <Route path="*" element={<Navigate to="overview" replace />} />
       </Routes>
     </Suspense>

@@ -1,128 +1,10 @@
 import React, { useState, useCallback } from 'react'
-import { useParams, useNavigate, Routes, Route, Navigate } from 'react-router-dom'
+import { useParams, useNavigate, NavLink } from 'react-router-dom'
 import { ArrowLeft, Save, Plus, Pencil, Upload, Trash2, Users, FileUp, ChevronDown, X } from 'lucide-react'
 import { toast } from 'react-toastify'
 import Cropper from 'react-easy-crop'
 import { useTournament } from '../TournamentContext'
 import { leagueApi } from '../../../../api/leagueApi'
-
-const TeamInfoTab = ({ team }) => {
-  const [teamData, setTeamData] = useState({
-    teamNumber: team?.teamNumber || `#${team?.id}`,
-    contactPhone: team?.contactPhone || '',
-    contactName: team?.contactName || '',
-    logo: team?.logo || null
-  })
-  const [saving, setSaving] = useState(false)
-
-  const handleInputChange = (field, value) => {
-    setTeamData(prev => ({ ...prev, [field]: value }))
-  }
-
-  const handleLogoChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setTeamData(prev => ({ ...prev, logo: reader.result }))
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const handleSave = async () => {
-    try {
-      setSaving(true)
-      // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      toast.success('Đã lưu thông tin đội')
-    } catch (error) {
-      console.error('Error saving team:', error)
-      toast.error('Không thể lưu thông tin đội')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (!team) return null
-
-  return (
-    <div className="team-info-edit">
-      <div className="team-logo-upload-section">
-        <label>Logo đội</label>
-        <div className="team-logo-preview-large">
-          <img 
-            src={teamData.logo || '/team.png'} 
-            alt="Team Logo" 
-            className="team-logo-preview-img-large"
-          />
-        </div>
-        <label className="btn-upload-logo">
-          <Upload size={16} />
-          Tải lên logo
-          <input
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={handleLogoChange}
-          />
-        </label>
-      </div>
-
-      <div className="team-info-form">
-        <div className="form-group">
-          <label>
-            Số đội <span className="required-asterisk">*</span>
-          </label>
-          <input
-            type="text"
-            className="form-input"
-            value={teamData.teamNumber}
-            onChange={(e) => handleInputChange('teamNumber', e.target.value)}
-            placeholder="#1"
-          />
-        </div>
-
-        <div className="form-group">
-          <label>
-            Số điện thoại liên hệ <span className="required-asterisk">*</span>
-          </label>
-          <input
-            type="tel"
-            className="form-input"
-            value={teamData.contactPhone}
-            onChange={(e) => handleInputChange('contactPhone', e.target.value)}
-            placeholder="0123456789"
-          />
-        </div>
-
-        <div className="form-group">
-          <label>
-            Tên người liên hệ <span className="required-asterisk">*</span>
-          </label>
-          <input
-            type="text"
-            className="form-input"
-            value={teamData.contactName}
-            onChange={(e) => handleInputChange('contactName', e.target.value)}
-            placeholder="Nguyễn Văn A"
-          />
-        </div>
-
-        <div className="form-actions">
-          <button 
-            className="btn-save"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            <Save size={16} />
-            {saving ? 'Đang lưu...' : 'Lưu thông tin'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 const createImage = (url) =>
   new Promise((resolve, reject) => {
@@ -168,7 +50,7 @@ const getCroppedImg = async (imageSrc, pixelCrop) => {
   })
 }
 
-const TeamMembersTab = ({ team, tournament, onUpdate }) => {
+const TeamMembersTab = ({ team, tournament }) => {
   const { id } = useParams()
   const { refreshTournament } = useTournament()
   const [showAddMemberForm, setShowAddMemberForm] = useState(false)
@@ -285,7 +167,6 @@ const TeamMembersTab = ({ team, tournament, onUpdate }) => {
         avatar: newMember.avatar || null
       }
       
-      // Chỉ lưu jerseyNumber nếu là môn Bóng đá
       if (isFootball) {
         memberData.jerseyNumber = newMember.jerseyNumber || ''
       }
@@ -293,11 +174,9 @@ const TeamMembersTab = ({ team, tournament, onUpdate }) => {
       const teamId = team.id || team._id
 
       if (editingMemberIndex !== null) {
-        // Cập nhật thành viên
         await leagueApi.updateMember(id, teamId, editingMemberIndex, memberData)
         toast.success('Đã cập nhật thành viên thành công')
       } else {
-        // Thêm thành viên mới
         const updatedTeams = tournament.teams.map(t => {
           const tId = t.id || t._id
           const teamIdNum = team.id || team._id
@@ -450,7 +329,6 @@ const TeamMembersTab = ({ team, tournament, onUpdate }) => {
         </div>
       </div>
 
-      {/* Import Actions */}
       <div className="members-import-actions">
         <button 
           className="btn-add-member"
@@ -460,19 +338,19 @@ const TeamMembersTab = ({ team, tournament, onUpdate }) => {
           Thêm thành viên
         </button>
         <div className="members-import-actions-right">
-        <button
-          className="download-sample-link"
-          onClick={handleDownloadSample}
-        >
-          Tải về tệp tin mẫu
-        </button>
-        <button
-          className="btn-import-file"
-          onClick={handleImportFile}
-        >
-          <FileUp size={16} />
-          Nhập tệp tin
-        </button>
+          <button
+            className="download-sample-link"
+            onClick={handleDownloadSample}
+          >
+            Tải về tệp tin mẫu
+          </button>
+          <button
+            className="btn-import-file"
+            onClick={handleImportFile}
+          >
+            <FileUp size={16} />
+            Nhập tệp tin
+          </button>
         </div>
       </div>
 
@@ -573,7 +451,7 @@ const TeamMembersTab = ({ team, tournament, onUpdate }) => {
             ) : (
               <div key={index} className="member-item-form">
                 <div className="member-avatar-section">
-                {member.avatar ? (
+                  {member.avatar ? (
                     <img src={member.avatar} alt={member.name} className="member-avatar-preview" />
                   ) : (
                     <img src="/player.png" alt="Default Avatar" className="member-avatar-preview" />
@@ -588,8 +466,8 @@ const TeamMembersTab = ({ team, tournament, onUpdate }) => {
                           Số áo
                         </label>
                         <div className="member-form-value">{member.jerseyNumber}</div>
-                  </div>
-                )}
+                      </div>
+                    )}
 
                     <div className="member-form-group">
                       <label className="member-form-label">
@@ -610,27 +488,27 @@ const TeamMembersTab = ({ team, tournament, onUpdate }) => {
                         Số điện thoại
                       </label>
                       <div className="member-form-value">{member.phone || '-'}</div>
-              </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
                 <div className="member-form-actions-inline">
-                <button 
-                  className="member-action-btn"
+                  <button 
+                    className="member-action-btn"
                     onClick={() => handleEditMember(index)}
                     disabled={deletingMemberIndex === index || savingMember}
-                >
-                  <Pencil size={16} />
-                </button>
-                <button 
-                  className="member-action-btn member-action-delete"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button 
+                    className="member-action-btn member-action-delete"
                     onClick={() => handleDeleteMember(index)}
                     disabled={deletingMemberIndex === index || savingMember || editingMemberIndex !== null}
-                >
-                  <Trash2 size={16} />
-                </button>
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
-            </div>
             )
           ))
         )}
@@ -655,65 +533,65 @@ const TeamMembersTab = ({ team, tournament, onUpdate }) => {
 
             <div className="add-member-form-content">
               <div className="member-form-fields">
-              {tournament?.sport === 'Bóng đá' && (
+                {tournament?.sport === 'Bóng đá' && (
+                  <div className="member-form-group">
+                    <label className="member-form-label">
+                      Số áo <span className="required-asterisk">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="member-form-input"
+                      value={newMember.jerseyNumber}
+                      onChange={(e) => handleMemberInputChange('jerseyNumber', e.target.value)}
+                      placeholder="Số áo"
+                    />
+                  </div>
+                )}
+
                 <div className="member-form-group">
                   <label className="member-form-label">
-                    Số áo <span className="required-asterisk">*</span>
+                    Vị Trí Thi Đấu
+                  </label>
+                  <div className="member-form-select-wrapper">
+                    <select
+                      className="member-form-select"
+                      value={newMember.position}
+                      onChange={(e) => handleMemberInputChange('position', e.target.value)}
+                    >
+                      <option value="">Chọn vị trí</option>
+                      {positions.map(pos => (
+                        <option key={pos} value={pos}>{pos}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={18} className="select-chevron" />
+                  </div>
+                </div>
+
+                <div className="member-form-group">
+                  <label className="member-form-label">
+                    Họ tên đầy đủ
                   </label>
                   <input
                     type="text"
                     className="member-form-input"
-                    value={newMember.jerseyNumber}
-                    onChange={(e) => handleMemberInputChange('jerseyNumber', e.target.value)}
-                    placeholder="Số áo"
+                    value={newMember.name}
+                    onChange={(e) => handleMemberInputChange('name', e.target.value)}
+                    placeholder="Họ tên đầy đủ"
                   />
                 </div>
-              )}
 
-              <div className="member-form-group">
-                <label className="member-form-label">
-                  Vị Trí Thi Đấu
-                </label>
-                <div className="member-form-select-wrapper">
-                  <select
-                    className="member-form-select"
-                    value={newMember.position}
-                    onChange={(e) => handleMemberInputChange('position', e.target.value)}
-                  >
-                    <option value="">Chọn vị trí</option>
-                    {positions.map(pos => (
-                      <option key={pos} value={pos}>{pos}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={18} className="select-chevron" />
+                <div className="member-form-group">
+                  <label className="member-form-label">
+                    Số điện thoại
+                  </label>
+                  <input
+                    type="tel"
+                    className="member-form-input"
+                    value={newMember.phone}
+                    onChange={(e) => handleMemberInputChange('phone', e.target.value)}
+                    placeholder="Số điện thoại"
+                  />
                 </div>
-              </div>
-
-              <div className="member-form-group">
-                <label className="member-form-label">
-                  Họ tên đầy đủ
-                </label>
-                <input
-                  type="text"
-                  className="member-form-input"
-                  value={newMember.name}
-                  onChange={(e) => handleMemberInputChange('name', e.target.value)}
-                  placeholder="Họ tên đầy đủ"
-                />
-              </div>
-
-              <div className="member-form-group">
-                <label className="member-form-label">
-                  Số điện thoại
-                </label>
-                <input
-                  type="tel"
-                  className="member-form-input"
-                  value={newMember.phone}
-                  onChange={(e) => handleMemberInputChange('phone', e.target.value)}
-                  placeholder="Số điện thoại"
-                />
-              </div>
               </div>
             </div>
 
@@ -739,21 +617,17 @@ const TeamMembersTab = ({ team, tournament, onUpdate }) => {
   )
 }
 
-const TeamEditPage = () => {
+const TeamMembersPage = () => {
   const { id, teamId } = useParams()
   const navigate = useNavigate()
   const { tournament, loading } = useTournament()
-  const [activeTeamTab, setActiveTeamTab] = useState('info')
 
-  // Tìm team với nhiều cách so sánh để đảm bảo tìm được
   let team = tournament?.teams?.find(t => {
     const tId = t.id || t._id
     const searchId = parseInt(teamId)
-    // So sánh cả number và string
     return tId === searchId || tId === teamId || String(tId) === String(teamId) || String(tId) === String(searchId)
   })
 
-  // Nếu không tìm thấy team trong tournament.teams, tạo team mặc định từ teamId
   if (!team && teamId) {
     const teamIdNum = parseInt(teamId)
     team = {
@@ -808,7 +682,6 @@ const TeamEditPage = () => {
     )
   }
 
-  // Team sẽ luôn có giá trị (từ API hoặc default), nhưng vẫn check để an toàn
   if (!team) {
     return (
       <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
@@ -821,14 +694,9 @@ const TeamEditPage = () => {
     navigate(`/tournament/${id}/teams`)
   }
 
-  const handleSubTabClick = (tab) => {
-    setActiveTeamTab(tab)
-  }
-
   return (
     <div className="team-edit-section">
       <div className="custom-layout">
-        {/* Sidebar */}
         <div className="custom-sidebar">
           <button 
             className="sidebar-back-btn"
@@ -838,26 +706,24 @@ const TeamEditPage = () => {
             Quay lại
           </button>
           <div className="sidebar-menu">
-            <button
-              className={`sidebar-menu-item ${activeTeamTab === 'info' ? 'active' : ''}`}
-              onClick={() => handleSubTabClick('info')}
+            <NavLink
+              to={`/tournament/${id}/teams/${teamId}/info`}
+              className={({ isActive }) => `sidebar-menu-item ${isActive ? 'active' : ''}`}
             >
               Thông tin đội
-            </button>
-            <button
-              className={`sidebar-menu-item ${activeTeamTab === 'members' ? 'active' : ''}`}
-              onClick={() => handleSubTabClick('members')}
+            </NavLink>
+            <NavLink
+              to={`/tournament/${id}/teams/${teamId}/members`}
+              className={({ isActive }) => `sidebar-menu-item ${isActive ? 'active' : ''}`}
             >
               Thành viên
-            </button>
+            </NavLink>
           </div>
         </div>
 
-        {/* Content */}
         <div className="custom-content-wrapper">
           <div className="section-card">
             <div className="custom-tab-content">
-              {/* Header */}
               <div style={{ marginBottom: '24px' }}>
                 <h2>Chỉnh sửa đội</h2>
                 <p style={{ color: '#6b7280', marginTop: '4px' }}>
@@ -865,9 +731,7 @@ const TeamEditPage = () => {
                 </p>
               </div>
 
-              {/* Tab Content */}
-              {activeTeamTab === 'info' && <TeamInfoTab team={team} />}
-              {activeTeamTab === 'members' && <TeamMembersTab team={team} tournament={tournament} />}
+              <TeamMembersTab team={team} tournament={tournament} />
             </div>
           </div>
         </div>
@@ -876,5 +740,5 @@ const TeamEditPage = () => {
   )
 }
 
-export default TeamEditPage
+export default TeamMembersPage
 

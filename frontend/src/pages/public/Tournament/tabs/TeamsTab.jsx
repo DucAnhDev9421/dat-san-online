@@ -12,7 +12,7 @@ const TeamsTab = ({ tournament }) => {
     e?.preventDefault()
     e?.stopPropagation()
     if (id && teamId) {
-      navigate(`/tournament/${id}/teams/${teamId}`)
+      navigate(`/tournament/${id}/teams/${teamId}/info`)
     } else {
       console.error('Missing id or teamId:', { id, teamId })
     }
