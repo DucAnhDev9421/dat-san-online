@@ -13,6 +13,7 @@ const TeamMembersPage = lazy(() => import("./tabs/TeamMembersPage"));
 const CustomTab = lazy(() => import("./tabs/CustomTab"));
 const RegistrationTab = lazy(() => import("./tabs/RegistrationTab"));
 const RegistrationListTab = lazy(() => import("./tabs/RegistrationListTab"));
+const MatchResultsTab = lazy(() => import("./tabs/MatchResultsTab"));
 
 // Loading component
 const PageLoader = () => (
@@ -60,6 +61,7 @@ const TournamentRoutes = () => {
         <Route path="register" element={<RegistrationTab tournament={tournament} />} />
         <Route path="registrations" element={<RegistrationListTab tournament={tournament} />} />
         <Route path="schedule" element={<ScheduleTab tournament={tournament} />} />
+        <Route path="results" element={<MatchResultsTab tournament={tournament} />} />
         <Route path="standings" element={<StandingsTab tournament={tournament} />} />
         <Route path="teams/:teamId/info" element={
           <ProtectedManagementRoute>

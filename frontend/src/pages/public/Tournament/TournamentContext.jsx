@@ -40,6 +40,7 @@ const TournamentProvider = ({ children }) => {
           location: league.location || '',
           address: league.address || '',
           facility: league.facility || null, // Include facility with owner
+          courtId: league.courtId || null, // Include court with name
           approvalStatus: league.approvalStatus || null,
           participants: league.participants || 0,
           maxParticipants: league.maxParticipants || 0,

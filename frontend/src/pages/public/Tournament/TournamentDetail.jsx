@@ -31,6 +31,7 @@ const TournamentDetailContent = () => {
     if (path.includes('/registrations')) return 'registrations'
     if (path.includes('/teams')) return 'teams'
     if (path.includes('/standings')) return 'standings'
+    if (path.includes('/results')) return 'results'
     if (path.includes('/schedule')) return 'schedule'
     if (path.includes('/overview') || path.endsWith(`/tournament/${id}`) || path.endsWith(`/tournament/${id}/`)) return 'overview'
     return 'overview'
@@ -139,10 +140,24 @@ const TournamentDetailContent = () => {
                   <span className="hero-detail-item">{tournament.creatorName}</span>
                 </>
               )}
-              {tournament.address && (
+              {(tournament.address || tournament.facility?.name || tournament.courtId?.name) && (
                 <>
                   {(tournament.format || tournament.sport || tournament.creatorName) && <span className="hero-detail-separator">||</span>}
-                  <span className="hero-detail-item">{tournament.address}</span>
+                  <span className="hero-detail-item">
+                    {(() => {
+                      const parts = []
+                      if (tournament.facility?.name) {
+                        parts.push(tournament.facility.name)
+                      }
+                      if (tournament.courtId?.name) {
+                        parts.push(tournament.courtId.name)
+                      }
+                      if (tournament.address) {
+                        parts.push(tournament.address)
+                      }
+                      return parts.length > 0 ? parts.join(' - ') : (tournament.facility?.name || tournament.courtId?.name || tournament.address)
+                    })()}
+                  </span>
                 </>
               )}
             </div>
@@ -189,6 +204,13 @@ const TournamentDetailContent = () => {
             >
               Lịch thi đấu
               {currentTab === 'schedule' && <span className="tab-indicator"></span>}
+            </button>
+            <button 
+              className={`hero-tab-button ${currentTab === 'results' ? 'active' : ''}`}
+              onClick={() => handleTabClick('results')}
+            >
+              Thi đấu
+              {currentTab === 'results' && <span className="tab-indicator"></span>}
             </button>
             {isRoundRobin && (
               <button 

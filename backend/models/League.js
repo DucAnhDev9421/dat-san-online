@@ -206,10 +206,10 @@ const leagueSchema = new mongoose.Schema(
           type: Number,
         },
         team1Id: {
-          type: Number,
+          type: Schema.Types.Mixed, // Cho phép Number (team ID) hoặc String ("BYE") hoặc null
         },
         team2Id: {
-          type: Number,
+          type: Schema.Types.Mixed, // Cho phép Number (team ID) hoặc String ("BYE") hoặc null
         },
         date: {
           type: Date,
@@ -224,6 +224,16 @@ const leagueSchema = new mongoose.Schema(
         score2: {
           type: Number,
           default: null,
+        },
+        // Liên kết đến trận đấu tiếp theo (người thắng sẽ vào trận này)
+        nextMatchId: {
+          type: String, // Format: "stage_matchNumber" hoặc null nếu là final
+          default: null,
+        },
+        // Đánh dấu trận đấu có BYE (đội ảo)
+        hasBye: {
+          type: Boolean,
+          default: false,
         },
       },
     ],

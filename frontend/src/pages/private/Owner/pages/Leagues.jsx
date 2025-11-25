@@ -4,12 +4,14 @@ import { CheckCircle2, XCircle, MapPin, Calendar, Users, Trophy, Building2, Awar
 import { toast } from 'react-toastify'
 import { leagueApi } from '../../../../api/leagueApi'
 import { facilityApi } from '../../../../api/facilityApi'
+import { useAuth } from '../../../../contexts/AuthContext'
 import LeagueDetailModal from '../modals/LeagueDetailModal'
 import RejectLeagueModal from '../modals/RejectLeagueModal'
 import AssignCourtModal from '../modals/AssignCourtModal'
 
 const Leagues = () => {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [leagues, setLeagues] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('pending')
@@ -23,13 +25,17 @@ const Leagues = () => {
 
   useEffect(() => {
     fetchLeagues()
-    fetchOwnerFacilities()
-  }, [activeTab])
+    if (user) {
+      fetchOwnerFacilities()
+    }
+  }, [activeTab, user])
 
   const fetchOwnerFacilities = async () => {
     try {
+      if (!user?._id) return
       setLoadingFacilities(true)
-      const result = await facilityApi.getFacilities({ status: 'opening' })
+      const ownerId = user._id || user.id
+      const result = await facilityApi.getFacilities({ ownerId, status: 'opening' })
       if (result.success) {
         const facilities = result.data?.facilities || result.data || []
         setOwnerFacilities(facilities)

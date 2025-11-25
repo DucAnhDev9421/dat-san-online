@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Users, Phone, User, CheckCircle2, XCircle, Clock, UserPlus, UserX, HelpCircle } from 'lucide-react'
+import { Users, Phone, User, CheckCircle2, XCircle, Clock, HelpCircle } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { useTournament } from '../TournamentContext'
 import { useAuth } from '../../../../contexts/AuthContext'
@@ -45,29 +45,34 @@ const RegistrationListTab = ({ tournament }) => {
     const counts = {
       pending: 0,
       accepted: 0,
-      rejected: 0,
-      invited: 0,
-      invitation_rejected: 0
+      rejected: 0
     }
     
     registeredTeams.forEach(team => {
       const status = team.registrationStatus || 'pending'
-      if (counts.hasOwnProperty(status)) {
-        counts[status]++
+      // Chỉ đếm các status hợp lệ (bỏ qua invited và invitation_rejected)
+      if (status === 'pending' || status === 'accepted' || status === 'rejected') {
+        if (counts.hasOwnProperty(status)) {
+          counts[status]++
+        }
       }
     })
     
     return counts
   }, [registeredTeams])
 
-  // Lọc teams theo status
+  // Lọc teams theo status (bỏ qua invited và invitation_rejected)
   const filteredTeams = useMemo(() => {
     if (activeStatus === 'all') {
-      return registeredTeams
+      return registeredTeams.filter(team => {
+        const status = team.registrationStatus || 'pending'
+        return status === 'pending' || status === 'accepted' || status === 'rejected'
+      })
     }
-    return registeredTeams.filter(team => 
-      (team.registrationStatus || 'pending') === activeStatus
-    )
+    return registeredTeams.filter(team => {
+      const status = team.registrationStatus || 'pending'
+      return status === activeStatus && (status === 'pending' || status === 'accepted' || status === 'rejected')
+    })
   }, [registeredTeams, activeStatus])
 
   const formatDateTime = (dateString) => {
@@ -110,18 +115,6 @@ const RegistrationListTab = ({ tournament }) => {
         color: '#ef4444', 
         bgColor: '#fee2e2',
         icon: XCircle 
-      },
-      invited: { 
-        label: 'Được mời', 
-        color: '#3b82f6', 
-        bgColor: '#dbeafe',
-        icon: UserPlus 
-      },
-      invitation_rejected: { 
-        label: 'Từ chối lời mời', 
-        color: '#6b7280', 
-        bgColor: '#f3f4f6',
-        icon: UserX 
       }
     }
     
@@ -181,18 +174,28 @@ const RegistrationListTab = ({ tournament }) => {
         <div style={{
           padding: '60px 40px',
           textAlign: 'center',
-          color: '#6b7280'
+          color: '#6b7280',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}>
-          <Users size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
+          <Users size={48} style={{ 
+            marginBottom: 16, 
+            opacity: 0.5,
+            display: 'block',
+            margin: '0 auto 16px auto'
+          }} />
           <h3 style={{ 
             fontSize: 18, 
             fontWeight: 600, 
             color: '#374151',
-            marginBottom: 8
+            marginBottom: 8,
+            margin: '0 0 8px 0'
           }}>
             Chưa có đội nào đăng ký
           </h3>
-          <p style={{ fontSize: 14, color: '#6b7280' }}>
+          <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
             Hãy đăng ký tham gia giải đấu để trở thành đội đầu tiên!
           </p>
         </div>
@@ -298,42 +301,6 @@ const RegistrationListTab = ({ tournament }) => {
           }}
         >
           Từ chối: {statusCounts.rejected}
-        </button>
-        <button
-          onClick={() => setActiveStatus('invited')}
-          style={{
-            padding: '10px 20px',
-            background: activeStatus === 'invited' ? '#3b82f6' : '#f3f4f6',
-            color: activeStatus === 'invited' ? '#fff' : '#374151',
-            border: 'none',
-            borderRadius: 8,
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-          }}
-        >
-          Được mời: {statusCounts.invited}
-        </button>
-        <button
-          onClick={() => setActiveStatus('invitation_rejected')}
-          style={{
-            padding: '10px 20px',
-            background: activeStatus === 'invitation_rejected' ? '#6b7280' : '#f3f4f6',
-            color: activeStatus === 'invitation_rejected' ? '#fff' : '#374151',
-            border: 'none',
-            borderRadius: 8,
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-          }}
-        >
-          Từ chối lời mời: {statusCounts.invitation_rejected}
         </button>
       </div>
 
