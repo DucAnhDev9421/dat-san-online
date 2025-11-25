@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Save } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { useParams } from 'react-router-dom'
@@ -8,171 +8,100 @@ import { useTournament } from '../../TournamentContext'
 const MatchesTab = ({ tournament }) => {
   const { id } = useParams()
   const { refreshTournament } = useTournament()
-  const [teamsList, setTeamsList] = useState([])
   const [matches, setMatches] = useState([])
   const [savingMatches, setSavingMatches] = useState(false)
   const [drawingMatches, setDrawingMatches] = useState(false)
+  const [selectedStage, setSelectedStage] = useState(null) // Stage đang được chỉnh sửa
   
   // Kiểm tra format giải đấu
   const isRoundRobin = tournament?.format === 'Vòng tròn' || tournament?.format === 'round-robin'
 
-  // Helper function: Tính toán stage đúng dựa trên số đội (cho single-elimination)
-  const calculateFirstStage = (numTeams) => {
-    if (numTeams === 2) {
-      return 'final'
-    } else if (numTeams === 4) {
-      return 'semi'
-    } else if (numTeams === 8) {
-      return 'round3'
-    } else if (numTeams === 16) {
-      return 'round4'
-    } else {
-      // Với số đội lớn hơn, tính toán vòng đầu tiên
-      let roundNumber = 1
-      let currentTeams = numTeams
-      while (currentTeams > 16) {
-        currentTeams = Math.floor(currentTeams / 2)
-        roundNumber++
-      }
-      if (currentTeams === 16) {
-        return 'round4'
-      } else if (currentTeams === 8) {
-        return 'round3'
-      } else if (currentTeams === 4) {
-        return 'semi'
-      } else if (currentTeams === 2) {
-        return 'final'
-      } else {
-        return `round${roundNumber}`
-      }
+  // Helper: Lấy tên stage để hiển thị
+  const getStageTitle = (stage) => {
+    const stageMap = {
+      'final': 'Chung Kết',
+      'semi': 'Bán Kết',
+      'round3': 'Tứ Kết',
+      'round4': 'Vòng 4',
+      'round2': 'Vòng 2',
+      'round1': 'Vòng 1',
+      'round-robin': 'Vòng tròn'
     }
+    return stageMap[stage] || stage
   }
 
-  useEffect(() => {
-    // Lấy số lượng đội từ maxParticipants (mặc định 4 nếu không có)
-    const numTeams = tournament?.maxParticipants || 4
+  // Helper: Tìm team từ tournament.teams dựa trên teamId
+  const findTeamById = (teamId) => {
+    if (!teamId || teamId === "BYE") return null
+    return tournament.teams?.find(t => 
+      (t.id === teamId) || 
+      (t._id?.toString() === teamId?.toString())
+    ) || null
+  }
+
+  // Lấy danh sách teams từ API (không tạo defaultTeams)
+  const teamsList = useMemo(() => {
+    return tournament?.teams || []
+  }, [tournament?.teams])
+
+  // Lấy danh sách các stage có matches từ API
+  const availableStages = useMemo(() => {
+    if (!tournament?.matches || tournament.matches.length === 0) {
+      return []
+    }
+
+    const stages = [...new Set(tournament.matches.map(m => m.stage).filter(Boolean))]
     
-    // Tạo mảng đội mặc định với số lượng đúng
-    const defaultTeams = Array.from({ length: numTeams }, (_, index) => ({
-      id: index + 1,
-      teamNumber: `Đội #${index + 1}`
-    }))
+    // Sắp xếp theo thứ tự: round1, round2, round3, round4, semi, final, round-robin
+    const stageOrder = ['round1', 'round2', 'round3', 'round4', 'semi', 'final', 'round-robin']
+    return stages.sort((a, b) => {
+      const indexA = stageOrder.indexOf(a)
+      const indexB = stageOrder.indexOf(b)
+      return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB)
+    })
+  }, [tournament?.matches])
 
-    // Merge với dữ liệu từ API nếu có
-    if (tournament?.teams && tournament.teams.length > 0) {
-      tournament.teams.forEach((team, index) => {
-        if (defaultTeams[index]) {
-          defaultTeams[index] = {
-            ...defaultTeams[index],
-            ...team,
-            id: team.id || index + 1,
-            teamNumber: team.teamNumber || `Đội #${index + 1}`
-          }
-        }
-      })
-    }
-    setTeamsList(defaultTeams)
-  }, [tournament])
-
+  // Tự động chọn stage đầu tiên khi có matches
   useEffect(() => {
-    // Load matches từ tournament nếu có
-    if (tournament?.matches && tournament.matches.length > 0) {
-      // Tính toán stage đúng dựa trên số đội
-      let currentStage = 'round-robin'
-      if (!isRoundRobin) {
-        const numTeams = teamsList.length
-        currentStage = calculateFirstStage(numTeams)
-        
-        // Nếu không tìm thấy matches cho stage tính toán, tìm stage từ matches có sẵn
-        const stageMatches = tournament.matches.filter(m => m.stage === currentStage)
-        if (stageMatches.length === 0) {
-          // Tìm stage từ matches có sẵn
-          const availableStages = [...new Set(tournament.matches.map(m => m.stage).filter(s => s !== 'round-robin'))]
-          if (availableStages.length > 0) {
-            // Ưu tiên các stage theo thứ tự: round1, round2, round3, round4, semi, final
-            const stageOrder = ['round1', 'round2', 'round3', 'round4', 'semi', 'final']
-            currentStage = availableStages.sort((a, b) => {
-              const indexA = stageOrder.indexOf(a)
-              const indexB = stageOrder.indexOf(b)
-              return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB)
-            })[0] || currentStage
-          }
-        }
-      }
-      
-      const stageMatches = tournament.matches.filter(match => match.stage === currentStage)
-      
-      if (stageMatches.length > 0) {
-        const loadedMatches = stageMatches.map(match => ({
-          id: match.matchNumber || match.id,
-          team1: match.team1Id || null,
-          team2: match.team2Id || null,
-          stage: match.stage,
-          date: match.date,
-          time: match.time,
-          score1: match.score1,
-          score2: match.score2
-        }))
-        setMatches(loadedMatches)
-      } else {
-        // Nếu không có matches cho stage hiện tại, tạo mặc định
-        const numTeams = teamsList.length
-        
-        if (isRoundRobin) {
-          const allMatches = []
-          for (let i = 0; i < numTeams; i++) {
-            for (let j = i + 1; j < numTeams; j++) {
-              allMatches.push({
-                id: allMatches.length + 1,
-                team1: teamsList[i]?.id || null,
-                team2: teamsList[j]?.id || null
-              })
-            }
-          }
-          setMatches(allMatches)
-        } else {
-          const numMatches = Math.floor(numTeams / 2)
-          const firstRoundMatches = Array.from({ length: numMatches }, (_, index) => ({
-            id: index + 1,
-            team1: teamsList[index * 2]?.id || null,
-            team2: teamsList[index * 2 + 1]?.id || null
-          }))
-          setMatches(firstRoundMatches)
-        }
-      }
-    } else {
-      // Nếu không có matches từ API, tạo mặc định
-      const numTeams = teamsList.length
-      
-      if (isRoundRobin) {
-        // Round-robin: tạo tất cả các cặp đấu (mỗi đội đấu với tất cả đội khác)
-        const allMatches = []
-        for (let i = 0; i < numTeams; i++) {
-          for (let j = i + 1; j < numTeams; j++) {
-            allMatches.push({
-              id: allMatches.length + 1,
-              team1: teamsList[i]?.id || null,
-              team2: teamsList[j]?.id || null
-            })
-          }
-        }
-        setMatches(allMatches)
-      } else {
-        // Single-elimination: tính số cặp đấu cho vòng đầu tiên (số cặp = số đội / 2)
-        const numMatches = Math.floor(numTeams / 2)
-        
-        // Tạo các cặp đấu cho vòng đầu tiên
-        const firstRoundMatches = Array.from({ length: numMatches }, (_, index) => ({
-          id: index + 1,
-          team1: teamsList[index * 2]?.id || null,
-          team2: teamsList[index * 2 + 1]?.id || null
-        }))
-        
-        setMatches(firstRoundMatches)
-      }
+    if (availableStages.length > 0 && !selectedStage) {
+      setSelectedStage(availableStages[0])
     }
-  }, [tournament?.matches, teamsList, isRoundRobin])
+  }, [availableStages, selectedStage])
 
+  // Load matches từ API dựa trên selectedStage
+  useEffect(() => {
+    if (!selectedStage || !tournament?.matches) {
+      setMatches([])
+      return
+    }
+
+    const stageMatches = tournament.matches
+      .filter(match => match.stage === selectedStage)
+      .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
+
+    const loadedMatches = stageMatches
+      // Lọc bỏ các match có BYE (ẩn trận bye)
+      .filter(match => {
+        const hasBye = match.team1Id === "BYE" || match.team2Id === "BYE"
+        return !hasBye
+      })
+      .map(match => ({
+        id: match.matchNumber || match.id,
+        team1: match.team1Id || null,
+        team2: match.team2Id || null,
+        stage: match.stage,
+        date: match.date,
+        time: match.time,
+        score1: match.score1,
+        score2: match.score2,
+        hasBye: match.hasBye || false,
+        _match: match // Lưu match gốc để dùng khi cần
+      }))
+
+    setMatches(loadedMatches)
+  }, [selectedStage, tournament?.matches])
+
+  // Bốc thăm ngẫu nhiên
   const handleRandomDraw = async () => {
     const numTeams = teamsList.length
     if (numTeams < 2) {
@@ -183,21 +112,27 @@ const MatchesTab = ({ tournament }) => {
     try {
       setDrawingMatches(true)
       
-      // Tính toán stage đúng dựa trên số đội (cho single-elimination)
-      let currentStage = 'round-robin'
-      if (!isRoundRobin) {
-        currentStage = calculateFirstStage(numTeams)
+      // Xác định stage để bốc thăm
+      // Nếu đã có matches, dùng stage đầu tiên
+      // Nếu chưa có, dùng 'round-robin' cho round-robin, 'round1' cho single-elimination
+      let targetStage = selectedStage
+      if (!targetStage) {
+        targetStage = isRoundRobin ? 'round-robin' : 'round1'
       }
       
-      // Gọi API để bốc thăm (clear existing matches cho cùng stage)
+      // Gọi API để bốc thăm
       const result = await leagueApi.drawMatches(id, {
-        stage: currentStage,
-        clearExisting: true // Xóa matches cũ của cùng stage trước khi bốc thăm mới
+        stage: targetStage,
+        clearExisting: true
       })
       
       if (result.success) {
         toast.success(result.message || 'Đã bốc thăm ngẫu nhiên thành công')
         refreshTournament()
+        // Tự động chọn stage vừa bốc thăm
+        if (targetStage) {
+          setSelectedStage(targetStage)
+        }
       }
     } catch (error) {
       console.error('Error drawing matches:', error)
@@ -207,38 +142,45 @@ const MatchesTab = ({ tournament }) => {
     }
   }
 
+  // Thay đổi đội trong match
   const handleMatchChange = (matchId, field, teamId) => {
     setMatches(prev => prev.map(match => 
       match.id === matchId ? { ...match, [field]: teamId || null } : match
     ))
   }
 
+  // Lưu matches
   const handleSaveMatches = async () => {
+    if (!selectedStage) {
+      toast.error('Vui lòng chọn vòng đấu')
+      return
+    }
+
     try {
       setSavingMatches(true)
       
-      // Tính toán stage đúng dựa trên số đội (cho single-elimination)
-      let currentStage = 'round-robin'
-      if (!isRoundRobin) {
-        const numTeams = teamsList.length
-        currentStage = calculateFirstStage(numTeams)
-      }
-      
       // Lấy matches hiện có từ tournament (để giữ lại các stage khác)
       const existingMatches = tournament?.matches || []
-      const otherStageMatches = existingMatches.filter(m => m.stage !== currentStage)
+      const otherStageMatches = existingMatches.filter(m => m.stage !== selectedStage)
       
       // Chuyển đổi matches hiện tại sang format backend
-      const matchesToSave = matches.map(match => ({
-        stage: currentStage,
-        matchNumber: match.id,
-        team1Id: match.team1 || null,
-        team2Id: match.team2 || null,
-        date: match.date || null,
-        time: match.time || null,
-        score1: match.score1 || null,
-        score2: match.score2 || null,
-      }))
+      const matchesToSave = matches.map(match => {
+        // Giữ lại các trường khác từ match gốc nếu có
+        const originalMatch = match._match || {}
+        
+        return {
+          stage: selectedStage,
+          matchNumber: match.id,
+          team1Id: match.team1 || null,
+          team2Id: match.team2 || null,
+          date: match.date || originalMatch.date || null,
+          time: match.time || originalMatch.time || null,
+          score1: match.score1 !== undefined ? match.score1 : (originalMatch.score1 || null),
+          score2: match.score2 !== undefined ? match.score2 : (originalMatch.score2 || null),
+          nextMatchId: originalMatch.nextMatchId || null,
+          hasBye: originalMatch.hasBye || false
+        }
+      })
       
       // Merge với các matches của stage khác
       const allMatches = [...otherStageMatches, ...matchesToSave]
@@ -260,6 +202,29 @@ const MatchesTab = ({ tournament }) => {
 
   if (!tournament) return null
 
+  // Nếu chưa có matches, hiển thị thông báo
+  if (availableStages.length === 0) {
+    return (
+      <div className="custom-tab-content">
+        <h2>Sắp xếp cặp đấu</h2>
+        
+        <p className="matches-description">
+          Chưa có lịch đấu. Vui lòng bốc thăm để tạo lịch đấu.
+        </p>
+
+        <div className="matches-actions">
+          <button
+            className="btn-random-draw"
+            onClick={handleRandomDraw}
+            disabled={drawingMatches}
+          >
+            {drawingMatches ? 'Đang bốc thăm...' : 'Bốc thăm ngẫu nhiên'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="custom-tab-content">
       <h2>Sắp xếp cặp đấu</h2>
@@ -278,57 +243,158 @@ const MatchesTab = ({ tournament }) => {
         </button>
       </div>
 
+      {/* Stage Selector (nếu có nhiều stage) */}
+      {availableStages.length > 1 && (
+        <div className="matches-stage-selector" style={{
+          display: 'flex',
+          gap: '8px',
+          marginBottom: '20px',
+          flexWrap: 'wrap'
+        }}>
+          {availableStages.map(stage => (
+            <button
+              key={stage}
+              onClick={() => setSelectedStage(stage)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '8px',
+                border: '2px solid',
+                borderColor: selectedStage === stage ? '#10b981' : '#e5e7eb',
+                backgroundColor: selectedStage === stage ? '#10b981' : 'white',
+                color: selectedStage === stage ? 'white' : '#374151',
+                fontWeight: '600',
+                fontSize: '14px',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              {getStageTitle(stage)}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="matches-section">
-        <div className="matches-stage-box">
-          <h3 className="matches-stage-title">
-            {isRoundRobin 
-              ? `Tất cả các trận đấu (${matches.length} trận)` 
-              : matches.length === 1 ? 'Chung Kết' : matches.length === 2 ? 'Bán Kết' : `Vòng 1 (${matches.length} cặp đấu)`
-            }
+        <div className="matches-stage-box" style={{
+          backgroundColor: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '12px',
+          padding: '24px',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        }}>
+          <h3 style={{
+            fontSize: '18px',
+            fontWeight: '600',
+            color: '#1f2937',
+            marginBottom: '20px',
+            paddingBottom: '12px',
+            borderBottom: '2px solid #e5e7eb'
+          }}>
+            {selectedStage ? getStageTitle(selectedStage) : 'Chọn vòng đấu'} ({matches.length} trận)
           </h3>
           
-          <div className="matches-list">
-            {matches.map((match) => {
-              const team1 = teamsList.find(t => t.id === match.team1)
-              const team2 = teamsList.find(t => t.id === match.team2)
-              
-              return (
-                <div key={match.id} className="match-item">
-                  <span className="match-number">#{match.id}</span>
-                  
-                  <div className="match-teams">
-                    <select
-                      className="match-team-select"
-                      value={match.team1 || ''}
-                      onChange={(e) => handleMatchChange(match.id, 'team1', e.target.value ? parseInt(e.target.value) : null)}
-                    >
-                      <option value="">Chọn đội</option>
-                      {teamsList.map((team) => (
-                        <option key={team.id} value={team.id}>
-                          {team.teamNumber || `Đội #${team.id}`}
-                        </option>
-                      ))}
-                    </select>
+          {matches.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+              Chưa có trận đấu nào cho vòng này. Vui lòng bốc thăm.
+            </div>
+          ) : (
+            <div className="matches-list">
+              {matches.map((match) => {
+                return (
+                  <div 
+                    key={match.id} 
+                    className="match-item"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px 16px',
+                      backgroundColor: match.hasBye ? '#fef3c7' : 'white',
+                      border: match.hasBye ? '2px solid #f59e0b' : '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      marginBottom: '8px'
+                    }}
+                  >
+                    <span style={{
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#374151',
+                      minWidth: '32px'
+                    }}>
+                      #{match.id}
+                    </span>
                     
-                    <span className="match-vs">-</span>
-                    
-                    <select
-                      className="match-team-select"
-                      value={match.team2 || ''}
-                      onChange={(e) => handleMatchChange(match.id, 'team2', e.target.value ? parseInt(e.target.value) : null)}
-                    >
-                      <option value="">Chọn đội</option>
-                      {teamsList.map((team) => (
-                        <option key={team.id} value={team.id}>
-                          {team.teamNumber || `Đội #${team.id}`}
-                        </option>
-                      ))}
-                    </select>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      flex: 1
+                    }}>
+                      <select
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          backgroundColor: 'white',
+                          cursor: 'pointer'
+                        }}
+                        value={match.team1 === "BYE" ? "BYE" : (match.team1 || '')}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          handleMatchChange(match.id, 'team1', value === "BYE" ? "BYE" : (value ? parseInt(value) : null))
+                        }}
+                      >
+                        <option value="">Chọn đội</option>
+                        <option value="BYE">BYE</option>
+                        {teamsList.map((team) => (
+                          <option key={team.id} value={team.id}>
+                            {team.teamNumber || `Đội #${team.id}`}
+                          </option>
+                        ))}
+                      </select>
+                      
+                      <span style={{
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        color: '#6b7280',
+                        minWidth: '20px',
+                        textAlign: 'center'
+                      }}>
+                        -
+                      </span>
+                      
+                      <select
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          backgroundColor: 'white',
+                          cursor: 'pointer'
+                        }}
+                        value={match.team2 === "BYE" ? "BYE" : (match.team2 || '')}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          handleMatchChange(match.id, 'team2', value === "BYE" ? "BYE" : (value ? parseInt(value) : null))
+                        }}
+                      >
+                        <option value="">Chọn đội</option>
+                        <option value="BYE">BYE</option>
+                        {teamsList.map((team) => (
+                          <option key={team.id} value={team.id}>
+                            {team.teamNumber || `Đội #${team.id}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -336,7 +402,7 @@ const MatchesTab = ({ tournament }) => {
         <button
           className="btn-save-matches"
           onClick={handleSaveMatches}
-          disabled={savingMatches}
+          disabled={savingMatches || !selectedStage}
         >
           <Save size={16} />
           {savingMatches ? 'Đang lưu...' : 'Lưu'}
@@ -347,4 +413,3 @@ const MatchesTab = ({ tournament }) => {
 }
 
 export default MatchesTab
-

@@ -206,7 +206,17 @@ router.post("/:id/register", authenticateToken, async (req, res, next) => {
     }
 
     // Kiểm tra giải đấu có cho phép đăng ký không
-    if (!league.registrationDeadline || new Date(league.registrationDeadline) < new Date()) {
+    if (!league.registrationDeadline) {
+      return res.status(400).json({
+        success: false,
+        message: "Giải đấu không cho phép đăng ký",
+      });
+    }
+
+    // So sánh đến cuối ngày hết hạn (23:59:59)
+    const deadlineDate = new Date(league.registrationDeadline);
+    deadlineDate.setHours(23, 59, 59, 999); // Set về cuối ngày
+    if (deadlineDate < new Date()) {
       return res.status(400).json({
         success: false,
         message: "Đã hết hạn đăng ký",
@@ -1794,8 +1804,12 @@ router.post(
         });
       }
 
-      // Xáo trộn ngẫu nhiên danh sách đội
-      const shuffledTeams = [...validTeams].sort(() => Math.random() - 0.5);
+      // Xáo trộn ngẫu nhiên danh sách đội bằng Fisher-Yates shuffle algorithm
+      const shuffledTeams = [...validTeams];
+      for (let i = shuffledTeams.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledTeams[i], shuffledTeams[j]] = [shuffledTeams[j], shuffledTeams[i]];
+      }
 
       // Kiểm tra format giải đấu
       const isRoundRobin = league.format === 'Vòng tròn' || league.format === 'round-robin' || stage === 'round-robin';
@@ -1823,10 +1837,91 @@ router.post(
           }
         }
       } else {
-        // Single-elimination: tạo matches cho vòng đầu tiên và tự động tạo matches cho tất cả các vòng tiếp theo
+        // Single-elimination: Bước 1 - Chuẩn hóa số lượng đội lên power of 2
         const numTeams = shuffledTeams.length;
-        const numMatches = Math.floor(numTeams / 2);
-        hasBye = numTeams % 2 === 1;
+        
+        // Helper function: Tính power of 2 gần nhất (làm tròn lên)
+        const getNextPowerOf2 = (n) => {
+          if (n <= 1) return 1;
+          if (n <= 2) return 2;
+          if (n <= 4) return 4;
+          if (n <= 8) return 8;
+          if (n <= 16) return 16;
+          if (n <= 32) return 32;
+          if (n <= 64) return 64;
+          // Nếu lớn hơn 64, tính toán động
+          let power = 1;
+          while (power < n) {
+            power *= 2;
+          }
+          return power;
+        };
+
+        const numSlots = getNextPowerOf2(numTeams);
+        const numByeSlots = numSlots - numTeams;
+        hasBye = numByeSlots > 0;
+
+        // Tạo bracketSlots với độ dài đúng bằng numSlots (power of 2)
+        // Sử dụng thuật toán Seeding để rải đều các BYE slots, tránh tập trung ở cuối
+        const bracketSlots = new Array(numSlots).fill(null);
+        
+        if (numByeSlots === 0) {
+          // Không có BYE, điền tất cả teams
+          shuffledTeams.forEach((team, index) => {
+            bracketSlots[index] = team;
+          });
+        } else {
+          // Có BYE: Sử dụng thuật toán Seeding để rải đều
+          // Tính khoảng cách giữa các BYE slots để rải đều
+          const byeInterval = Math.floor(numSlots / (numByeSlots + 1));
+          
+          // Tạo mảng vị trí sẽ đặt BYE (rải đều)
+          const byePositions = [];
+          for (let i = 0; i < numByeSlots; i++) {
+            // Rải đều BYE vào các vị trí cách đều nhau
+            // Sử dụng công thức: (i + 1) * (numSlots / (numByeSlots + 1))
+            const position = Math.floor((i + 1) * (numSlots / (numByeSlots + 1)));
+            byePositions.push(position);
+          }
+          
+          // Điền teams vào các vị trí không phải BYE
+          let teamIndex = 0;
+          for (let i = 0; i < numSlots; i++) {
+            if (byePositions.includes(i)) {
+              // Vị trí này là BYE, giữ nguyên null
+              bracketSlots[i] = null;
+            } else {
+              // Vị trí này là team thật
+              if (teamIndex < shuffledTeams.length) {
+                bracketSlots[i] = shuffledTeams[teamIndex];
+                teamIndex++;
+              } else {
+                // Nếu hết teams nhưng vẫn còn slot, đặt BYE
+                bracketSlots[i] = null;
+              }
+            }
+          }
+          
+          // Đảm bảo không có 2 BYE liên tiếp trong cùng một match (cặp slot)
+          // Điều chỉnh nếu cần: nếu slot chẵn và slot lẻ đều là BYE, swap một trong hai
+          for (let i = 0; i < numSlots; i += 2) {
+            const slot1 = bracketSlots[i];
+            const slot2 = bracketSlots[i + 1];
+            
+            // Nếu cả 2 slot trong cùng một match đều là BYE, swap với slot tiếp theo có team
+            if (slot1 === null && slot2 === null) {
+              // Tìm slot tiếp theo có team để swap
+              for (let j = i + 2; j < numSlots; j++) {
+                if (bracketSlots[j] !== null) {
+                  // Swap: đặt team vào slot1, BYE vào slot j
+                  bracketSlots[i] = bracketSlots[j];
+                  bracketSlots[j] = null;
+                  break;
+                }
+              }
+            }
+          }
+        }
 
         // Helper function: Tính toán stage dựa trên số đội
         const calculateStage = (numTeamsInRound) => {
@@ -1858,9 +1953,9 @@ router.post(
           }
         };
 
-        // Tính toán tất cả các vòng cần thiết
+        // Tính toán tất cả các vòng cần thiết dựa trên số slot (power of 2)
         const allRounds = [];
-        let currentTeams = numTeams;
+        let currentTeams = numSlots;
         
         while (currentTeams > 1) {
           const currentNumMatches = Math.floor(currentTeams / 2);
@@ -1875,29 +1970,94 @@ router.post(
           currentTeams = currentNumMatches;
         }
 
+        // Tạo matches cho tất cả các vòng (từ đầu đến cuối)
+        const allMatchesByRound = []; // Lưu matches theo từng vòng để dễ xử lý
+
         // Tạo matches cho tất cả các vòng
         allRounds.forEach((round, roundIndex) => {
+          const roundMatches = [];
+
           if (roundIndex === 0) {
-            // Vòng đầu tiên: gán teams thật
+            // Vòng đầu tiên: gán teams thật và BYE từ bracketSlots
             for (let i = 0; i < round.numMatches; i++) {
-              const team1 = shuffledTeams[i * 2];
-              const team2 = shuffledTeams[i * 2 + 1];
+              const slotIndex1 = i * 2;
+              const slotIndex2 = i * 2 + 1;
               
-              matches.push({
+              // Lấy team hoặc BYE từ bracketSlots (đảm bảo độ dài đúng bằng numSlots)
+              const team1 = bracketSlots[slotIndex1]; // Có thể là team hoặc null (BYE)
+              const team2 = bracketSlots[slotIndex2]; // Có thể là team hoặc null (BYE)
+
+              const matchHasBye = !team1 || !team2;
+              let team1Id = null;
+              let team2Id = null;
+              let score1 = null;
+              let score2 = null;
+
+              if (team1 && team2) {
+                // Cả 2 đội đều thật
+                team1Id = team1.id !== null && team1.id !== undefined ? team1.id : team1._id;
+                team2Id = team2.id !== null && team2.id !== undefined ? team2.id : team2._id;
+              } else if (team1 && !team2) {
+                // Team1 thật, Team2 là BYE -> Team1 tự động thắng
+                team1Id = team1.id !== null && team1.id !== undefined ? team1.id : team1._id;
+                team2Id = "BYE";
+                score1 = 1; // Tự động thắng
+                score2 = 0;
+              } else if (!team1 && team2) {
+                // Team1 là BYE, Team2 thật -> Team2 tự động thắng
+                team1Id = "BYE";
+                team2Id = team2.id !== null && team2.id !== undefined ? team2.id : team2._id;
+                score1 = 0;
+                score2 = 1; // Tự động thắng
+              } else {
+                // Cả 2 đều là BYE (double BYE) - Trường hợp này có thể xảy ra với power of 2
+                // Ví dụ: 6 đội -> 8 slots, match cuối cùng sẽ là BYE vs BYE
+                // Trong trường hợp này, match này không nên tồn tại hoặc cần được skip
+                // Ta sẽ không tạo match này (skip), và điều chỉnh nextMatchId của match trước
+                // Hoặc đơn giản hơn: tạo match nhưng đánh dấu là double BYE và tự động skip
+                team1Id = "BYE";
+                team2Id = "BYE";
+                // Không set score, match này sẽ được skip trong propagation
+                // Match này sẽ không có winner, và vòng tiếp theo sẽ nhận BYE hoặc null
+              }
+
+              // Tính nextMatchId
+              let nextMatchId = null;
+              if (roundIndex < allRounds.length - 1) {
+                const nextRound = allRounds[roundIndex + 1];
+                // Match 1,2 -> Match 1 (team1, team2)
+                // Match 3,4 -> Match 2 (team1, team2)
+                const nextMatchNumber = Math.floor(i / 2) + 1;
+                nextMatchId = `${nextRound.stage}_${nextMatchNumber}`;
+              }
+
+              const match = {
                 stage: round.stage,
                 matchNumber: i + 1,
-                team1Id: team1.id !== null && team1.id !== undefined ? team1.id : team1._id,
-                team2Id: team2.id !== null && team2.id !== undefined ? team2.id : team2._id,
+                team1Id: team1Id,
+                team2Id: team2Id,
                 date: null,
                 time: null,
-                score1: null,
-                score2: null,
-              });
+                score1: score1,
+                score2: score2,
+                nextMatchId: nextMatchId,
+                hasBye: matchHasBye,
+              };
+
+              roundMatches.push(match);
             }
           } else {
             // Các vòng sau: tạo matches với teamId = null (sẽ được cập nhật sau khi có kết quả)
             for (let i = 0; i < round.numMatches; i++) {
-              matches.push({
+              // Tính nextMatchId
+              let nextMatchId = null;
+              if (roundIndex < allRounds.length - 1) {
+                const nextRound = allRounds[roundIndex + 1];
+                const nextMatchNumber = Math.floor(i / 2) + 1;
+                nextMatchId = `${nextRound.stage}_${nextMatchNumber}`;
+              }
+
+              const match = {
                 stage: round.stage,
                 matchNumber: i + 1,
                 team1Id: null, // Sẽ được cập nhật sau khi có kết quả vòng trước
@@ -1906,23 +2066,114 @@ router.post(
                 time: null,
                 score1: null,
                 score2: null,
-              });
+                nextMatchId: nextMatchId,
+                hasBye: false,
+              };
+
+              roundMatches.push(match);
             }
           }
-        });
 
-        // Nếu có đội lẻ, thêm thông tin vào response
-        if (hasBye) {
-          byeTeam = shuffledTeams[shuffledTeams.length - 1];
+          allMatchesByRound.push(roundMatches);
+          matches.push(...roundMatches);
+        })
+
+        // Xử lý tự động thắng cho các trận có BYE ở vòng đầu tiên
+        // Điền đội thắng vào vòng tiếp theo ngay lập tức (Propagation)
+        if (allMatchesByRound.length > 0) {
+          const firstRoundMatches = allMatchesByRound[0];
+          
+          firstRoundMatches.forEach(match => {
+            // Bỏ qua match double BYE (cả 2 đều là BYE)
+            if (match.team1Id === "BYE" && match.team2Id === "BYE") {
+              // Match này không có winner, và vòng tiếp theo sẽ nhận BYE hoặc null
+              // Nếu match này có nextMatchId, ta cần xử lý đặc biệt
+              if (match.nextMatchId) {
+                const [nextStage, nextMatchNumber] = match.nextMatchId.split('_');
+                const nextMatch = matches.find(m => 
+                  m.stage === nextStage && m.matchNumber === parseInt(nextMatchNumber)
+                );
+                
+                if (nextMatch) {
+                  // Đặt BYE vào match tiếp theo
+                  const isOddMatch = match.matchNumber % 2 === 1;
+                  if (isOddMatch && !nextMatch.team1Id) {
+                    nextMatch.team1Id = "BYE";
+                    nextMatch.hasBye = true;
+                  } else if (!isOddMatch && !nextMatch.team2Id) {
+                    nextMatch.team2Id = "BYE";
+                    nextMatch.hasBye = true;
+                  }
+                  
+                  // Nếu match tiếp theo cũng trở thành double BYE, ta cần xử lý tiếp
+                  // (sẽ được xử lý trong lần lặp tiếp theo hoặc trong updateMatchResult)
+                  // Đảm bảo match tiếp theo được cập nhật trong mảng matches
+                  const nextMatchIndex = matches.findIndex(m => 
+                    m.stage === nextStage && m.matchNumber === parseInt(nextMatchNumber)
+                  );
+                  if (nextMatchIndex !== -1) {
+                    matches[nextMatchIndex] = nextMatch;
+                  }
+                }
+              }
+              return; // Skip match double BYE
+            }
+            
+            if (match.hasBye && match.score1 !== null && match.score2 !== null) {
+              // Xác định đội thắng (loại bỏ BYE)
+              const winnerId = match.score1 > match.score2 
+                ? (match.team1Id !== "BYE" ? match.team1Id : null)
+                : (match.team2Id !== "BYE" ? match.team2Id : null);
+              
+              if (winnerId && winnerId !== "BYE" && match.nextMatchId) {
+                // Tìm match tiếp theo
+                const [nextStage, nextMatchNumber] = match.nextMatchId.split('_');
+                const nextMatch = matches.find(m => 
+                  m.stage === nextStage && m.matchNumber === parseInt(nextMatchNumber)
+                );
+
+                if (nextMatch) {
+                  // Xác định vị trí team (team1 hoặc team2) dựa trên matchNumber
+                  // Match 1, 2 -> Match 1 vòng tiếp theo (team1, team2)
+                  // Match 3, 4 -> Match 2 vòng tiếp theo (team1, team2)
+                  // Match 5, 6 -> Match 3 vòng tiếp theo (team1, team2)
+                  const isOddMatch = match.matchNumber % 2 === 1;
+                  if (isOddMatch) {
+                    // Match lẻ (1, 3, 5...) -> team1 ở vòng tiếp theo
+                    nextMatch.team1Id = winnerId;
+                  } else {
+                    // Match chẵn (2, 4, 6...) -> team2 ở vòng tiếp theo
+                    nextMatch.team2Id = winnerId;
+                  }
+                  
+                  // Đảm bảo match tiếp theo được cập nhật trong mảng matches
+                  const nextMatchIndex = matches.findIndex(m => 
+                    m.stage === nextStage && m.matchNumber === parseInt(nextMatchNumber)
+                  );
+                  if (nextMatchIndex !== -1) {
+                    matches[nextMatchIndex] = nextMatch;
+                  }
+                }
+              }
+            }
+          });
         }
       }
 
       // Cập nhật matches trong league
       let updatedMatches;
       if (clearExisting) {
-        // Xóa tất cả matches của stage hiện tại, giữ lại các stage khác
-        updatedMatches = (league.matches || []).filter(m => m.stage !== stage);
-        updatedMatches = [...updatedMatches, ...matches];
+        if (isRoundRobin) {
+          // Round-robin: chỉ xóa matches của stage hiện tại
+          updatedMatches = (league.matches || []).filter(m => m.stage !== stage);
+          updatedMatches = [...updatedMatches, ...matches];
+        } else {
+          // Single-elimination: xóa TẤT CẢ các matches của single-elimination
+          // (vì bốc thăm tạo matches cho tất cả các vòng)
+          const singleEliminationStages = ['round1', 'round2', 'round3', 'round4', 'semi', 'final'];
+          updatedMatches = (league.matches || []).filter(m => !singleEliminationStages.includes(m.stage));
+          updatedMatches = [...updatedMatches, ...matches];
+        }
       } else {
         // Thêm matches mới, loại bỏ trùng lặp
         updatedMatches = [...(league.matches || []), ...matches];
@@ -1949,16 +2200,36 @@ router.post(
         hasBye: hasBye,
       });
 
+      // Tính số lượng BYE slots cho response (chỉ cho single-elimination)
+      let byeInfo = null;
+      let byeMessage = '';
+      if (hasBye && !isRoundRobin) {
+        // Lấy thông tin từ biến đã tính toán trước đó
+        const firstRoundStage = matches.length > 0 ? matches[0].stage : null;
+        const byeMatches = matches.filter(m => m.hasBye && m.stage === firstRoundStage);
+        const numByeSlots = byeMatches.length;
+        
+        byeInfo = {
+          numByeSlots: numByeSlots,
+          numTeams: validTeams.length,
+          byeMatches: byeMatches.map(m => ({
+            matchNumber: m.matchNumber,
+            stage: m.stage,
+            hasAutoWin: m.score1 !== null && m.score2 !== null,
+            winnerId: m.score1 > m.score2 ? m.team1Id : (m.score2 > m.score1 ? m.team2Id : null)
+          }))
+        };
+        
+        byeMessage = ` (${numByeSlots} slot BYE)`;
+      }
+
       res.json({
         success: true,
-        message: `Đã bốc thăm ${matches.length} cặp đấu thành công${hasBye ? ` (1 đội được bye)` : ''}`,
+        message: `Đã bốc thăm ${matches.length} cặp đấu thành công${byeMessage}`,
         data: {
           league: league,
           matches: matches,
-          byeTeam: byeTeam ? {
-            id: byeTeam.id || byeTeam._id,
-            teamNumber: byeTeam.teamNumber
-          } : null,
+          byeInfo: byeInfo,
         },
       });
     } catch (error) {
@@ -2078,6 +2349,7 @@ router.put(
         });
       }
 
+      // Cho phép null để hủy kết quả, nhưng không cho phép undefined
       if (score1 === undefined || score2 === undefined) {
         return res.status(400).json({
           success: false,
@@ -2112,6 +2384,9 @@ router.put(
       const match = league.matches[matchIndex];
       const oldScore1 = match.score1;
       const oldScore2 = match.score2;
+      const oldWinnerId = oldScore1 !== null && oldScore2 !== null
+        ? (oldScore1 > oldScore2 ? match.team1Id : (oldScore1 < oldScore2 ? match.team2Id : null))
+        : null;
 
       // Cập nhật kết quả
       match.score1 = score1 !== null && score1 !== undefined ? parseInt(score1) : null;
@@ -2177,96 +2452,132 @@ router.put(
           league.teams[team2Index] = team2;
         }
       } else {
-        // Single-elimination: Tự động tính winner và cập nhật vào vòng tiếp theo
-        if (match.score1 !== null && match.score2 !== null) {
-          const winnerId = match.score1 > match.score2 ? match.team1Id : 
-                           match.score1 < match.score2 ? match.team2Id : null;
-
-          if (winnerId) {
-            // Xác định vòng tiếp theo
-            let nextStage = null;
-            if (stage === 'round1') {
-              // Tính số đội ở vòng hiện tại
-              const currentRoundMatches = league.matches.filter(m => m.stage === stage);
-              const numTeamsInCurrentRound = currentRoundMatches.length * 2;
-              
-              if (numTeamsInCurrentRound === 4) {
-                nextStage = 'semi';
-              } else if (numTeamsInCurrentRound === 8) {
-                nextStage = 'round3';
-              } else if (numTeamsInCurrentRound === 16) {
-                nextStage = 'round4';
-              } else if (numTeamsInCurrentRound > 16) {
-                // Tính vòng tiếp theo dựa trên số đội
-                const numMatches = currentRoundMatches.length;
-                if (numMatches === 8) nextStage = 'round4';
-                else if (numMatches === 16) nextStage = 'round3';
-                else if (numMatches === 32) nextStage = 'round2';
-                else nextStage = 'round2';
-              }
-            } else if (stage === 'round2') {
-              nextStage = 'round3';
-            } else if (stage === 'round3') {
-              nextStage = 'semi';
-            } else if (stage === 'round4') {
-              nextStage = 'semi';
-            } else if (stage === 'semi') {
-              nextStage = 'final';
+        // Single-elimination: Tự động tính winner và cập nhật vào vòng tiếp theo (PROPAGATION)
+        
+        // Bước 1: Xóa đội thắng cũ khỏi vòng tiếp theo (nếu có kết quả cũ)
+        if (oldWinnerId && oldWinnerId !== "BYE" && match.nextMatchId) {
+          const [oldNextStage, oldNextMatchNumber] = match.nextMatchId.split('_');
+          const oldNextMatchIndex = league.matches.findIndex(m => 
+            m.stage === oldNextStage && m.matchNumber === parseInt(oldNextMatchNumber)
+          );
+          
+          if (oldNextMatchIndex !== -1) {
+            const oldNextMatch = league.matches[oldNextMatchIndex];
+            const isOddMatch = match.matchNumber % 2 === 1;
+            
+            // Xóa đội thắng cũ (chỉ xóa nếu đúng là đội thắng cũ)
+            if (isOddMatch && oldNextMatch.team1Id === oldWinnerId) {
+              oldNextMatch.team1Id = null;
+            } else if (!isOddMatch && oldNextMatch.team2Id === oldWinnerId) {
+              oldNextMatch.team2Id = null;
             }
+            
+            league.matches[oldNextMatchIndex] = oldNextMatch;
+          }
+        }
+        
+        // Bước 2: Điền đội thắng mới vào vòng tiếp theo
+        if (match.score1 !== null && match.score2 !== null) {
+          // Xử lý BYE: nếu một trong hai đội là BYE, đội còn lại tự động thắng
+          let winnerId = null;
+          
+          if (match.team1Id === "BYE" || match.team2Id === "BYE") {
+            // Có BYE trong trận đấu
+            winnerId = match.team1Id !== "BYE" ? match.team1Id : match.team2Id;
+          } else {
+            // Trận đấu bình thường, tính winner dựa trên điểm số
+            winnerId = match.score1 > match.score2 ? match.team1Id : 
+                       match.score1 < match.score2 ? match.team2Id : null;
+          }
 
-            if (nextStage) {
-              // Tìm match ở vòng tiếp theo mà winner sẽ tham gia
-              const nextRoundMatches = league.matches.filter(m => m.stage === nextStage);
-              
-              // Tính matchNumber cho vòng tiếp theo
-              // Match 1 và 2 của vòng hiện tại -> Match 1 của vòng tiếp theo
-              // Match 3 và 4 của vòng hiện tại -> Match 2 của vòng tiếp theo
-              const matchPosition = Math.ceil(match.matchNumber / 2);
-              const nextMatchNumber = matchPosition;
+          if (winnerId && winnerId !== "BYE" && match.nextMatchId) {
+            // Sử dụng nextMatchId đã được tính toán sẵn khi bốc thăm
+            const [nextStage, nextMatchNumber] = match.nextMatchId.split('_');
+            
+            // Tìm match tiếp theo
+            let nextMatchIndex = league.matches.findIndex(m => 
+              m.stage === nextStage && m.matchNumber === parseInt(nextMatchNumber)
+            );
 
-              // Tìm hoặc tạo match ở vòng tiếp theo
-              let nextMatchIndex = league.matches.findIndex(m => 
-                m.stage === nextStage && m.matchNumber === nextMatchNumber
-              );
+            if (nextMatchIndex === -1) {
+              // Tạo match mới ở vòng tiếp theo (trường hợp hiếm, không nên xảy ra)
+              const nextMatch = {
+                stage: nextStage,
+                matchNumber: parseInt(nextMatchNumber),
+                team1Id: null,
+                team2Id: null,
+                date: null,
+                time: null,
+                score1: null,
+                score2: null,
+                nextMatchId: null, // Sẽ được tính sau
+                hasBye: false,
+              };
 
-              if (nextMatchIndex === -1) {
-                // Tạo match mới ở vòng tiếp theo
-                const nextMatch = {
-                  stage: nextStage,
-                  matchNumber: nextMatchNumber,
-                  team1Id: null,
-                  team2Id: null,
-                  date: null,
-                  time: null,
-                  score1: null,
-                  score2: null,
-                };
-
-                // Xác định vị trí team (team1 hoặc team2) dựa trên matchNumber hiện tại
-                if (match.matchNumber % 2 === 1) {
-                  // Match lẻ -> team1 ở vòng tiếp theo
-                  nextMatch.team1Id = winnerId;
-                } else {
-                  // Match chẵn -> team2 ở vòng tiếp theo
-                  nextMatch.team2Id = winnerId;
-                }
-
-                league.matches.push(nextMatch);
+              // Xác định vị trí team (team1 hoặc team2) dựa trên matchNumber hiện tại
+              // Match 1, 2 -> Match 1 vòng tiếp theo (team1, team2)
+              // Match 3, 4 -> Match 2 vòng tiếp theo (team1, team2)
+              const isOddMatch = match.matchNumber % 2 === 1;
+              if (isOddMatch) {
+                // Match lẻ (1, 3, 5...) -> team1 ở vòng tiếp theo
+                nextMatch.team1Id = winnerId;
               } else {
-                // Cập nhật match hiện có
-                const nextMatch = league.matches[nextMatchIndex];
-                
-                // Xác định vị trí team (team1 hoặc team2) dựa trên matchNumber hiện tại
-                if (match.matchNumber % 2 === 1) {
-                  // Match lẻ -> team1 ở vòng tiếp theo
-                  nextMatch.team1Id = winnerId;
-                } else {
-                  // Match chẵn -> team2 ở vòng tiếp theo
-                  nextMatch.team2Id = winnerId;
-                }
-
-                league.matches[nextMatchIndex] = nextMatch;
+                // Match chẵn (2, 4, 6...) -> team2 ở vòng tiếp theo
+                nextMatch.team2Id = winnerId;
               }
+
+              league.matches.push(nextMatch);
+            } else {
+              // Cập nhật match hiện có - PROPAGATION: Đẩy đội thắng lên vòng tiếp theo
+              const nextMatch = league.matches[nextMatchIndex];
+              
+              // Xác định vị trí team (team1 hoặc team2) dựa trên matchNumber hiện tại
+              const isOddMatch = match.matchNumber % 2 === 1;
+              if (isOddMatch) {
+                // Match lẻ (1, 3, 5...) -> team1 ở vòng tiếp theo
+                // Chỉ cập nhật nếu chưa có team1 hoặc đang ghi đè
+                nextMatch.team1Id = winnerId;
+              } else {
+                // Match chẵn (2, 4, 6...) -> team2 ở vòng tiếp theo
+                // Chỉ cập nhật nếu chưa có team2 hoặc đang ghi đè
+                nextMatch.team2Id = winnerId;
+              }
+
+              // Đảm bảo cập nhật vào mảng
+              league.matches[nextMatchIndex] = nextMatch;
+            }
+          }
+        }
+        
+        // Bước 3: Xử lý hủy kết quả (khi score1 hoặc score2 = null)
+        // Nếu cả hai đều null hoặc một trong hai null, xóa đội thắng khỏi vòng tiếp theo
+        if ((match.score1 === null || match.score2 === null) && oldWinnerId && oldWinnerId !== "BYE" && match.nextMatchId) {
+          // Logic xóa đội thắng cũ đã được xử lý ở Bước 1 (dòng 2456-2476)
+          // Nhưng cần đảm bảo rằng khi hủy kết quả, đội thắng cũ vẫn bị xóa
+          // Logic này đã có sẵn ở Bước 1, không cần thêm gì
+        }
+
+        // Bước 4: Kiểm tra trận chung kết (final) - Nếu có đội vô địch, chuyển status thành "completed"
+        if (match.stage === 'final' && match.score1 !== null && match.score2 !== null) {
+          // Xác định đội thắng
+          let winnerId = null;
+          
+          if (match.team1Id === "BYE" || match.team2Id === "BYE") {
+            // Có BYE trong trận đấu
+            winnerId = match.team1Id !== "BYE" ? match.team1Id : match.team2Id;
+          } else {
+            // Trận đấu bình thường, tính winner dựa trên điểm số
+            winnerId = match.score1 > match.score2 ? match.team1Id : 
+                       match.score1 < match.score2 ? match.team2Id : null;
+          }
+
+          // Nếu có đội thắng (không phải hòa), chuyển status thành "completed"
+          if (winnerId && winnerId !== "BYE") {
+            league.status = 'completed';
+          } else if (match.score1 === null || match.score2 === null) {
+            // Nếu hủy kết quả trận final, chuyển lại status về "ongoing" (nếu đang là completed)
+            if (league.status === 'completed') {
+              league.status = 'ongoing';
             }
           }
         }
@@ -2346,6 +2657,11 @@ router.get(
 
       const getTeamName = (teamId, teams) => {
         if (teamId === null || teamId === undefined) return null;
+        
+        // Xử lý BYE
+        if (teamId === "BYE" || String(teamId) === "BYE") {
+          return "BYE";
+        }
         
         let teamIdStr = String(teamId);
         let teamIdNum = null;
@@ -2436,8 +2752,13 @@ router.get(
           };
 
           if (match.team1Id !== null && match.team1Id !== undefined) {
-            const foundTeam1Name = getTeamName(match.team1Id, league.teams);
-            team1Name = foundTeam1Name || `Đội #${match.team1Id}`;
+            // Xử lý BYE
+            if (match.team1Id === "BYE" || String(match.team1Id) === "BYE") {
+              team1Name = "BYE";
+            } else {
+              const foundTeam1Name = getTeamName(match.team1Id, league.teams);
+              team1Name = foundTeam1Name || `Đội #${match.team1Id}`;
+            }
           } else {
             const prevStage = getPrevStage(match.stage);
             const prevStageName = mapStageToStageName(prevStage);
@@ -2446,8 +2767,13 @@ router.get(
           }
 
           if (match.team2Id !== null && match.team2Id !== undefined) {
-            const foundTeam2Name = getTeamName(match.team2Id, league.teams);
-            team2Name = foundTeam2Name || `Đội #${match.team2Id}`;
+            // Xử lý BYE
+            if (match.team2Id === "BYE" || String(match.team2Id) === "BYE") {
+              team2Name = "BYE";
+            } else {
+              const foundTeam2Name = getTeamName(match.team2Id, league.teams);
+              team2Name = foundTeam2Name || `Đội #${match.team2Id}`;
+            }
           } else {
             const prevStage = getPrevStage(match.stage);
             const prevStageName = mapStageToStageName(prevStage);
@@ -3328,4 +3654,5 @@ router.put(
 );
 
 export default router;
+
 

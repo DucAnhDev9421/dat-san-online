@@ -102,8 +102,11 @@ const RegistrationTab = ({ tournament }) => {
 
     const calculateTimeLeft = () => {
       const now = new Date().getTime()
-      const deadline = new Date(tournament.registrationDeadline).getTime()
-      const difference = deadline - now
+      const deadline = new Date(tournament.registrationDeadline)
+      // Set về cuối ngày (23:59:59) để so sánh chính xác
+      deadline.setHours(23, 59, 59, 999)
+      const deadlineTime = deadline.getTime()
+      const difference = deadlineTime - now
 
       if (difference <= 0) {
         setIsExpired(true)
@@ -431,7 +434,14 @@ const RegistrationTab = ({ tournament }) => {
     )
   }
 
-  const hasRegistration = tournament.registrationDeadline && new Date(tournament.registrationDeadline) > new Date()
+  // So sánh đến cuối ngày hết hạn (23:59:59)
+  const hasRegistration = tournament.registrationDeadline && (() => {
+    const deadline = new Date(tournament.registrationDeadline);
+    deadline.setHours(23, 59, 59, 999); // Set về cuối ngày
+    return deadline > new Date();
+  })()
+  // Kiểm tra giải đấu đã đủ đội tham gia chưa
+  const isFull = tournament.participants >= tournament.maxParticipants
   const minMembers = tournament.membersPerTeam || 0
   const maxMembers = tournament.membersPerTeam || 0
   const isFootball = tournament.sport === 'Bóng đá'
@@ -492,7 +502,7 @@ const RegistrationTab = ({ tournament }) => {
         )}
 
         {/* Countdown Timer */}
-        {hasRegistration && !isExpired && (
+        {hasRegistration && !isExpired && !isFull && (
           <div style={{
             display: 'flex',
             justifyContent: 'center',
@@ -606,8 +616,28 @@ const RegistrationTab = ({ tournament }) => {
           </div>
         )}
 
-        {/* Expired Message */}
-        {isExpired && (
+        {/* Full Teams Message - Ưu tiên hiển thị nếu đã đủ đội */}
+        {isFull && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.2)',
+            border: '2px solid rgba(239, 68, 68, 0.5)',
+            borderRadius: 12,
+            padding: 24,
+            marginBottom: 40
+          }}>
+            <p style={{ 
+              fontSize: 18, 
+              fontWeight: 600, 
+              margin: 0,
+              color: '#fff'
+            }}>
+              Đã đủ đội tham gia
+            </p>
+          </div>
+        )}
+
+        {/* Expired Message - Chỉ hiển thị khi chưa đủ đội nhưng đã hết hạn */}
+        {isExpired && !isFull && (
           <div style={{
             background: 'rgba(239, 68, 68, 0.2)',
             border: '2px solid rgba(239, 68, 68, 0.5)',
@@ -627,7 +657,7 @@ const RegistrationTab = ({ tournament }) => {
         )}
 
         {/* Register Button */}
-        {hasRegistration && !isExpired && (
+        {hasRegistration && !isExpired && !isFull && (
           <button
             onClick={handleStartRegister}
             style={{

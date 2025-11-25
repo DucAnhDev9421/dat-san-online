@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Pencil, HelpCircle } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Pencil } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { categoryApi } from '../../../api/categoryApi'
 import { facilityApi } from '../../../api/facilityApi'
@@ -10,28 +10,23 @@ import { useAuth } from '../../../contexts/AuthContext'
 import useClickOutside from '../../../hook/use-click-outside'
 import '../../../styles/CreateTournament.css'
 
-const CreateTournament = () => {
+const CreateInternalTournament = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const [searchParams] = useSearchParams()
-  const facilityIdFromUrl = searchParams.get('facility')
   
   const [formData, setFormData] = useState({
     image: null,
     name: '',
     description: '',
     phone: '',
-    mode: 'private', // private or public
     location: '',
-    type: 'individual', // team or individual
+    type: 'individual', // team or individual (mặc định individual)
     sport: '', // selected sport category
     format: 'single-elimination', // tournament format
     numParticipants: 2,
     membersPerTeam: 2, // số lượng người mỗi đội
     startDate: '',
-    endDate: '',
-    allowRegistration: false,
-    registrationDeadline: ''
+    endDate: ''
   })
 
   const [imagePreview, setImagePreview] = useState(null)
@@ -45,7 +40,6 @@ const CreateTournament = () => {
   const [favoriteFacilities, setFavoriteFacilities] = useState([])
   const [loadingFavorites, setLoadingFavorites] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isFacilityLocked, setIsFacilityLocked] = useState(false) // Track if facility is locked from URL
   const facilityDropdownRef = useClickOutside(() => {
     setShowFacilityDropdown(false)
   }, showFacilityDropdown)
@@ -129,40 +123,12 @@ const CreateTournament = () => {
     fetchFavorites()
   }, [])
 
-  // Load facility from URL params
+  // Set default phone from user if available
   useEffect(() => {
-    if (facilityIdFromUrl) {
-      const loadFacility = async () => {
-        try {
-          const result = await facilityApi.getFacilityById(facilityIdFromUrl)
-          if (result.success && result.data) {
-            const facility = result.data
-            
-            // Verify facility belongs to owner if user is owner
-            if (user && (user.role === 'owner' || user.role === 'admin')) {
-              const facilityOwnerId = facility.owner?._id || facility.owner?.id || facility.owner
-              const userId = user._id || user.id
-              
-              if (facilityOwnerId && String(facilityOwnerId) !== String(userId) && user.role !== 'admin') {
-                toast.error('Bạn không có quyền tạo giải đấu cho cơ sở này')
-                navigate('/tournament/create')
-                return
-              }
-            }
-            
-            setSelectedFacility(facility)
-            setFormData(prev => ({ ...prev, location: facility._id || facility.id || facility.name || '' }))
-            setFacilitySearchQuery(facility.name + (facility.address ? ` - ${facility.address}` : ''))
-            setIsFacilityLocked(true) // Lock the facility field
-          }
-        } catch (error) {
-          console.error('Error loading facility:', error)
-          toast.error('Không thể tải thông tin cơ sở')
-        }
-      }
-      loadFacility()
+    if (user && user.phone && !formData.phone) {
+      setFormData(prev => ({ ...prev, phone: user.phone }))
     }
-  }, [facilityIdFromUrl, user, navigate])
+  }, [user])
 
   const tournamentFormats = [
     { id: 'single-elimination', icon: '⚔️', label: 'Loại trực tiếp' },
@@ -171,22 +137,10 @@ const CreateTournament = () => {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
-    setFormData(prev => {
-      const newData = {
-        ...prev,
-        [name]: type === 'checkbox' ? checked : (type === 'number' ? parseInt(value) : value)
-      }
-      // Khi chọn "Công khai", tự động bật cho phép đăng ký
-      if (name === 'mode' && value === 'public') {
-        newData.allowRegistration = true
-      }
-      // Khi chọn "Riêng tư", tắt cho phép đăng ký
-      if (name === 'mode' && value === 'private') {
-        newData.allowRegistration = false
-        newData.registrationDeadline = ''
-      }
-      return newData
-    })
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : (type === 'number' ? parseInt(value) : value)
+    }))
   }
 
   const handleImageUpload = (e) => {
@@ -206,7 +160,6 @@ const CreateTournament = () => {
   }
 
 
-
   const handleFacilitySelect = (facility) => {
     setSelectedFacility(facility)
     setFormData(prev => ({ ...prev, location: facility._id || facility.id }))
@@ -215,10 +168,6 @@ const CreateTournament = () => {
   }
 
   const handleFacilitySearchChange = (e) => {
-    // Prevent changes if facility is locked from URL
-    if (isFacilityLocked) {
-      return
-    }
     const value = e.target.value
     setFacilitySearchQuery(value)
     if (!value.trim()) {
@@ -236,8 +185,8 @@ const CreateTournament = () => {
       toast.error('Vui lòng nhập tên giải đấu')
       return
     }
-    if (!formData.location) {
-      toast.error('Vui lòng chọn sân')
+    if (!formData.phone.trim()) {
+      toast.error('Vui lòng nhập số điện thoại')
       return
     }
     if (!formData.startDate) {
@@ -246,11 +195,6 @@ const CreateTournament = () => {
     }
     if (!formData.endDate) {
       toast.error('Vui lòng chọn ngày kết thúc')
-      return
-    }
-    // Validation cho hạn chót đăng ký khi chọn công khai
-    if (formData.mode === 'public' && !formData.registrationDeadline) {
-      toast.error('Vui lòng chọn hạn chót đăng ký cho giải đấu công khai')
       return
     }
     // Validate date range
@@ -283,38 +227,34 @@ const CreateTournament = () => {
       // 3. Lấy thông tin facility
       const facilityName = selectedFacility?.name || ''
       const facilityAddress = selectedFacility?.address || ''
-      const facilityId = selectedFacility?._id || selectedFacility?.id || facilityIdFromUrl || null
+      const facilityId = selectedFacility?._id || selectedFacility?.id || null
 
       // 4. Prepare request body
       const requestBody = {
         name: formData.name.trim(),
         format: formatMapping[formData.format] || formData.format,
         sport: formData.sport,
-        phone: user?.phone || null,
+        phone: formData.phone.trim(),
         tournamentType: formData.type, // 'team' | 'individual'
         membersPerTeam: formData.membersPerTeam,
         startDate: startDateTime,
         endDate: endDateTime,
-        location: facilityName,
-        address: facilityAddress,
+        location: facilityName || null,
+        address: facilityAddress || null,
         maxParticipants: formData.numParticipants,
         description: formData.description.trim() || null,
         fullDescription: formData.description.trim() || null,
-        registrationDeadline: formData.mode === 'public' && formData.registrationDeadline
-          ? `${formData.registrationDeadline}T23:59:59`
-          : null,
-        type: formData.mode === 'public' ? 'PUBLIC' : 'PRIVATE', // Map mode to type
+        type: 'PRIVATE', // Giải đấu nội bộ luôn là PRIVATE
         teams: [],
         matches: []
       }
 
-      // Nếu có facility ID, thêm vào request body
+      // Nếu có facility ID, thêm vào request body (nhưng không bắt buộc)
       if (facilityId) {
         requestBody.facility = facilityId
-        // Nếu có facility, giải đấu sẽ tự động có approvalStatus: "pending"
       }
 
-      // 5. Create league first
+      // 4. Create league
       const result = await leagueApi.createLeague(requestBody)
       
       if (!result.success) {
@@ -323,7 +263,7 @@ const CreateTournament = () => {
 
       const leagueId = result.data._id || result.data.id
 
-      // 6. Upload image if exists
+      // 5. Upload image if exists
       if (formData.image && leagueId) {
         try {
           const uploadResult = await leagueApi.uploadImage(leagueId, formData.image)
@@ -341,7 +281,7 @@ const CreateTournament = () => {
         }
       }
 
-      toast.success('Tạo giải đấu thành công!')
+      toast.success('Tạo giải đấu nội bộ thành công!')
       navigate(`/tournament/${leagueId}`)
     } catch (error) {
       console.error('Error creating tournament:', error)
@@ -358,16 +298,13 @@ const CreateTournament = () => {
           {/* Header */}
           <div className="create-tournament-header">
             <div className="header-left">
-              <h1>Tạo Giải</h1>
+              <h1>Tạo giải đấu mới</h1>
               <p className="header-subtitle">
-                Vui lòng nhập thông tin hợp lệ cho các trường được yêu cầu
+                Điền thông tin để tạo giải đấu của bạn
               </p>
             </div>
-            <button className="help-button" type="button">
-              <HelpCircle size={18} />
-              <span>Hướng dẫn</span>
-            </button>
           </div>
+
           {/* Basic Information Section */}
           <div className="form-section">
             <div className="form-row">
@@ -479,33 +416,19 @@ const CreateTournament = () => {
 
                 <div className="form-row-inline">
                   <div className="form-field">
-                    <label htmlFor="mode">Chế độ</label>
-                    <select
-                      id="mode"
-                      name="mode"
-                      value={formData.mode}
+                    <label htmlFor="phone">
+                      Số điện thoại <span className="required">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      id="phone"
+                      name="phone"
+                      value={formData.phone}
                       onChange={handleInputChange}
-                    >
-                      <option value="private">Riêng tư</option>
-                      <option value="public">Công khai</option>
-                    </select>
+                      placeholder="Nhập số điện thoại"
+                      required
+                    />
                   </div>
-
-                  {formData.mode === 'public' && (
-                    <div className="form-field">
-                      <label htmlFor="registrationDeadline">
-                        Hạn chót đăng ký <span className="required">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        id="registrationDeadline"
-                        name="registrationDeadline"
-                        value={formData.registrationDeadline}
-                        onChange={handleInputChange}
-                        required
-                      />
-                    </div>
-                  )}
                 </div>
 
                 {/* Tournament Date & Time */}
@@ -539,19 +462,10 @@ const CreateTournament = () => {
                   </div>
                 </div>
 
+                {/* Facility Search */}
                 <div className="form-field facility-search-field">
                   <label htmlFor="facilitySearch">
-                    Địa điểm <span className="required">*</span>
-                    {isFacilityLocked && (
-                      <span style={{ 
-                        marginLeft: 8, 
-                        fontSize: 12, 
-                        color: '#6b7280', 
-                        fontWeight: 'normal' 
-                      }}>
-                        (Đã khóa)
-                      </span>
-                    )}
+                    Địa điểm (tùy chọn)
                   </label>
                   <div className="facility-search-wrapper" ref={facilityDropdownRef}>
                     <input
@@ -561,19 +475,12 @@ const CreateTournament = () => {
                       value={facilitySearchQuery}
                       onChange={handleFacilitySearchChange}
                       onFocus={() => {
-                        if (!isFacilityLocked && (facilitySearchResults.length > 0 || favoriteFacilities.length > 0)) {
+                        if (facilitySearchResults.length > 0 || favoriteFacilities.length > 0) {
                           setShowFacilityDropdown(true)
                         }
                       }}
-                      placeholder={isFacilityLocked ? "Địa điểm đã được chọn" : "Tìm theo tên cơ sở, quận huyện..."}
-                      required={!formData.location}
+                      placeholder="Tìm theo tên cơ sở, quận huyện..."
                       autoComplete="off"
-                      disabled={isFacilityLocked}
-                      style={{
-                        cursor: isFacilityLocked ? 'not-allowed' : 'text',
-                        backgroundColor: isFacilityLocked ? '#f3f4f6' : '#fff',
-                        opacity: isFacilityLocked ? 0.7 : 1
-                      }}
                     />
                     {loadingFacilities && (
                       <div className="facility-search-loading">
@@ -651,7 +558,6 @@ const CreateTournament = () => {
                       type="hidden"
                       name="location"
                       value={formData.location}
-                      required
                     />
                   </div>
                 </div>
@@ -676,7 +582,6 @@ const CreateTournament = () => {
             </div>
           </div>
 
-
           {/* Submit Button */}
           <div className="form-actions">
             <button 
@@ -684,15 +589,14 @@ const CreateTournament = () => {
               className="submit-button"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Đang tạo giải đấu...' : 'Tạo giải'}
+              {isSubmitting ? 'Đang tạo giải đấu...' : 'Tạo giải đấu nội bộ'}
             </button>
           </div>
         </form>
       </div>
-
     </div>
   )
 }
 
-export default CreateTournament
+export default CreateInternalTournament
 

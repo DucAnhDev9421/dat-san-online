@@ -8,9 +8,11 @@ import {
 import { toast } from 'react-toastify'
 import Dialog from '../../../../components/ui/Dialog'
 import { leagueApi } from '../../../../api/leagueApi'
+import { useAuth } from '../../../../contexts/AuthContext'
 
 export default function MyTournamentsTab() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [tournaments, setTournaments] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -147,7 +149,10 @@ export default function MyTournamentsTab() {
   }
 
   const handleCreateTournament = () => {
-    navigate('/tournament/create')
+    // Điều hướng dựa trên role: owner/admin -> /tournament/create, user -> /tournament/create/internal
+    const isOwnerOrAdmin = user && (user.role === 'owner' || user.role === 'admin')
+    const route = isOwnerOrAdmin ? '/tournament/create' : '/tournament/create/internal'
+    navigate(route)
   }
 
   return (

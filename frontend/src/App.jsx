@@ -41,6 +41,7 @@ import Promotion from "./pages/public/Promotion.jsx";
 import Tournament from "./pages/public/Tournament.jsx";
 import TournamentDetail from "./pages/public/Tournament/TournamentDetail.jsx";
 import CreateTournament from "./pages/public/Tournament/CreateTournament.jsx";
+import CreateInternalTournament from "./pages/public/Tournament/CreateInternalTournament.jsx";
 import NotificationsPage from "./pages/public/Notifications.jsx";
 import Login from "./pages/auth/Login.jsx";
 import Register from "./pages/auth/Register.jsx";
@@ -184,6 +185,7 @@ function App() {
                 <Route path="/promotion" element={<Promotion />} />
                 <Route path="/tournament" element={<Tournament />} />
                 <Route path="/tournament/create" element={<CreateTournament />} />
+                <Route path="/tournament/create/internal" element={<CreateInternalTournament />} />
                 <Route path="/tournament/:id/*" element={<TournamentDetail />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />

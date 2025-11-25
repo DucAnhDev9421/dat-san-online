@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Save, Plus, Minus, Pencil, Upload, Send } from 'lucide-react'
+import { Save, Plus, Minus, Pencil, Upload, Send, Play } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { categoryApi } from '../../../../../api/categoryApi'
 import { facilityApi } from '../../../../../api/facilityApi'
@@ -49,6 +49,7 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
   const [loadingActivateFacilities, setLoadingActivateFacilities] = useState(false)
   const [showActivateFacilityDropdown, setShowActivateFacilityDropdown] = useState(false)
   const [selectedActivateFacility, setSelectedActivateFacility] = useState(null)
+  const [startingTournament, setStartingTournament] = useState(false)
   const [activateFavoriteFacilities, setActivateFavoriteFacilities] = useState([])
   
   const facilityDropdownRef = useClickOutside(() => {
@@ -516,6 +517,35 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
     }
   }
 
+  // Bắt đầu giải đấu (chuyển status từ upcoming sang ongoing)
+  const handleStartTournament = async () => {
+    if (!window.confirm('Bạn có chắc chắn muốn bắt đầu giải đấu? Trạng thái sẽ chuyển sang "Đang diễn ra".')) {
+      return
+    }
+
+    try {
+      setStartingTournament(true)
+      
+      const result = await leagueApi.updateLeague(id, {
+        status: 'ongoing'
+      })
+      
+      if (result.success) {
+        toast.success('Đã bắt đầu giải đấu thành công')
+        if (refreshTournament) {
+          refreshTournament()
+        }
+      } else {
+        throw new Error(result.message || 'Không thể bắt đầu giải đấu')
+      }
+    } catch (error) {
+      console.error('Error starting tournament:', error)
+      toast.error(error.message || 'Không thể bắt đầu giải đấu')
+    } finally {
+      setStartingTournament(false)
+    }
+  }
+
   const tournamentFormats = [
     { value: 'single-elimination', label: 'Loại trực tiếp' },
     { value: 'round-robin', label: 'Vòng tròn' },
@@ -526,6 +556,7 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
   const canActivate = !tournament?.facility && tournament?.approvalStatus !== 'pending' && tournament?.approvalStatus !== 'approved'
   const isPending = tournament?.approvalStatus === 'pending'
   const isApproved = tournament?.approvalStatus === 'approved'
+  const canStartTournament = tournament?.status === 'upcoming' && (isApproved || !tournament?.facility) // Có thể bắt đầu nếu đã được duyệt hoặc không cần duyệt
 
   if (!tournament) return null
 
@@ -576,6 +607,43 @@ const ConfigTab = ({ tournament: tournamentProp }) => {
               fontWeight: '500'
             }}>
               ✓ Đã được duyệt
+            </span>
+          )}
+          {canStartTournament && !isEditing && (
+            <button 
+              className="btn-edit"
+              onClick={handleStartTournament}
+              disabled={startingTournament}
+              style={{ 
+                backgroundColor: '#3b82f6', 
+                color: 'white', 
+                border: 'none', 
+                opacity: startingTournament ? 0.6 : 1 
+              }}
+            >
+              {startingTournament ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: 'inline-block', marginRight: '4px', verticalAlign: 'middle' }}></div>
+                  Đang bắt đầu...
+                </>
+              ) : (
+                <>
+                  <Play size={16} style={{ marginRight: '4px', display: 'inline-block', verticalAlign: 'middle' }} />
+                  Bắt đầu giải đấu
+                </>
+              )}
+            </button>
+          )}
+          {tournament?.status === 'ongoing' && !isEditing && (
+            <span style={{ 
+              padding: '8px 16px', 
+              backgroundColor: '#dbeafe', 
+              color: '#1e40af', 
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}>
+              ▶ Đang diễn ra
             </span>
           )}
           {!isEditing && (
