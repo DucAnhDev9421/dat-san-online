@@ -2571,14 +2571,19 @@ router.put(
                        match.score1 < match.score2 ? match.team2Id : null;
           }
 
-          // Nếu có đội thắng (không phải hòa), chuyển status thành "completed"
+          // Nếu có đội thắng (không phải hòa), chuyển status thành "completed" và lưu đội vô địch
           if (winnerId && winnerId !== "BYE") {
             league.status = 'completed';
+            league.champion = winnerId; // Lưu đội vô địch
           } else if (match.score1 === null || match.score2 === null) {
-            // Nếu hủy kết quả trận final, chuyển lại status về "ongoing" (nếu đang là completed)
+            // Nếu hủy kết quả trận final, chuyển lại status về "ongoing" và xóa đội vô địch
             if (league.status === 'completed') {
               league.status = 'ongoing';
+              league.champion = null; // Xóa đội vô địch
             }
+          } else if (winnerId === null) {
+            // Trường hợp hòa (score1 === score2), không có đội vô địch
+            league.champion = null;
           }
         }
       }

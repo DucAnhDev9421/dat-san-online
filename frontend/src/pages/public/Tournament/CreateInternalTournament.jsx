@@ -414,6 +414,22 @@ const CreateInternalTournament = () => {
                   />
                 </div>
 
+                {/* Members Per Team */}
+                <div className="form-field">
+                  <label htmlFor="membersPerTeam">
+                    Số thành viên mỗi đội
+                  </label>
+                  <input
+                    type="number"
+                    id="membersPerTeam"
+                    name="membersPerTeam"
+                    value={formData.membersPerTeam}
+                    onChange={handleInputChange}
+                    min="1"
+                    placeholder="Nhập số thành viên"
+                  />
+                </div>
+
                 <div className="form-row-inline">
                   <div className="form-field">
                     <label htmlFor="phone">

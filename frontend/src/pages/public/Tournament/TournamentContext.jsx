@@ -55,7 +55,8 @@ const TournamentProvider = ({ children }) => {
           membersPerTeam: league.membersPerTeam,
           type: league.type || 'PRIVATE', // Map type from backend
           teams: league.teams || [],
-          matches: league.matches || []
+          matches: league.matches || [],
+          champion: league.champion || null // Đội vô địch
         }
         
         setTournament(mappedTournament)

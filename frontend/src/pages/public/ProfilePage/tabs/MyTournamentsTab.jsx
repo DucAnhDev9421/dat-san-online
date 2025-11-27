@@ -546,10 +546,6 @@ export default function MyTournamentsTab() {
         <div className="empty-state">
           <h4>Chưa có giải đấu nào</h4>
           <p>Tạo giải đấu mới để bắt đầu quản lý giải đấu của bạn</p>
-          <button className="btn btn-primary" onClick={handleCreateTournament}>
-            <Plus size={18} />
-            Tạo giải đấu mới
-          </button>
         </div>
       ) : (
         <div className="tournaments-list">

@@ -1,15 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import useMobile from '../../hook/use-mobile';
 import useToggle from '../../hook/use-toggle';
+import { useAuth } from '../../contexts/AuthContext';
+import useUserLocation from '../../hook/use-user-location';
+import { aiApi } from '../../api/aiApi';
+import FacilityCard from './FacilityCard';
+import CourtCard from './CourtCard';
 import chatbotAvatar from '../../assets/chatbot.png';
 import './ChatButton.css';
+
+// Quick Replies - Common questions
+const QUICK_REPLIES = [
+  { text: '📍 Tìm cơ sở gần nhất', message: 'Tìm các cơ sở gần tôi' },
+  { text: '⚽ Đặt sân', message: 'Hướng dẫn tôi cách đặt sân' },
+];
 
 const ChatButton = () => {
   const location = useLocation();
   const isMobile = useMobile(768);
   const [isOpen, { toggle: toggleChat }] = useToggle(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef(null);
+  const { user } = useAuth();
+  const { userLocation } = useUserLocation();
+  
+  // Booking flow state
+  const [bookingStep, setBookingStep] = useState(null); // 'sport' | 'courtType' | 'date' | 'timeSlots' | 'search'
+  const [selectedSport, setSelectedSport] = useState(null);
+  const [selectedCourtType, setSelectedCourtType] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedTimeSlots, setSelectedTimeSlots] = useState([]);
+  const [dynamicQuickReplies, setDynamicQuickReplies] = useState([]);
+  const [sportCategories, setSportCategories] = useState([]);
+  const [courtTypes, setCourtTypes] = useState([]);
   
   // Hide chat button on auth pages, admin pages, owner pages, and chat page
   const authPages = ['/login', '/register', '/verify-otp', '/forgot-password', '/reset-password', '/auth/callback', '/auth/error'];
@@ -18,16 +45,436 @@ const ChatButton = () => {
   const isOwnerPage = location.pathname.startsWith('/owner');
   const isChatPage = location.pathname.startsWith('/chat');
 
-  // Simulate typing effect
+  // Initialize with welcome message and reset booking flow
   useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(() => {
-        setIsTyping(true);
-        setTimeout(() => setIsTyping(false), 2000);
-      }, 1000);
-      return () => clearTimeout(timer);
+    if (isOpen && messages.length === 0) {
+      setMessages([{
+        id: Date.now(),
+        role: 'bot',
+        content: 'Xin chào! 👋 Tôi là AI Assistant. Tôi có thể giúp bạn:\n\n• Tìm các cơ sở gần nhất 📍\n• Gợi ý sân giá rẻ 💰\n• Hỗ trợ đặt sân ⚽\n\nBạn cần hỗ trợ gì hôm nay?',
+        timestamp: new Date()
+      }]);
+      // Reset booking flow
+      setBookingStep(null);
+      setSelectedSport(null);
+      setSelectedCourtType(null);
+      setSelectedDate(null);
+      setSelectedTimeSlots([]);
+      setDynamicQuickReplies([]);
     }
   }, [isOpen]);
+
+  // Scroll to bottom when new message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
+
+  const sendMessage = async (messageText) => {
+    if (!messageText.trim() || isLoading) return;
+
+    const userMessage = {
+      id: Date.now(),
+      role: 'user',
+      content: messageText.trim(),
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsTyping(true);
+    setIsLoading(true);
+
+    try {
+      // Build conversation history
+      const conversationHistory = messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({
+          role: m.role === 'user' ? 'user' : 'model',
+          content: m.content
+        }));
+
+      // Get user location if available
+      const location = userLocation ? {
+        lat: userLocation.latitude,
+        lng: userLocation.longitude
+      } : null;
+
+      // Call AI API
+      const response = await aiApi.chat(
+        userMessage.content,
+        conversationHistory,
+        location
+      );
+
+      if (response.success) {
+        const botMessage = {
+          id: Date.now() + 1,
+          role: 'bot',
+          content: response.data.message,
+          facilities: response.data.facilities || [],
+          courts: response.data.courts || [],
+          timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, botMessage]);
+      } else {
+        throw new Error(response.message || 'Có lỗi xảy ra');
+      }
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMessage = {
+        id: Date.now() + 1,
+        role: 'bot',
+        content: 'Xin lỗi, tôi gặp lỗi khi xử lý yêu cầu của bạn. Vui lòng thử lại sau. 😔',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    await sendMessage(inputMessage);
+  };
+
+  const handleQuickReply = async (message, data = null) => {
+    // Check if it's booking flow
+    if (message === 'Hướng dẫn tôi cách đặt sân' || bookingStep) {
+      await handleBookingFlow(message, data);
+    } else {
+      sendMessage(message);
+    }
+  };
+
+  const handleBookingFlow = async (message, data = null) => {
+    if (!bookingStep) {
+      // Start booking flow
+      setBookingStep('sport');
+      
+      // Load sport categories
+      try {
+        const response = await aiApi.getBookingData();
+        if (response.success) {
+          setSportCategories(response.data.sportCategories || []);
+          const quickReplies = (response.data.sportCategories || []).map(cat => ({
+            text: cat.name,
+            message: `Chọn ${cat.name}`,
+            data: { type: 'sport', id: cat.id, name: cat.name }
+          }));
+          setDynamicQuickReplies(quickReplies);
+          
+          // Add bot message
+          const botMessage = {
+            id: Date.now(),
+            role: 'bot',
+            content: 'Bạn muốn đặt sân cho môn thể thao nào? 🏃',
+            timestamp: new Date(),
+            quickReplies: quickReplies
+          };
+          setMessages(prev => [...prev, botMessage]);
+        }
+      } catch (error) {
+        console.error('Error loading sport categories:', error);
+      }
+      return;
+    }
+
+    // Handle booking step
+    if (bookingStep === 'sport' && data && data.type === 'sport') {
+      setSelectedSport(data);
+      setBookingStep('courtType');
+      
+      // Load court types for selected sport
+      try {
+        const response = await aiApi.getBookingData(data.id);
+        if (response.success) {
+          setCourtTypes(response.data.courtTypes || []);
+          const quickReplies = (response.data.courtTypes || []).map(ct => ({
+            text: ct.name,
+            message: `Chọn ${ct.name}`,
+            data: { type: 'courtType', id: ct.id, name: ct.name }
+          }));
+          setDynamicQuickReplies(quickReplies);
+          
+          // Add user and bot messages
+          const userMsg = {
+            id: Date.now(),
+            role: 'user',
+            content: data.name,
+            timestamp: new Date()
+          };
+          const botMsg = {
+            id: Date.now() + 1,
+            role: 'bot',
+            content: `Bạn đã chọn ${data.name}. Vui lòng chọn loại sân:`,
+            timestamp: new Date(),
+            quickReplies: quickReplies
+          };
+          setMessages(prev => [...prev, userMsg, botMsg]);
+        }
+      } catch (error) {
+        console.error('Error loading court types:', error);
+      }
+      return;
+    }
+
+    if (bookingStep === 'courtType' && data && data.type === 'courtType') {
+      setSelectedCourtType(data);
+      setBookingStep('date');
+      
+      // Generate date options (today, tomorrow, and next 6 days)
+      const dateOptions = [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const dayNames = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+      
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        const dayName = dayNames[date.getDay()];
+        const dateStr = date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+        
+        let label = '';
+        if (i === 0) {
+          label = `Hôm nay (${dateStr})`;
+        } else if (i === 1) {
+          label = `Ngày mai (${dateStr})`;
+        } else {
+          label = `${dayName} (${dateStr})`;
+        }
+        
+        dateOptions.push({
+          text: label,
+          message: label,
+          data: { 
+            type: 'date', 
+            date: date.toISOString().split('T')[0],
+            dateObj: date
+          }
+        });
+      }
+      
+      setDynamicQuickReplies(dateOptions);
+      
+      // Add user and bot messages
+      const userMsg = {
+        id: Date.now(),
+        role: 'user',
+        content: data.name,
+        timestamp: new Date()
+      };
+      const botMsg = {
+        id: Date.now() + 1,
+        role: 'bot',
+        content: `Bạn đã chọn ${data.name}. Vui lòng chọn ngày muốn đặt sân:`,
+        timestamp: new Date(),
+        quickReplies: dateOptions
+      };
+      setMessages(prev => [...prev, userMsg, botMsg]);
+      return;
+    }
+
+    if (bookingStep === 'date' && data && data.type === 'date') {
+      setSelectedDate(data.dateObj);
+      setBookingStep('timeSlots');
+      
+      // Generate time slot options
+      const timeSlots = [];
+      for (let hour = 6; hour <= 22; hour++) {
+        const startTime = `${String(hour).padStart(2, '0')}:00`;
+        const endTime = `${String(hour + 1).padStart(2, '0')}:00`;
+        timeSlots.push({
+          text: `${startTime}-${endTime}`,
+          message: startTime,
+          data: { type: 'timeSlot', slot: `${startTime}-${endTime}` }
+        });
+      }
+      setDynamicQuickReplies(timeSlots);
+      
+      // Format date for display
+      const dateDisplay = data.dateObj.toLocaleDateString('vi-VN', { 
+        weekday: 'long', 
+        day: 'numeric', 
+        month: 'numeric' 
+      });
+      
+      // Add user and bot messages
+      const userMsg = {
+        id: Date.now(),
+        role: 'user',
+        content: data.dateObj.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }),
+        timestamp: new Date()
+      };
+      const botMsg = {
+        id: Date.now() + 1,
+        role: 'bot',
+        content: `Bạn đã chọn ${dateDisplay}. Vui lòng chọn khung giờ muốn chơi (có thể chọn nhiều):`,
+        timestamp: new Date(),
+        quickReplies: timeSlots,
+        allowMultiple: true
+      };
+      setMessages(prev => [...prev, userMsg, botMsg]);
+      return;
+    }
+
+    if (bookingStep === 'timeSlots' && data && data.type === 'timeSlot') {
+      // Toggle time slot selection (no message, just visual feedback)
+      setSelectedTimeSlots(prev => {
+        const exists = prev.includes(data.slot);
+        const newSlots = exists
+          ? prev.filter(s => s !== data.slot)
+          : [...prev, data.slot];
+        
+        // Update quick replies to show search button if slots selected
+        if (newSlots.length > 0) {
+          const timeSlots = [];
+          for (let hour = 6; hour <= 22; hour++) {
+            const startTime = `${String(hour).padStart(2, '0')}:00`;
+            const endTime = `${String(hour + 1).padStart(2, '0')}:00`;
+            timeSlots.push({
+              text: `${startTime}-${endTime}`,
+              message: startTime,
+              data: { type: 'timeSlot', slot: `${startTime}-${endTime}` }
+            });
+          }
+          timeSlots.push({ text: '🔍 Tìm sân', message: 'Tìm sân', data: { type: 'search' } });
+          setDynamicQuickReplies(timeSlots);
+        } else {
+          // Remove search button if no slots selected
+          const timeSlots = [];
+          for (let hour = 6; hour <= 22; hour++) {
+            const startTime = `${String(hour).padStart(2, '0')}:00`;
+            const endTime = `${String(hour + 1).padStart(2, '0')}:00`;
+            timeSlots.push({
+              text: `${startTime}-${endTime}`,
+              message: startTime,
+              data: { type: 'timeSlot', slot: `${startTime}-${endTime}` }
+            });
+          }
+          setDynamicQuickReplies(timeSlots);
+        }
+        
+        return newSlots;
+      });
+      
+      // Don't add user message - just visual feedback via selected state
+      return;
+    }
+
+    if (bookingStep === 'timeSlots' && data && data.type === 'search') {
+      // Validate that time slots are selected
+      if (selectedTimeSlots.length === 0) {
+        const errorMsg = {
+          id: Date.now(),
+          role: 'bot',
+          content: 'Vui lòng chọn ít nhất một khung giờ trước khi tìm sân.',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMsg]);
+        return;
+      }
+
+      // Search facilities
+      setBookingStep('search');
+      setIsTyping(true);
+      setIsLoading(true);
+      
+      // Add user message showing selected time slots
+      const userMsg = {
+        id: Date.now(),
+        role: 'user',
+        content: `Tìm sân cho các khung giờ: ${selectedTimeSlots.join(', ')}`,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMsg]);
+      
+      try {
+        const location = userLocation ? {
+          lat: userLocation.latitude,
+          lng: userLocation.longitude
+        } : null;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const bookingDate = selectedDate || today;
+        bookingDate.setHours(0, 0, 0, 0);
+
+        const response = await aiApi.searchBookingFacilities({
+          sportCategoryId: selectedSport?.id,
+          courtTypeId: selectedCourtType?.id,
+          timeSlots: selectedTimeSlots,
+          date: bookingDate.toISOString(),
+          userLocation: location
+        });
+
+        if (response.success) {
+          
+          const facilities = response.data.facilities || [];
+          const botMsg = {
+            id: Date.now() + 1,
+            role: 'bot',
+            content: facilities.length > 0 
+              ? `Tôi tìm thấy ${facilities.length} cơ sở phù hợp với yêu cầu của bạn:`
+              : 'Không tìm thấy cơ sở nào phù hợp. Vui lòng thử lại với khung giờ khác.',
+            facilities: facilities,
+            timestamp: new Date()
+          };
+          
+          setMessages(prev => [...prev, userMsg, botMsg]);
+          setBookingStep(null);
+          setSelectedSport(null);
+          setSelectedCourtType(null);
+          setSelectedDate(null);
+          setSelectedTimeSlots([]);
+          setDynamicQuickReplies([]);
+        }
+      } catch (error) {
+        console.error('Error searching facilities:', error);
+        const errorMsg = {
+          id: Date.now() + 1,
+          role: 'bot',
+          content: 'Xin lỗi, có lỗi xảy ra khi tìm kiếm. Vui lòng thử lại.',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMsg]);
+      } finally {
+        setIsTyping(false);
+        setIsLoading(false);
+      }
+    }
+  };
+
+  // Check if should show quick replies
+  const shouldShowQuickReplies = () => {
+    if (messages.length === 0) return false;
+    if (isTyping || isLoading) return false;
+    
+    // Show dynamic quick replies if in booking flow
+    if (dynamicQuickReplies.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      return lastMessage && lastMessage.role === 'bot' && lastMessage.quickReplies;
+    }
+    
+    // Show static quick replies only after welcome message
+    if (messages.length === 1) {
+      const firstMessage = messages[0];
+      return firstMessage && firstMessage.role === 'bot';
+    }
+    return false;
+  };
+
+  // Get quick replies to show
+  const getQuickReplies = () => {
+    if (dynamicQuickReplies.length > 0) {
+      return dynamicQuickReplies;
+    }
+    return QUICK_REPLIES;
+  };
 
   // Don't render chat button on auth pages, admin pages, owner pages, or chat page
   if (isAuthPage || isAdminPage || isOwnerPage || isChatPage) {
@@ -89,20 +536,56 @@ const ChatButton = () => {
           </div>
           
           <div className="chat-messages">
-            <div className="message bot-message">
-              <div className="message-avatar">
-                <img src={chatbotAvatar} alt="Chatbot Avatar" />
-              </div>
-              <div className="message-content">
-                <p>Xin chào! Tôi là AI Assistant. Tôi có thể giúp bạn:</p>
-                <ul>
-                  <li>Hỗ trợ đặt sân</li>
-                  <li>Trả lời câu hỏi về dịch vụ</li>
-                  <li>Hướng dẫn sử dụng website</li>
-                </ul>
-                <span className="message-time">Vừa xong</span>
-              </div>
-            </div>
+            {messages.map((message) => (
+              <React.Fragment key={message.id}>
+                <div className={`message ${message.role === 'user' ? 'user-message' : 'bot-message'}`}>
+                  {message.role === 'bot' && (
+                    <div className="message-avatar">
+                      <img src={chatbotAvatar} alt="Chatbot Avatar" />
+                    </div>
+                  )}
+                  <div className="message-content">
+                    <p style={{ whiteSpace: 'pre-wrap' }}>{message.content}</p>
+                    <span className="message-time">
+                      {new Date(message.timestamp).toLocaleTimeString('vi-VN', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
+                    </span>
+                  </div>
+                </div>
+                {/* Display facilities list */}
+                {message.role === 'bot' && message.facilities && message.facilities.length > 0 && (
+                  <div className="chat-results-container">
+                    <div className="chat-results-title">Cơ sở tìm thấy:</div>
+                    <div className="chat-facilities-list">
+                      {message.facilities.map((facility) => (
+                        <FacilityCard 
+                          key={facility.id} 
+                          facility={facility}
+                          userLocation={userLocation}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Display courts list */}
+                {message.role === 'bot' && message.courts && message.courts.length > 0 && (
+                  <div className="chat-results-container">
+                    <div className="chat-results-title">Sân tìm thấy:</div>
+                    <div className="chat-facilities-list">
+                      {message.courts.map((court) => (
+                        <CourtCard 
+                          key={court.id} 
+                          court={court}
+                          userLocation={userLocation}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
             
             {isTyping && (
               <div className="message bot-message typing-message">
@@ -118,22 +601,56 @@ const ChatButton = () => {
                 </div>
               </div>
             )}
+            
+            {/* Quick Replies */}
+            {shouldShowQuickReplies() && (
+              <div className="chat-quick-replies">
+                {getQuickReplies().map((reply, index) => {
+                  const isSelected = reply.data?.type === 'timeSlot' && selectedTimeSlots.includes(reply.data.slot);
+                  return (
+                    <button
+                      key={index}
+                      type="button"
+                      className={`quick-reply-button ${isSelected ? 'selected' : ''}`}
+                      onClick={() => handleQuickReply(reply.message, reply.data)}
+                      disabled={isLoading}
+                    >
+                      {reply.text}
+                    </button>
+                  );
+                })}
+                {bookingStep === 'timeSlots' && selectedTimeSlots.length > 0 && (
+                  <div className="selected-time-slots">
+                    <span>Đã chọn: {selectedTimeSlots.join(', ')}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div ref={messagesEndRef} />
           </div>
           
-          <div className="chat-input">
+          <form className="chat-input" onSubmit={handleSendMessage}>
             <div className="input-container">
               <input 
                 type="text" 
                 placeholder="Nhập tin nhắn của bạn..." 
                 className="message-input"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                disabled={isLoading}
               />
-              <button className="send-button">
+              <button 
+                type="submit"
+                className="send-button"
+                disabled={!inputMessage.trim() || isLoading}
+              >
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M2.01 21L23 12L2.01 3L2 10L17 12L2 14L2.01 21Z" fill="currentColor"/>
                 </svg>
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
     </>
