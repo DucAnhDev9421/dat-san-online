@@ -278,6 +278,11 @@ const leagueSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    // Đội vô địch (team ID của đội thắng trận final)
+    champion: {
+      type: Schema.Types.Mixed, // Cho phép Number (team ID) hoặc null
+      default: null,
+    },
   },
   {
     timestamps: true, // Tự động thêm createdAt và updatedAt

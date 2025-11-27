@@ -129,20 +129,18 @@ const RegistrationTab = ({ tournament }) => {
     return () => clearInterval(interval)
   }, [tournament?.registrationDeadline])
 
-  // Initialize members array based on membersPerTeam
+  // Initialize members array - chỉ tạo khi chuyển sang step 2 và chưa có members nào
   useEffect(() => {
-    if (step === 2 && tournament?.membersPerTeam) {
-      const requiredMembers = tournament.membersPerTeam
-      if (members.length < requiredMembers) {
-        const newMembers = Array.from({ length: requiredMembers }, (_, index) => ({
-          name: '',
-          phone: '',
-          position: '',
-          jerseyNumber: '',
-          avatar: null
-        }))
-        setMembers(newMembers)
+    if (step === 2 && members.length === 0 && tournament?.membersPerTeam) {
+      // Chỉ tạo 1 member mặc định, người dùng có thể thêm thêm
+      const initialMember = {
+        name: '',
+        phone: '',
+        position: '',
+        jerseyNumber: '',
+        avatar: null
       }
+      setMembers([initialMember])
     }
   }, [step, tournament?.membersPerTeam])
 
@@ -450,28 +448,26 @@ const RegistrationTab = ({ tournament }) => {
   if (step === 0) {
     return (
       <div style={{
-        minHeight: '600px',
-        background: 'linear-gradient(135deg, #10b981 0%, #8b5cf6 100%)',
-        borderRadius: 16,
-        padding: '60px 40px',
-        color: '#fff',
-        textAlign: 'center'
+        background: '#fff',
+        borderRadius: 12,
+        padding: '48px 32px',
+        textAlign: 'center',
+        border: '1px solid #e5e7eb'
       }}>
         {/* Registration Deadline Info */}
         {tournament.registrationDeadline && (
           <div style={{ marginBottom: 32 }}>
             <p style={{ 
-              fontSize: 18, 
-              fontWeight: 500, 
+              fontSize: 16, 
+              fontWeight: 400, 
               margin: 0,
               marginBottom: 8,
-              color: '#fff'
+              color: '#6b7280'
             }}>
-              Giải cho phép đăng ký trực tuyến đến hết ngày{' '}
+              Hạn đăng ký đến hết ngày{' '}
               <span style={{ 
-                color: '#fbbf24', 
-                fontWeight: 700,
-                fontSize: 20
+                color: '#1f2937', 
+                fontWeight: 600
               }}>
                 {formatDate(tournament.registrationDeadline)}
               </span>
@@ -481,22 +477,17 @@ const RegistrationTab = ({ tournament }) => {
 
         {/* Team Requirements */}
         {tournament.tournamentType === 'team' && tournament.membersPerTeam && (
-          <div style={{ marginBottom: 40 }}>
+          <div style={{ marginBottom: 32 }}>
             <p style={{ 
-              fontSize: 16, 
+              fontSize: 14, 
               fontWeight: 400, 
               margin: 0,
-              color: '#fff'
+              color: '#6b7280'
             }}>
-              Giải đấu yêu cầu số lượng thành viên mỗi đội ít nhất là{' '}
-              <strong style={{ color: '#fbbf24' }}>{minMembers}</strong>
+              Yêu cầu: Tối thiểu <strong style={{ color: '#1f2937' }}>{minMembers}</strong> thành viên
               {maxMembers > minMembers ? (
-                <>
-                  , nhiều nhất là <strong style={{ color: '#fbbf24' }}>{maxMembers}</strong>.
-                </>
-              ) : (
-                '.'
-              )}
+                <> / Tối đa <strong style={{ color: '#1f2937' }}>{maxMembers}</strong> thành viên</>
+              ) : null}
             </p>
           </div>
         )}
@@ -506,31 +497,32 @@ const RegistrationTab = ({ tournament }) => {
           <div style={{
             display: 'flex',
             justifyContent: 'center',
-            gap: 16,
+            gap: 24,
             marginBottom: 40,
             flexWrap: 'wrap'
           }}>
             {/* Days */}
             <div style={{
-              background: 'rgba(0, 0, 0, 0.3)',
-              borderRadius: 12,
-              padding: '24px 32px',
-              minWidth: 100,
-              backdropFilter: 'blur(10px)'
+              background: '#f9fafb',
+              borderRadius: 8,
+              padding: '20px 24px',
+              minWidth: 80,
+              border: '1px solid #e5e7eb'
             }}>
               <div style={{
-                fontSize: 48,
-                fontWeight: 700,
+                fontSize: 36,
+                fontWeight: 600,
                 lineHeight: 1,
-                marginBottom: 8,
-                fontFamily: 'monospace'
+                marginBottom: 4,
+                fontFamily: 'monospace',
+                color: '#1f2937'
               }}>
                 {String(timeLeft.days).padStart(2, '0')}
               </div>
               <div style={{
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: 500,
-                opacity: 0.9
+                color: '#6b7280'
               }}>
                 Ngày
               </div>
@@ -538,25 +530,26 @@ const RegistrationTab = ({ tournament }) => {
 
             {/* Hours */}
             <div style={{
-              background: 'rgba(0, 0, 0, 0.3)',
-              borderRadius: 12,
-              padding: '24px 32px',
-              minWidth: 100,
-              backdropFilter: 'blur(10px)'
+              background: '#f9fafb',
+              borderRadius: 8,
+              padding: '20px 24px',
+              minWidth: 80,
+              border: '1px solid #e5e7eb'
             }}>
               <div style={{
-                fontSize: 48,
-                fontWeight: 700,
+                fontSize: 36,
+                fontWeight: 600,
                 lineHeight: 1,
-                marginBottom: 8,
-                fontFamily: 'monospace'
+                marginBottom: 4,
+                fontFamily: 'monospace',
+                color: '#1f2937'
               }}>
                 {String(timeLeft.hours).padStart(2, '0')}
               </div>
               <div style={{
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: 500,
-                opacity: 0.9
+                color: '#6b7280'
               }}>
                 Giờ
               </div>
@@ -564,25 +557,26 @@ const RegistrationTab = ({ tournament }) => {
 
             {/* Minutes */}
             <div style={{
-              background: 'rgba(0, 0, 0, 0.3)',
-              borderRadius: 12,
-              padding: '24px 32px',
-              minWidth: 100,
-              backdropFilter: 'blur(10px)'
+              background: '#f9fafb',
+              borderRadius: 8,
+              padding: '20px 24px',
+              minWidth: 80,
+              border: '1px solid #e5e7eb'
             }}>
               <div style={{
-                fontSize: 48,
-                fontWeight: 700,
+                fontSize: 36,
+                fontWeight: 600,
                 lineHeight: 1,
-                marginBottom: 8,
-                fontFamily: 'monospace'
+                marginBottom: 4,
+                fontFamily: 'monospace',
+                color: '#1f2937'
               }}>
                 {String(timeLeft.minutes).padStart(2, '0')}
               </div>
               <div style={{
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: 500,
-                opacity: 0.9
+                color: '#6b7280'
               }}>
                 Phút
               </div>
@@ -590,25 +584,26 @@ const RegistrationTab = ({ tournament }) => {
 
             {/* Seconds */}
             <div style={{
-              background: 'rgba(0, 0, 0, 0.3)',
-              borderRadius: 12,
-              padding: '24px 32px',
-              minWidth: 100,
-              backdropFilter: 'blur(10px)'
+              background: '#f9fafb',
+              borderRadius: 8,
+              padding: '20px 24px',
+              minWidth: 80,
+              border: '1px solid #e5e7eb'
             }}>
               <div style={{
-                fontSize: 48,
-                fontWeight: 700,
+                fontSize: 36,
+                fontWeight: 600,
                 lineHeight: 1,
-                marginBottom: 8,
-                fontFamily: 'monospace'
+                marginBottom: 4,
+                fontFamily: 'monospace',
+                color: '#1f2937'
               }}>
                 {String(timeLeft.seconds).padStart(2, '0')}
               </div>
               <div style={{
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: 500,
-                opacity: 0.9
+                color: '#6b7280'
               }}>
                 Giây
               </div>
@@ -619,17 +614,17 @@ const RegistrationTab = ({ tournament }) => {
         {/* Full Teams Message - Ưu tiên hiển thị nếu đã đủ đội */}
         {isFull && (
           <div style={{
-            background: 'rgba(239, 68, 68, 0.2)',
-            border: '2px solid rgba(239, 68, 68, 0.5)',
-            borderRadius: 12,
-            padding: 24,
-            marginBottom: 40
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: 8,
+            padding: 20,
+            marginBottom: 32
           }}>
             <p style={{ 
-              fontSize: 18, 
-              fontWeight: 600, 
+              fontSize: 16, 
+              fontWeight: 500, 
               margin: 0,
-              color: '#fff'
+              color: '#991b1b'
             }}>
               Đã đủ đội tham gia
             </p>
@@ -639,17 +634,17 @@ const RegistrationTab = ({ tournament }) => {
         {/* Expired Message - Chỉ hiển thị khi chưa đủ đội nhưng đã hết hạn */}
         {isExpired && !isFull && (
           <div style={{
-            background: 'rgba(239, 68, 68, 0.2)',
-            border: '2px solid rgba(239, 68, 68, 0.5)',
-            borderRadius: 12,
-            padding: 24,
-            marginBottom: 40
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: 8,
+            padding: 20,
+            marginBottom: 32
           }}>
             <p style={{ 
-              fontSize: 18, 
-              fontWeight: 600, 
+              fontSize: 16, 
+              fontWeight: 500, 
               margin: 0,
-              color: '#fff'
+              color: '#991b1b'
             }}>
               Đã hết hạn đăng ký
             </p>
@@ -661,26 +656,21 @@ const RegistrationTab = ({ tournament }) => {
           <button
             onClick={handleStartRegister}
             style={{
-              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              background: '#1f2937',
               color: '#fff',
               border: 'none',
-              borderRadius: 12,
-              padding: '16px 48px',
-              fontSize: 18,
-              fontWeight: 700,
+              borderRadius: 8,
+              padding: '14px 32px',
+              fontSize: 16,
+              fontWeight: 600,
               cursor: 'pointer',
-              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.2)',
-              transition: 'all 0.3s',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
+              transition: 'background 0.2s'
             }}
             onMouseEnter={(e) => {
-              e.target.style.transform = 'translateY(-2px)'
-              e.target.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.3)'
+              e.target.style.background = '#374151'
             }}
             onMouseLeave={(e) => {
-              e.target.style.transform = 'translateY(0)'
-              e.target.style.boxShadow = '0 4px 14px rgba(0, 0, 0, 0.2)'
+              e.target.style.background = '#1f2937'
             }}
           >
             Bắt đầu đăng ký
@@ -690,17 +680,17 @@ const RegistrationTab = ({ tournament }) => {
         {/* No Registration Message */}
         {!tournament.registrationDeadline && (
           <div style={{
-            background: 'rgba(107, 114, 128, 0.2)',
-            border: '2px solid rgba(107, 114, 128, 0.5)',
-            borderRadius: 12,
-            padding: 24,
-            marginTop: 40
+            background: '#f9fafb',
+            border: '1px solid #e5e7eb',
+            borderRadius: 8,
+            padding: 20,
+            marginTop: 32
           }}>
             <p style={{ 
-              fontSize: 16, 
-              fontWeight: 500, 
+              fontSize: 14, 
+              fontWeight: 400, 
               margin: 0,
-              color: '#fff'
+              color: '#6b7280'
             }}>
               Giải đấu này không cho phép đăng ký trực tuyến
             </p>
@@ -713,30 +703,99 @@ const RegistrationTab = ({ tournament }) => {
   // Step 1: Team Info Form
   if (step === 1) {
     return (
-      <div className="section-card">
-        <div className="team-info-edit">
-          <div className="team-logo-upload-section">
-            <label>Logo đội</label>
-            <div className="team-logo-preview-large" style={{ position: 'relative' }}>
+      <div style={{
+        background: '#fff',
+        borderRadius: 12,
+        padding: '32px',
+        border: '1px solid #e5e7eb'
+      }}>
+        <h2 style={{
+          fontSize: 20,
+          fontWeight: 600,
+          color: '#1f2937',
+          margin: '0 0 24px 0'
+        }}>
+          Thông tin đội
+        </h2>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '200px 1fr',
+          gap: '32px',
+          alignItems: 'start'
+        }}>
+          {/* Logo Upload */}
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: 14,
+              fontWeight: 500,
+              color: '#374151',
+              marginBottom: 12
+            }}>
+              Logo đội
+            </label>
+            <div style={{
+              position: 'relative',
+              width: 160,
+              height: 160,
+              borderRadius: 8,
+              overflow: 'hidden',
+              border: '1px solid #e5e7eb',
+              marginBottom: 12
+            }}>
               <img 
                 src={teamData.logo || '/team.png'} 
-                alt="Team Logo" 
-                className="team-logo-preview-img-large"
+                alt="Team Logo"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover'
+                }}
               />
               {teamData.logo && (
                 <button
-                  className="btn-delete-logo"
                   onClick={handleDeleteLogo}
                   type="button"
-                  title="Xóa logo"
+                  style={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    background: 'rgba(0, 0, 0, 0.6)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: 28,
+                    height: 28,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#fff'
+                  }}
                 >
-                  <X size={16} />
+                  <X size={14} />
                 </button>
               )}
             </div>
-            <label className="btn-upload-logo">
+            <label style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 16px',
+              background: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 500,
+              color: '#374151',
+              cursor: 'pointer',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+            onMouseLeave={(e) => e.target.style.background = '#f9fafb'}
+            >
               <Upload size={16} />
-              {teamData.logo ? 'Thay đổi logo' : 'Tải lên logo'}
+              {teamData.logo ? 'Thay đổi' : 'Tải lên'}
               <input
                 type="file"
                 accept="image/*"
@@ -746,58 +805,140 @@ const RegistrationTab = ({ tournament }) => {
             </label>
           </div>
 
-          <div className="team-info-form">
-            <div className="form-group">
-              <label>
-                Số đội <span className="required-asterisk">*</span>
+          {/* Form Fields */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: 14,
+                fontWeight: 500,
+                color: '#374151',
+                marginBottom: 8
+              }}>
+                Số đội <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="text"
-                className="form-input"
                 value={teamData.teamNumber}
                 onChange={(e) => handleTeamInputChange('teamNumber', e.target.value)}
                 placeholder="#1"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  color: '#1f2937',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#9ca3af'}
+                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
               />
             </div>
 
-            <div className="form-group">
-              <label>
-                Số điện thoại liên hệ <span className="required-asterisk">*</span>
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: 14,
+                fontWeight: 500,
+                color: '#374151',
+                marginBottom: 8
+              }}>
+                Số điện thoại liên hệ <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="tel"
-                className="form-input"
                 value={teamData.contactPhone}
                 onChange={(e) => handleTeamInputChange('contactPhone', e.target.value)}
                 placeholder="0123456789"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  color: '#1f2937',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#9ca3af'}
+                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
               />
             </div>
 
-            <div className="form-group">
-              <label>
-                Tên người liên hệ <span className="required-asterisk">*</span>
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: 14,
+                fontWeight: 500,
+                color: '#374151',
+                marginBottom: 8
+              }}>
+                Tên người liên hệ <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="text"
-                className="form-input"
                 value={teamData.contactName}
                 onChange={(e) => handleTeamInputChange('contactName', e.target.value)}
                 placeholder="Nguyễn Văn A"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  color: '#1f2937',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#9ca3af'}
+                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
               />
             </div>
 
-            <div className="form-actions">
+            <div style={{
+              display: 'flex',
+              gap: 12,
+              marginTop: 8
+            }}>
               <button 
-                className="btn-save" 
                 onClick={handleBackStep}
-                style={{ background: '#6b7280', marginRight: 12 }}
+                style={{
+                  padding: '12px 24px',
+                  background: '#f3f4f6',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: '#374151',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.background = '#e5e7eb'}
+                onMouseLeave={(e) => e.target.style.background = '#f3f4f6'}
               >
                 <ArrowLeft size={16} />
                 Quay lại
               </button>
               <button 
-                className="btn-save" 
                 onClick={handleNextStep}
+                style={{
+                  padding: '12px 24px',
+                  background: '#1f2937',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: '#fff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.background = '#374151'}
+                onMouseLeave={(e) => e.target.style.background = '#1f2937'}
               >
                 Tiếp theo
                 <ArrowRight size={16} />
@@ -812,7 +953,12 @@ const RegistrationTab = ({ tournament }) => {
   // Step 2: Members Form
   if (step === 2) {
     return (
-      <div className="section-card">
+      <div style={{
+        background: '#fff',
+        borderRadius: 12,
+        padding: '32px',
+        border: '1px solid #e5e7eb'
+      }}>
         {/* Crop Modal */}
         {cropModalState.show && (
           <div className="crop-modal-overlay">
@@ -860,7 +1006,7 @@ const RegistrationTab = ({ tournament }) => {
           </div>
         )}
 
-        <div className="team-members-edit">
+        <div>
           <div className="members-header">
             <div>
               <h3>Thông tin thành viên</h3>
@@ -889,16 +1035,41 @@ const RegistrationTab = ({ tournament }) => {
             </div>
           </div>
 
-          <div className="members-list">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {members.map((member, index) => (
-              <div key={index} className="add-member-form-inline">
-                <div className="member-avatar-section">
-                  <label className="member-avatar-upload-label">
-                    {member.avatar ? (
-                      <img src={member.avatar} alt="Avatar" className="member-avatar-preview" />
-                    ) : (
-                      <img src="/player.png" alt="Default Avatar" className="member-avatar-preview" />
-                    )}
+              <div 
+                key={index} 
+                style={{
+                  background: '#fff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 8,
+                  padding: 20,
+                  display: 'flex',
+                  gap: 20,
+                  alignItems: 'start'
+                }}
+              >
+                {/* Avatar */}
+                <div>
+                  <label style={{
+                    display: 'block',
+                    width: 80,
+                    height: 80,
+                    borderRadius: 8,
+                    overflow: 'hidden',
+                    border: '1px solid #e5e7eb',
+                    cursor: 'pointer',
+                    position: 'relative'
+                  }}>
+                    <img 
+                      src={member.avatar || '/player.png'} 
+                      alt="Avatar"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover'
+                      }}
+                    />
                     <input
                       type="file"
                       accept="image/*"
@@ -908,79 +1079,141 @@ const RegistrationTab = ({ tournament }) => {
                   </label>
                 </div>
 
-                <div className="add-member-form-content">
-                  <div className="member-form-fields">
-                    {isFootball && (
-                      <div className="member-form-group">
-                        <label className="member-form-label">
-                          Số áo <span className="required-asterisk">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          className="member-form-input"
-                          value={member.jerseyNumber}
-                          onChange={(e) => handleMemberChange(index, 'jerseyNumber', e.target.value)}
-                          placeholder="Số áo"
-                        />
-                      </div>
-                    )}
-
-                    <div className="member-form-group">
-                      <label className="member-form-label">
-                        Vị Trí Thi Đấu
-                      </label>
-                      <div className="member-form-select-wrapper">
-                        <select
-                          className="member-form-select"
-                          value={member.position}
-                          onChange={(e) => handleMemberChange(index, 'position', e.target.value)}
-                        >
-                          <option value="">Chọn vị trí</option>
-                          {positions.map(pos => (
-                            <option key={pos} value={pos}>{pos}</option>
-                          ))}
-                        </select>
-                        <ChevronDown size={18} className="select-chevron" />
-                      </div>
-                    </div>
-
-                    <div className="member-form-group">
-                      <label className="member-form-label">
-                        Họ tên đầy đủ <span className="required-asterisk">*</span>
+                {/* Form Fields */}
+                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: isFootball ? '80px 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: 16 }}>
+                  {isFootball && (
+                    <div>
+                      <label style={{
+                        display: 'block',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: '#374151',
+                        marginBottom: 6
+                      }}>
+                        Số áo <span style={{ color: '#ef4444' }}>*</span>
                       </label>
                       <input
                         type="text"
-                        className="member-form-input"
-                        value={member.name}
-                        onChange={(e) => handleMemberChange(index, 'name', e.target.value)}
-                        placeholder="Họ tên đầy đủ"
+                        value={member.jerseyNumber}
+                        onChange={(e) => handleMemberChange(index, 'jerseyNumber', e.target.value)}
+                        placeholder="Số áo"
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: 6,
+                          fontSize: 14,
+                          color: '#1f2937'
+                        }}
                       />
                     </div>
+                  )}
 
-                    <div className="member-form-group">
-                      <label className="member-form-label">
-                        Số điện thoại
-                      </label>
-                      <input
-                        type="tel"
-                        className="member-form-input"
-                        value={member.phone}
-                        onChange={(e) => handleMemberChange(index, 'phone', e.target.value)}
-                        placeholder="Số điện thoại"
-                      />
-                    </div>
+                  <div>
+                    <label style={{
+                      display: 'block',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: '#374151',
+                      marginBottom: 6
+                    }}>
+                      Vị trí
+                    </label>
+                    <select
+                      value={member.position}
+                      onChange={(e) => handleMemberChange(index, 'position', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 6,
+                        fontSize: 14,
+                        color: '#1f2937',
+                        background: '#fff',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="">Chọn vị trí</option>
+                      {positions.map(pos => (
+                        <option key={pos} value={pos}>{pos}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{
+                      display: 'block',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: '#374151',
+                      marginBottom: 6
+                    }}>
+                      Họ tên <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={member.name}
+                      onChange={(e) => handleMemberChange(index, 'name', e.target.value)}
+                      placeholder="Họ tên đầy đủ"
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 6,
+                        fontSize: 14,
+                        color: '#1f2937'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{
+                      display: 'block',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: '#374151',
+                      marginBottom: 6
+                    }}>
+                      Số điện thoại
+                    </label>
+                    <input
+                      type="tel"
+                      value={member.phone}
+                      onChange={(e) => handleMemberChange(index, 'phone', e.target.value)}
+                      placeholder="Số điện thoại"
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 6,
+                        fontSize: 14,
+                        color: '#1f2937'
+                      }}
+                    />
                   </div>
                 </div>
 
+                {/* Remove Button */}
                 {members.length > minMembers && (
-                  <div className="member-form-actions-inline">
-                    <button 
-                      className="btn-cancel-member" 
-                      onClick={() => handleRemoveMember(index)}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
+                  <button 
+                    onClick={() => handleRemoveMember(index)}
+                    style={{
+                      padding: '8px',
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color: '#991b1b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = '#fee2e2'}
+                    onMouseLeave={(e) => e.target.style.background = '#fef2f2'}
+                  >
+                    <X size={16} />
+                  </button>
                 )}
               </div>
             ))}
@@ -988,29 +1221,79 @@ const RegistrationTab = ({ tournament }) => {
 
           {members.length < maxMembers && (
             <button
-              className="btn-add-member"
               onClick={handleAddMember}
-              style={{ marginTop: 16 }}
+              style={{
+                marginTop: 16,
+                padding: '12px 24px',
+                background: '#f9fafb',
+                border: '1px dashed #d1d5db',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 500,
+                color: '#374151',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                justifyContent: 'center',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+              onMouseLeave={(e) => e.target.style.background = '#f9fafb'}
             >
               <Plus size={16} />
               Thêm thành viên
             </button>
           )}
 
-          <div className="form-actions" style={{ marginTop: 24 }}>
+          <div style={{
+            display: 'flex',
+            gap: 12,
+            marginTop: 32,
+            paddingTop: 24,
+            borderTop: '1px solid #e5e7eb'
+          }}>
             <button 
-              className="btn-save" 
               onClick={handleBackStep}
               disabled={submitting}
-              style={{ background: '#6b7280', marginRight: 12 }}
+              style={{
+                padding: '12px 24px',
+                background: '#f3f4f6',
+                border: '1px solid #e5e7eb',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 500,
+                color: '#374151',
+                cursor: submitting ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                opacity: submitting ? 0.6 : 1,
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => !submitting && (e.target.style.background = '#e5e7eb')}
+              onMouseLeave={(e) => e.target.style.background = '#f3f4f6'}
             >
               <ArrowLeft size={16} />
               Quay lại
             </button>
             <button 
-              className="btn-save" 
               onClick={handleSubmit}
               disabled={submitting}
+              style={{
+                padding: '12px 24px',
+                background: '#1f2937',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 500,
+                color: '#fff',
+                cursor: submitting ? 'not-allowed' : 'pointer',
+                opacity: submitting ? 0.6 : 1,
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => !submitting && (e.target.style.background = '#374151')}
+              onMouseLeave={(e) => e.target.style.background = '#1f2937'}
             >
               {submitting ? 'Đang xử lý...' : 'Hoàn tất đăng ký'}
             </button>

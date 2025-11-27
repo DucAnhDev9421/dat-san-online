@@ -42,6 +42,7 @@ import promotionRoutes from "./routes/promotion.js";
 import analyticsRoutes from "./routes/analytics.js";
 import walletRouters from "./routes/wallet.js";
 import leagueRoutes from "./routes/league.js";
+import aiRoutes from "./routes/ai.js";
 import User from "./models/User.js";
 import loyaltyRoutes from "./routes/loyalty.js";
 import referralRoutes from "./routes/referral.js";
@@ -145,6 +146,7 @@ app.use("/api/wallet", walletRouters);
 app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/referrals", referralRoutes);
 app.use("/api/leagues", leagueRoutes);
+app.use("/api/ai", aiRoutes);
 // 404 handler
 app.use(notFound);
 

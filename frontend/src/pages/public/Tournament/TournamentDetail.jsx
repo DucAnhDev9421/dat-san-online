@@ -1,9 +1,11 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { Users, Eye } from 'lucide-react'
 import { TournamentProvider, useTournament } from './TournamentContext'
 import { useAuth } from '../../../contexts/AuthContext'
 import TournamentRoutes from './TournamentRoutes'
+import ChampionCelebration from '../../../components/tournament/ChampionCelebration'
+import { hasChampion } from '../../../utils/tournamentHelpers'
 import '../../../styles/TournamentDetail.css'
 
 const TournamentDetailContent = () => {
@@ -12,6 +14,7 @@ const TournamentDetailContent = () => {
   const location = useLocation()
   const { tournament, loading } = useTournament()
   const { user } = useAuth()
+  const [showChampionCelebration, setShowChampionCelebration] = useState(false)
 
   const getStatusBadge = (status) => {
     const badges = {
@@ -71,6 +74,18 @@ const TournamentDetailContent = () => {
     }
   }
 
+  // Hiển thị màn hình chúc mừng đội vô địch khi vào trang và giải đã có đội vô địch
+  useEffect(() => {
+    if (tournament && !loading && hasChampion(tournament)) {
+      // Kiểm tra xem đã hiển thị chưa (dùng sessionStorage để tránh hiển thị lại khi refresh)
+      const hasShown = sessionStorage.getItem(`champion-celebration-${id}`)
+      if (!hasShown) {
+        setShowChampionCelebration(true)
+        sessionStorage.setItem(`champion-celebration-${id}`, 'true')
+      }
+    }
+  }, [tournament, loading, id])
+
   if (loading) {
     return (
       <div className="tournament-detail-page">
@@ -99,6 +114,14 @@ const TournamentDetailContent = () => {
 
   return (
     <div className="tournament-detail-page">
+      {/* Champion Celebration Modal */}
+      {showChampionCelebration && tournament && (
+        <ChampionCelebration 
+          tournament={tournament}
+          onClose={() => setShowChampionCelebration(false)}
+        />
+      )}
+
       {/* Hero Banner */}
       <div 
         className="tournament-hero-banner"
