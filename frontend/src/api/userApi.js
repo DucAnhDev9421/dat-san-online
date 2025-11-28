@@ -145,6 +145,20 @@ export const userApi = {
     }
   },
 
+  /**
+   * Delete own account
+   * DELETE /api/users/account
+   * @returns {Promise} Success message
+   */
+  deleteAccount: async () => {
+    try {
+      const response = await api.delete('/users/account');
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
   // --- ADMIN ONLY OPERATIONS ---
 
   /**

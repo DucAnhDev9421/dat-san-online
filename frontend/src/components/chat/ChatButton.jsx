@@ -12,8 +12,9 @@ import './ChatButton.css';
 
 // Quick Replies - Common questions
 const QUICK_REPLIES = [
-  { text: '📍 Tìm cơ sở gần nhất', message: 'Tìm các cơ sở gần tôi' },
-  { text: '⚽ Đặt sân', message: 'Hướng dẫn tôi cách đặt sân' },
+  { text: 'Tìm cơ sở gần nhất', message: 'Tìm các cơ sở gần tôi' },
+  { text: 'Đặt sân', message: 'Hướng dẫn tôi cách đặt sân' },
+  { text: 'Gợi ý sân phù hợp', message: 'Gợi ý sân phù hợp' },
 ];
 
 const ChatButton = () => {
@@ -29,11 +30,14 @@ const ChatButton = () => {
   const { userLocation } = useUserLocation();
   
   // Booking flow state
-  const [bookingStep, setBookingStep] = useState(null); // 'sport' | 'courtType' | 'date' | 'timeSlots' | 'search'
+  const [bookingStep, setBookingStep] = useState(null); // 'sport' | 'courtType' | 'date' | 'timeSlots' | 'search' | 'suggest' | 'priceRange' | 'radius'
+  const [flowType, setFlowType] = useState(null); // 'booking' | 'suggest'
   const [selectedSport, setSelectedSport] = useState(null);
   const [selectedCourtType, setSelectedCourtType] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTimeSlots, setSelectedTimeSlots] = useState([]);
+  const [selectedPriceRange, setSelectedPriceRange] = useState(null);
+  const [selectedRadius, setSelectedRadius] = useState(null);
   const [dynamicQuickReplies, setDynamicQuickReplies] = useState([]);
   const [sportCategories, setSportCategories] = useState([]);
   const [courtTypes, setCourtTypes] = useState([]);
@@ -56,10 +60,13 @@ const ChatButton = () => {
       }]);
       // Reset booking flow
       setBookingStep(null);
+      setFlowType(null);
       setSelectedSport(null);
       setSelectedCourtType(null);
       setSelectedDate(null);
       setSelectedTimeSlots([]);
+      setSelectedPriceRange(null);
+      setSelectedRadius(null);
       setDynamicQuickReplies([]);
     }
   }, [isOpen]);
@@ -141,9 +148,11 @@ const ChatButton = () => {
   };
 
   const handleQuickReply = async (message, data = null) => {
-    // Check if it's booking flow
-    if (message === 'Hướng dẫn tôi cách đặt sân' || bookingStep) {
+    // Check flow type
+    if (message === 'Hướng dẫn tôi cách đặt sân' || (bookingStep && flowType === 'booking')) {
       await handleBookingFlow(message, data);
+    } else if (message === 'Gợi ý sân phù hợp' || (bookingStep && flowType === 'suggest')) {
+      await handleSuggestFlow(message, data);
     } else {
       sendMessage(message);
     }
@@ -152,6 +161,7 @@ const ChatButton = () => {
   const handleBookingFlow = async (message, data = null) => {
     if (!bookingStep) {
       // Start booking flow
+      setFlowType('booking');
       setBookingStep('sport');
       
       // Load sport categories
@@ -341,7 +351,7 @@ const ChatButton = () => {
               data: { type: 'timeSlot', slot: `${startTime}-${endTime}` }
             });
           }
-          timeSlots.push({ text: '🔍 Tìm sân', message: 'Tìm sân', data: { type: 'search' } });
+          timeSlots.push({ text: 'Tìm sân', message: 'Tìm sân', data: { type: 'search' } });
           setDynamicQuickReplies(timeSlots);
         } else {
           // Remove search button if no slots selected
@@ -427,9 +437,299 @@ const ChatButton = () => {
           
           setMessages(prev => [...prev, userMsg, botMsg]);
           setBookingStep(null);
+          setFlowType(null);
           setSelectedSport(null);
           setSelectedCourtType(null);
           setSelectedDate(null);
+          setSelectedTimeSlots([]);
+          setSelectedPriceRange(null);
+          setSelectedRadius(null);
+          setDynamicQuickReplies([]);
+        }
+      } catch (error) {
+        console.error('Error searching facilities:', error);
+        const errorMsg = {
+          id: Date.now() + 1,
+          role: 'bot',
+          content: 'Xin lỗi, có lỗi xảy ra khi tìm kiếm. Vui lòng thử lại.',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMsg]);
+      } finally {
+        setIsTyping(false);
+        setIsLoading(false);
+      }
+    }
+  };
+
+  // Handle suggest flow - Gợi ý sân phù hợp
+  const handleSuggestFlow = async (message, data = null) => {
+    if (!bookingStep) {
+      // Start suggest flow
+      setFlowType('suggest');
+      setBookingStep('sport');
+      
+      // Load sport categories
+      try {
+        const response = await aiApi.getBookingData();
+        if (response.success) {
+          setSportCategories(response.data.sportCategories || []);
+          const quickReplies = (response.data.sportCategories || []).map(cat => ({
+            text: cat.name,
+            message: `Chọn ${cat.name}`,
+            data: { type: 'sport', id: cat.id, name: cat.name }
+          }));
+          setDynamicQuickReplies(quickReplies);
+          
+          // Add bot message
+          const botMessage = {
+            id: Date.now(),
+            role: 'bot',
+            content: 'Bạn muốn tìm sân cho môn thể thao nào?',
+            timestamp: new Date(),
+            quickReplies: quickReplies
+          };
+          setMessages(prev => [...prev, botMessage]);
+        }
+      } catch (error) {
+        console.error('Error loading sport categories:', error);
+      }
+      return;
+    }
+
+    // Handle sport selection
+    if (bookingStep === 'sport' && data && data.type === 'sport') {
+      setSelectedSport(data);
+      setBookingStep('priceRange');
+      
+      // Price range options
+      const priceRanges = [
+        { text: 'Dưới 100k/giờ', min: 0, max: 100000 },
+        { text: '100k - 200k/giờ', min: 100000, max: 200000 },
+        { text: '200k - 300k/giờ', min: 200000, max: 300000 },
+        { text: '300k - 500k/giờ', min: 300000, max: 500000 },
+        { text: 'Trên 500k/giờ', min: 500000, max: null },
+        { text: 'Không quan tâm', min: null, max: null }
+      ];
+      
+      const quickReplies = priceRanges.map(pr => ({
+        text: pr.text,
+        message: pr.text,
+        data: { type: 'priceRange', min: pr.min, max: pr.max, text: pr.text }
+      }));
+      setDynamicQuickReplies(quickReplies);
+      
+      // Add user and bot messages
+      const userMsg = {
+        id: Date.now(),
+        role: 'user',
+        content: data.name,
+        timestamp: new Date()
+      };
+      const botMsg = {
+        id: Date.now() + 1,
+        role: 'bot',
+        content: `Bạn đã chọn ${data.name}. Vui lòng chọn khoảng giá phù hợp:`,
+        timestamp: new Date(),
+        quickReplies: quickReplies
+      };
+      setMessages(prev => [...prev, userMsg, botMsg]);
+      return;
+    }
+
+    // Handle price range selection
+    if (bookingStep === 'priceRange' && data && data.type === 'priceRange') {
+      setSelectedPriceRange(data);
+      setBookingStep('radius');
+      
+      // Radius options (in km)
+      const radiusOptions = [
+        { text: '1 km', value: 1 },
+        { text: '3 km', value: 3 },
+        { text: '5 km', value: 5 },
+        { text: '10 km', value: 10 },
+        { text: '15 km', value: 15 },
+        { text: 'Không giới hạn', value: null }
+      ];
+      
+      const quickReplies = radiusOptions.map(r => ({
+        text: r.text,
+        message: r.text,
+        data: { type: 'radius', value: r.value, text: r.text }
+      }));
+      setDynamicQuickReplies(quickReplies);
+      
+      // Add user and bot messages
+      const userMsg = {
+        id: Date.now(),
+        role: 'user',
+        content: data.text,
+        timestamp: new Date()
+      };
+      const botMsg = {
+        id: Date.now() + 1,
+        role: 'bot',
+        content: `Bạn đã chọn ${data.text}. Vui lòng chọn bán kính tìm kiếm:`,
+        timestamp: new Date(),
+        quickReplies: quickReplies
+      };
+      setMessages(prev => [...prev, userMsg, botMsg]);
+      return;
+    }
+
+    // Handle radius selection
+    if (bookingStep === 'radius' && data && data.type === 'radius') {
+      setSelectedRadius(data);
+      setBookingStep('timeSlots');
+      
+      // Generate time slot options
+      const timeSlots = [];
+      for (let hour = 6; hour <= 22; hour++) {
+        const startTime = `${String(hour).padStart(2, '0')}:00`;
+        const endTime = `${String(hour + 1).padStart(2, '0')}:00`;
+        timeSlots.push({
+          text: `${startTime}-${endTime}`,
+          message: startTime,
+          data: { type: 'timeSlot', slot: `${startTime}-${endTime}` }
+        });
+      }
+      setDynamicQuickReplies(timeSlots);
+      
+      // Add user and bot messages
+      const userMsg = {
+        id: Date.now(),
+        role: 'user',
+        content: data.text,
+        timestamp: new Date()
+      };
+      const botMsg = {
+        id: Date.now() + 1,
+        role: 'bot',
+        content: `Bạn đã chọn ${data.text}. Vui lòng chọn giờ trống muốn tìm (có thể chọn nhiều):`,
+        timestamp: new Date(),
+        quickReplies: timeSlots,
+        allowMultiple: true
+      };
+      setMessages(prev => [...prev, userMsg, botMsg]);
+      return;
+    }
+
+    // Handle time slots selection (same as booking flow)
+    if (bookingStep === 'timeSlots' && data && data.type === 'timeSlot') {
+      // Toggle time slot selection (no message, just visual feedback)
+      setSelectedTimeSlots(prev => {
+        const exists = prev.includes(data.slot);
+        const newSlots = exists
+          ? prev.filter(s => s !== data.slot)
+          : [...prev, data.slot];
+        
+        // Update quick replies to show search button if slots selected
+        if (newSlots.length > 0) {
+          const timeSlots = [];
+          for (let hour = 6; hour <= 22; hour++) {
+            const startTime = `${String(hour).padStart(2, '0')}:00`;
+            const endTime = `${String(hour + 1).padStart(2, '0')}:00`;
+            timeSlots.push({
+              text: `${startTime}-${endTime}`,
+              message: startTime,
+              data: { type: 'timeSlot', slot: `${startTime}-${endTime}` }
+            });
+          }
+          timeSlots.push({ text: 'Tìm sân', message: 'Tìm sân', data: { type: 'search' } });
+          setDynamicQuickReplies(timeSlots);
+        } else {
+          // Remove search button if no slots selected
+          const timeSlots = [];
+          for (let hour = 6; hour <= 22; hour++) {
+            const startTime = `${String(hour).padStart(2, '0')}:00`;
+            const endTime = `${String(hour + 1).padStart(2, '0')}:00`;
+            timeSlots.push({
+              text: `${startTime}-${endTime}`,
+              message: startTime,
+              data: { type: 'timeSlot', slot: `${startTime}-${endTime}` }
+            });
+          }
+          setDynamicQuickReplies(timeSlots);
+        }
+        
+        return newSlots;
+      });
+      
+      // Don't add user message - just visual feedback via selected state
+      return;
+    }
+
+    // Handle search
+    if (bookingStep === 'timeSlots' && data && data.type === 'search') {
+      // Validate that time slots are selected
+      if (selectedTimeSlots.length === 0) {
+        const errorMsg = {
+          id: Date.now(),
+          role: 'bot',
+          content: 'Vui lòng chọn ít nhất một khung giờ trước khi tìm sân.',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMsg]);
+        return;
+      }
+
+      // Search facilities
+      setBookingStep('search');
+      setIsTyping(true);
+      setIsLoading(true);
+      
+      // Add user message showing selected criteria
+      const criteria = [];
+      if (selectedSport) criteria.push(`Môn: ${selectedSport.name}`);
+      if (selectedPriceRange) criteria.push(`Giá: ${selectedPriceRange.text}`);
+      if (selectedRadius) criteria.push(`Bán kính: ${selectedRadius.text}`);
+      if (selectedTimeSlots.length > 0) criteria.push(`Giờ: ${selectedTimeSlots.join(', ')}`);
+      
+      const userMsg = {
+        id: Date.now(),
+        role: 'user',
+        content: `Tìm sân với: ${criteria.join(', ')}`,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMsg]);
+      
+      try {
+        const location = userLocation ? {
+          lat: userLocation.latitude,
+          lng: userLocation.longitude
+        } : null;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const response = await aiApi.searchSuggestFacilities({
+          sportCategoryId: selectedSport?.id,
+          timeSlots: selectedTimeSlots,
+          date: today.toISOString(),
+          userLocation: location,
+          priceMin: selectedPriceRange?.min,
+          priceMax: selectedPriceRange?.max,
+          radius: selectedRadius?.value ? selectedRadius.value * 1000 : null // Convert km to meters
+        });
+
+        if (response.success) {
+          const facilities = response.data.facilities || [];
+          const botMsg = {
+            id: Date.now() + 1,
+            role: 'bot',
+            content: facilities.length > 0 
+              ? `Tôi tìm thấy ${facilities.length} cơ sở phù hợp với yêu cầu của bạn:`
+              : 'Không tìm thấy cơ sở nào phù hợp. Vui lòng thử lại với tiêu chí khác.',
+            facilities: facilities,
+            timestamp: new Date()
+          };
+          
+          setMessages(prev => [...prev, botMsg]);
+          setBookingStep(null);
+          setFlowType(null);
+          setSelectedSport(null);
+          setSelectedPriceRange(null);
+          setSelectedRadius(null);
           setSelectedTimeSlots([]);
           setDynamicQuickReplies([]);
         }
@@ -454,17 +754,19 @@ const ChatButton = () => {
     if (messages.length === 0) return false;
     if (isTyping || isLoading) return false;
     
-    // Show dynamic quick replies if in booking flow
-    if (dynamicQuickReplies.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      return lastMessage && lastMessage.role === 'bot' && lastMessage.quickReplies;
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage || lastMessage.role !== 'bot') return false;
+    
+    // Show dynamic quick replies if in booking/suggest flow
+    if (dynamicQuickReplies.length > 0 && bookingStep) {
+      return true;
     }
     
-    // Show static quick replies only after welcome message
-    if (messages.length === 1) {
-      const firstMessage = messages[0];
-      return firstMessage && firstMessage.role === 'bot';
+    // Show static quick replies if not in any flow (user hasn't selected a Quick Reply yet)
+    if (!bookingStep) {
+      return true;
     }
+    
     return false;
   };
 

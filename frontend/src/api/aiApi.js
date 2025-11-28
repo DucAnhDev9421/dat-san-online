@@ -72,6 +72,27 @@ export const aiApi = {
       throw handleApiError(error);
     }
   },
+
+  /**
+   * Search facilities with suggestions (price range, radius, time slots)
+   * @param {Object} data - Search parameters
+   * @param {string} data.sportCategoryId - Sport category ID
+   * @param {Array<string>} data.timeSlots - Time slots array
+   * @param {string} data.date - Booking date (ISO string)
+   * @param {Object} data.userLocation - User location {lat, lng}
+   * @param {number} data.priceMin - Minimum price
+   * @param {number} data.priceMax - Maximum price
+   * @param {number} data.radius - Radius in meters
+   * @returns {Promise} Available facilities
+   */
+  searchSuggestFacilities: async (data) => {
+    try {
+      const response = await api.post('/ai/suggest-search', data);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 
 export default aiApi;
