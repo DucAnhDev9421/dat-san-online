@@ -1007,6 +1007,7 @@ router.patch(
   } catch (error) {
     next(error);
   }
+  }
 );
 
 /**

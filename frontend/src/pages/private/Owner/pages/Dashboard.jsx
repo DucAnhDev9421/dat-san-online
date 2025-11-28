@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Download } from "lucide-react";
 import {
   CalendarDays,
@@ -6,23 +6,130 @@ import {
   BadgeDollarSign,
   Star,
 } from "lucide-react";
-import { ownerKpis, trendData, pieData, pieColors } from "../data/mockData";
+import { useAuth } from "../../../../contexts/AuthContext";
+import { facilityApi } from "../../../../api/facilityApi";
+import { analyticsApi } from "../../../../api/analyticsApi";
+import { toast } from "react-toastify";
 import KpiCard from "../components/Dashboard/KpiCard";
 import TrendChart from "../components/Dashboard/TrendChart";
 import PieChartCard from "../components/Dashboard/PieChartCard";
 import TodaySchedule from "../components/Dashboard/TodaySchedule";
 
-const todaySchedule = [
-  { time: "08:00", status: "booked", customer: "Nguyễn Văn An", court: "Sân 1" },
-  { time: "10:00", status: "available", customer: null, court: "Tất cả sân" },
-  { time: "12:00", status: "booked", customer: "Trần Thị Bình", court: "Sân 2" },
-  { time: "14:00", status: "booked", customer: "Lê Hoàng", court: "Sân 1" },
-  { time: "16:00", status: "booked", customer: "Phạm Văn Đức", court: "Sân 2" },
-  { time: "18:00", status: "booked", customer: "Võ Thị Hoa", court: "Sân 1" },
-  { time: "20:00", status: "available", customer: null, court: "Tất cả sân" },
-];
-
 const Dashboard = () => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [facilityId, setFacilityId] = useState(null);
+  const [facilities, setFacilities] = useState([]);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [period, setPeriod] = useState("month");
+
+  // Fetch owner facilities
+  useEffect(() => {
+    const fetchFacilities = async () => {
+      if (!user?._id) return;
+      try {
+        const ownerId = user._id || user.id;
+        const result = await facilityApi.getFacilities({ ownerId, status: "opening" });
+        if (result.success) {
+          const facilitiesList = result.data?.facilities || result.data || [];
+          setFacilities(facilitiesList);
+          if (facilitiesList.length > 0) {
+            const firstFacilityId = facilitiesList[0]._id || facilitiesList[0].id;
+            setFacilityId(firstFacilityId);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching facilities:", error);
+        toast.error("Không thể tải danh sách cơ sở");
+      }
+    };
+    fetchFacilities();
+  }, [user]);
+
+  // Fetch dashboard data
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      if (!facilityId) return;
+      try {
+        setLoading(true);
+        const result = await analyticsApi.getOwnerDashboard(facilityId, period);
+        if (result.success) {
+          setDashboardData(result.data);
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard:", error);
+        toast.error(error.message || "Không thể tải dữ liệu dashboard");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashboard();
+  }, [facilityId, period]);
+
+  // Transform revenue chart data for TrendChart
+  const trendData = dashboardData?.revenueChart
+    ? dashboardData.revenueChart.map((item) => ({
+        name: new Date(item._id).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
+        revenue: item.dailyRevenue / 1e6, // Convert to millions
+        bookings: 0, // Not available in dashboard API
+      }))
+    : [];
+
+  // Transform booking status for PieChart
+  const pieData = dashboardData
+    ? [
+        { name: "Đã xác nhận", value: dashboardData.totalBookings || 0 },
+        { name: "Chờ xác nhận", value: dashboardData.pendingBookings || 0 },
+      ]
+    : [];
+  const pieColors = ["#10b981", "#f59e0b"];
+
+  // Mock today schedule (not available in API yet)
+  const todaySchedule = [
+    { time: "08:00", status: "booked", customer: "Nguyễn Văn An", court: "Sân 1" },
+    { time: "10:00", status: "available", customer: null, court: "Tất cả sân" },
+    { time: "12:00", status: "booked", customer: "Trần Thị Bình", court: "Sân 2" },
+    { time: "14:00", status: "booked", customer: "Lê Hoàng", court: "Sân 1" },
+    { time: "16:00", status: "booked", customer: "Phạm Văn Đức", court: "Sân 2" },
+    { time: "18:00", status: "booked", customer: "Võ Thị Hoa", court: "Sân 1" },
+    { time: "20:00", status: "available", customer: null, court: "Tất cả sân" },
+  ];
+
+  if (loading && !dashboardData) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px" }}>
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              border: "4px solid #e5e7eb",
+              borderTop: "4px solid #3b82f6",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite",
+              margin: "0 auto 1rem",
+            }}
+          />
+          <p style={{ color: "#6b7280" }}>Đang tải dữ liệu...</p>
+        </div>
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  if (!facilityId) {
+    return (
+      <div style={{ textAlign: "center", padding: "2rem" }}>
+        <p style={{ color: "#6b7280" }}>Bạn chưa có cơ sở nào. Vui lòng tạo cơ sở trước.</p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div
@@ -33,9 +140,44 @@ const Dashboard = () => {
           alignItems: "center",
         }}
       >
-        <h1 style={{ fontSize: 24, fontWeight: 800 }}>Bảng điều khiển chủ sân</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800 }}>Bảng điều khiển chủ sân</h1>
+          {facilities.length > 1 && (
+            <select
+              value={facilityId}
+              onChange={(e) => setFacilityId(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+              }}
+            >
+              {facilities.map((facility) => (
+                <option key={facility._id || facility.id} value={facility._id || facility.id}>
+                  {facility.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+              fontSize: 14,
+            }}
+          >
+            <option value="day">Hôm nay</option>
+            <option value="week">Tuần này</option>
+            <option value="month">Tháng này</option>
+          </select>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
+            onClick={() => toast.info("Tính năng xuất báo cáo đang được phát triển")}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -64,35 +206,31 @@ const Dashboard = () => {
         }}
       >
         <KpiCard
-          title="Doanh thu hôm nay"
-          value={`${(ownerKpis.todayRevenue / 1e6).toFixed(1)}M VNĐ`}
+          title={`Doanh thu ${period === "day" ? "hôm nay" : period === "week" ? "tuần này" : "tháng này"}`}
+          value={`${dashboardData ? (dashboardData.totalRevenue / 1e6).toFixed(1) : "0"}M VNĐ`}
           icon={<BadgeDollarSign size={20} color="#10b981" />}
-          trend="+15% so với hôm qua"
         />
         <KpiCard
           title="Tổng số lượt đặt sân"
-          value={`${ownerKpis.weeklyBookings} lượt / tuần`}
+          value={`${dashboardData?.totalBookings || 0} lượt`}
           icon={<CalendarDays size={20} color="#3b82f6" />}
-          trend="+8% so với tuần trước"
         />
         <KpiCard
-          title="Tỷ lệ lấp đầy"
-          value={`${ownerKpis.occupancyRate}%`}
+          title="Đơn chờ xác nhận"
+          value={`${dashboardData?.pendingBookings || 0} đơn`}
           icon={<Users2 size={20} color="#f59e0b" />}
-          trend="+5% so với tuần trước"
         />
         <KpiCard
           title="Đánh giá trung bình"
-          value={`⭐ ${ownerKpis.averageRating} / 5.0`}
+          value={`⭐ ${dashboardData?.averageRating?.toFixed(1) || "0"} / 5.0`}
           icon={<Star size={20} color="#f59e0b" />}
-          trend="+0.1 so với tháng trước"
         />
       </div>
 
       {/* Charts and Schedule row */}
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 16 }}>
-        <TrendChart data={trendData} />
-        <PieChartCard data={pieData} colors={pieColors} />
+        <TrendChart data={trendData} title="Doanh thu theo ngày" />
+        <PieChartCard data={pieData} colors={pieColors} title="Tình trạng đơn" />
       </div>
 
       {/* Today's Schedule */}
