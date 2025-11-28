@@ -1,5 +1,5 @@
 import express from 'express';
-import { chat, suggestFacilities, getBookingData, searchBookingFacilities } from '../controllers/aiController.js';
+import { chat, suggestFacilities, getBookingData, searchBookingFacilities, searchSuggestFacilities } from '../controllers/aiController.js';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { config } from '../config/config.js';
@@ -55,6 +55,12 @@ router.get('/booking-data', optionalAuth, getBookingData);
  * Search facilities for booking with filters
  */
 router.post('/booking-search', optionalAuth, searchBookingFacilities);
+
+/**
+ * POST /api/ai/suggest-search
+ * Search facilities with suggestions (price, radius, time slots)
+ */
+router.post('/suggest-search', optionalAuth, searchSuggestFacilities);
 
 export default router;
 

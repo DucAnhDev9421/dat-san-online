@@ -389,6 +389,219 @@ export const buildBookingContext = async ({ sportCategoryId, courtTypeId, timeSl
   return context;
 };
 
+/**
+ * Build context for suggest flow - find facilities with filters (price, radius, time slots)
+ * @param {Object} params
+ * @param {string} params.sportCategoryId - Sport category ID
+ * @param {Array<string>} params.timeSlots - Time slots array
+ * @param {Date|string} params.date - Booking date
+ * @param {Object} params.userLocation - User location {lat, lng}
+ * @param {string} params.userId - User ID (optional)
+ * @param {number} params.priceMin - Minimum price
+ * @param {number} params.priceMax - Maximum price
+ * @param {number} params.radius - Radius in meters
+ * @returns {Promise<Object>} Context object with available facilities
+ */
+export const buildSuggestContext = async ({ sportCategoryId, timeSlots = [], date, userLocation, userId, priceMin, priceMax, radius }) => {
+  const context = {
+    timestamp: new Date().toISOString(),
+    userLocation: userLocation || null,
+    facilities: [],
+    courts: [],
+  };
+
+  try {
+    // Get sport category info
+    let sportCategory = null;
+    if (sportCategoryId) {
+      sportCategory = await SportCategory.findById(sportCategoryId).lean();
+    }
+
+    // Parse date
+    const bookingDate = date ? new Date(date) : new Date();
+    bookingDate.setHours(0, 0, 0, 0);
+
+    // Build query for courts
+    const courtQuery = {
+      status: 'active'
+    };
+
+    // Filter by sport category if provided
+    if (sportCategory) {
+      const courtTypes = await CourtType.find({
+        sportCategory: sportCategoryId,
+        status: 'active'
+      }).select('name _id').lean();
+      
+      if (courtTypes.length > 0) {
+        const courtTypeNames = courtTypes.map(ct => ct.name);
+        const courtTypeIds = courtTypes.map(ct => ct._id);
+        courtQuery.$or = [
+          { type: { $in: courtTypeNames } },
+          { courtType: { $in: courtTypeIds } }
+        ];
+        if (mongoose.Types.ObjectId.isValid(sportCategoryId)) {
+          courtQuery.$or.push({ sportCategory: new mongoose.Types.ObjectId(sportCategoryId) });
+        }
+      } else {
+        if (mongoose.Types.ObjectId.isValid(sportCategoryId)) {
+          courtQuery.sportCategory = new mongoose.Types.ObjectId(sportCategoryId);
+        }
+      }
+    }
+
+    // Filter by price range if provided
+    if (priceMin !== null || priceMax !== null) {
+      const priceQuery = {};
+      if (priceMin !== null) priceQuery.$gte = priceMin;
+      if (priceMax !== null) priceQuery.$lte = priceMax;
+      courtQuery.price = priceQuery;
+    }
+
+    // Get courts matching criteria
+    let courts = await Court.find(courtQuery)
+      .populate({
+        path: 'facility',
+        match: { status: 'opening' },
+        select: 'name address location types pricePerHour phoneNumber images'
+      })
+      .lean();
+
+    // Filter out courts without active facilities
+    courts = courts.filter(c => c.facility);
+
+    // Filter by location and radius if provided
+    if (userLocation && radius) {
+      courts = courts.filter(c => {
+        if (!c.facility.location?.coordinates) return false;
+        const distance = calculateDistance(
+          userLocation.lat,
+          userLocation.lng,
+          c.facility.location.coordinates[1],
+          c.facility.location.coordinates[0]
+        ) * 1000; // Convert to meters
+        return distance <= radius;
+      });
+
+      // Sort by distance
+      courts.sort((a, b) => {
+        const distA = calculateDistance(
+          userLocation.lat,
+          userLocation.lng,
+          a.facility.location.coordinates[1],
+          a.facility.location.coordinates[0]
+        );
+        const distB = calculateDistance(
+          userLocation.lat,
+          userLocation.lng,
+          b.facility.location.coordinates[1],
+          b.facility.location.coordinates[0]
+        );
+        return distA - distB;
+      });
+    } else if (userLocation) {
+      // Sort by distance even without radius limit
+      courts.sort((a, b) => {
+        if (!a.facility.location?.coordinates) return 1;
+        if (!b.facility.location?.coordinates) return -1;
+        const distA = calculateDistance(
+          userLocation.lat,
+          userLocation.lng,
+          a.facility.location.coordinates[1],
+          a.facility.location.coordinates[0]
+        );
+        const distB = calculateDistance(
+          userLocation.lat,
+          userLocation.lng,
+          b.facility.location.coordinates[1],
+          b.facility.location.coordinates[0]
+        );
+        return distA - distB;
+      });
+    }
+
+    // Check availability for each court if time slots provided
+    if (timeSlots.length > 0) {
+      const availableCourts = [];
+
+      for (const court of courts.slice(0, 20)) { // Limit to 20 courts for performance
+        // Check if all requested time slots are available
+        const isAvailable = await Booking.checkAvailability(
+          court._id,
+          bookingDate,
+          timeSlots
+        );
+
+        if (isAvailable) {
+          availableCourts.push(court);
+        }
+      }
+
+      courts = availableCourts;
+    }
+
+    // Limit results
+    courts = courts.slice(0, 10);
+
+    // Group courts by facility
+    const facilityMap = new Map();
+
+    for (const court of courts) {
+      const facilityId = court.facility._id.toString();
+      
+      if (!facilityMap.has(facilityId)) {
+        facilityMap.set(facilityId, {
+          id: facilityId,
+          name: court.facility.name,
+          address: court.facility.address,
+          types: court.facility.types,
+          pricePerHour: court.facility.pricePerHour,
+          phoneNumber: court.facility.phoneNumber,
+          location: court.facility.location?.coordinates ? {
+            lat: court.facility.location.coordinates[1],
+            lng: court.facility.location.coordinates[0]
+          } : null,
+          images: court.facility.images?.slice(0, 1) || [],
+          courts: []
+        });
+      }
+
+      const facility = facilityMap.get(facilityId);
+      facility.courts.push({
+        id: court._id.toString(),
+        name: court.name,
+        type: court.type,
+        price: court.price,
+        capacity: court.capacity
+      });
+    }
+
+    context.facilities = Array.from(facilityMap.values());
+    context.courts = courts.map(c => ({
+      id: c._id.toString(),
+      name: c.name,
+      type: c.type,
+      price: c.price,
+      capacity: c.capacity,
+      facility: {
+        id: c.facility._id.toString(),
+        name: c.facility.name,
+        address: c.facility.address,
+        types: c.facility.types,
+        location: c.facility.location?.coordinates ? {
+          lat: c.facility.location.coordinates[1],
+          lng: c.facility.location.coordinates[0]
+        } : null
+      }
+    }));
+
+  } catch (error) {
+    console.error('Error building suggest context:', error);
+  }
+
+  return context;
+};
+
 // Helper function to calculate distance
 function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371; // Radius of the Earth in km
@@ -402,5 +615,5 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-export default { buildContext, buildBookingContext };
+export default { buildContext, buildBookingContext, buildSuggestContext };
 

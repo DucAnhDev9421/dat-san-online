@@ -1,5 +1,5 @@
 import { generateChatResponse } from '../utils/geminiService.js';
-import { buildContext, buildBookingContext } from '../utils/contextBuilder.js';
+import { buildContext, buildBookingContext, buildSuggestContext } from '../utils/contextBuilder.js';
 import { getSystemPrompt } from '../utils/aiPrompts.js';
 import SportCategory from '../models/SportCategory.js';
 import CourtType from '../models/CourtType.js';
@@ -181,6 +181,39 @@ export const searchBookingFacilities = async (req, res, next) => {
     });
   } catch (error) {
     console.error('Search Booking Facilities Error:', error);
+    next(error);
+  }
+};
+
+/**
+ * POST /api/ai/suggest-search
+ * Search facilities with suggestions (price range, radius, time slots)
+ */
+export const searchSuggestFacilities = async (req, res, next) => {
+  try {
+    const { sportCategoryId, timeSlots, date, userLocation, priceMin, priceMax, radius } = req.body;
+    const userId = req.user?._id?.toString() || null;
+
+    const context = await buildSuggestContext({
+      sportCategoryId,
+      timeSlots: timeSlots || [],
+      date: date || new Date(),
+      userLocation: userLocation || null,
+      userId,
+      priceMin: priceMin || null,
+      priceMax: priceMax || null,
+      radius: radius || null
+    });
+
+    res.json({
+      success: true,
+      data: {
+        facilities: context.facilities || [],
+        courts: context.courts || []
+      }
+    });
+  } catch (error) {
+    console.error('Search Suggest Facilities Error:', error);
     next(error);
   }
 };

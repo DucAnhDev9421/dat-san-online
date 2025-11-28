@@ -215,6 +215,82 @@ router.put("/change-password", async (req, res, next) => {
   }
 });
 
+/**
+ * API: Xóa tài khoản của chính mình
+ * DELETE /api/users/account
+ */
+router.delete("/account", async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Không cho phép admin xóa tài khoản của mình
+    if (user.role === "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Tài khoản admin không thể tự xóa. Vui lòng liên hệ quản trị viên.",
+      });
+    }
+
+    // Kiểm tra nếu user là owner và có facilities
+    if (user.role === "owner") {
+      const facilityCount = await Facility.countDocuments({ 
+        owner: user._id,
+        status: { $ne: "deleted" }
+      });
+      
+      if (facilityCount > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Bạn không thể xóa tài khoản vì bạn đang quản lý ${facilityCount} sân. Vui lòng xóa hoặc chuyển quyền quản lý các sân trước khi xóa tài khoản.`,
+        });
+      }
+    }
+
+    // Xóa avatar từ Cloudinary nếu có
+    if (user.avatarPublicId) {
+      try {
+        await cloudinaryUtils.deleteImage(user.avatarPublicId);
+        console.log('✅ Deleted avatar from Cloudinary:', user.avatarPublicId);
+      } catch (deleteError) {
+        console.warn('⚠️ Could not delete avatar from Cloudinary:', deleteError.message);
+        // Vẫn tiếp tục xóa tài khoản
+      }
+    }
+
+    // Soft delete tài khoản
+    const deletedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        isLocked: false, // Unlock khi xóa
+        refreshTokens: [], // Xóa tất cả refresh tokens
+      },
+      { new: true }
+    ).select("-password -refreshTokens");
+
+    logAudit("DELETE_OWN_ACCOUNT", req.user._id, req, {
+      userName: user.name,
+      email: user.email,
+    });
+
+    res.json({
+      success: true,
+      message: "Tài khoản đã được xóa thành công.",
+      data: { user: deletedUser },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // --- ADMIN ROUTES ---
 // (Di chuyển từ auth.js)
 
