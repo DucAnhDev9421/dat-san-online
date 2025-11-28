@@ -82,13 +82,13 @@ const UserDetailModal = ({ isOpen, user, onClose }) => {
               ? new Date(user.lastLogin).toLocaleString("vi-VN")
               : "Chưa đăng nhập"}
           </div>
-          {user.facilities && user.facilities.length > 0 && (
+          {(user.facilities && user.facilities.length > 0) && (
             <div>
               <strong>Cơ sở ({user.facilities.length}):</strong>
               <ul style={{ marginTop: 8, marginLeft: 20 }}>
                 {user.facilities.map((facility, idx) => (
-                  <li key={idx} style={{ marginBottom: 4 }}>
-                    <strong>{facility.name}</strong> - {facility.address}
+                  <li key={facility._id || facility.id || idx} style={{ marginBottom: 4 }}>
+                    <strong>{facility.name}</strong> - {facility.address || "N/A"}
                     <span
                       style={{
                         marginLeft: 8,
@@ -96,24 +96,26 @@ const UserDetailModal = ({ isOpen, user, onClose }) => {
                         borderRadius: 4,
                         fontSize: 11,
                         background:
-                          facility.status === "opening"
+                          facility.status === "opening" || facility.status === "active"
                             ? "#e6f9f0"
-                            : facility.status === "closed"
+                            : facility.status === "closed" || facility.status === "paused"
                             ? "#fee2e2"
                             : "#f3f4f6",
                         color:
-                          facility.status === "opening"
+                          facility.status === "opening" || facility.status === "active"
                             ? "#059669"
-                            : facility.status === "closed"
+                            : facility.status === "closed" || facility.status === "paused"
                             ? "#ef4444"
                             : "#6b7280",
                       }}
                     >
-                      {facility.status === "opening"
+                      {facility.status === "opening" || facility.status === "active"
                         ? "Đang hoạt động"
                         : facility.status === "closed"
                         ? "Đã đóng"
-                        : facility.status}
+                        : facility.status === "paused"
+                        ? "Tạm dừng"
+                        : facility.status || "N/A"}
                     </span>
                   </li>
                 ))}

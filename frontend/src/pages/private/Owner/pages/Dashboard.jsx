@@ -22,6 +22,8 @@ const Dashboard = () => {
   const [facilities, setFacilities] = useState([]);
   const [dashboardData, setDashboardData] = useState(null);
   const [period, setPeriod] = useState("month");
+  const [todaySchedule, setTodaySchedule] = useState([]);
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
 
   // Fetch owner facilities
   useEffect(() => {
@@ -66,6 +68,26 @@ const Dashboard = () => {
     fetchDashboard();
   }, [facilityId, period]);
 
+  // Fetch today schedule
+  useEffect(() => {
+    const fetchTodaySchedule = async () => {
+      if (!facilityId) return;
+      try {
+        setLoadingSchedule(true);
+        const result = await analyticsApi.getOwnerTodaySchedule(facilityId);
+        if (result.success) {
+          setTodaySchedule(result.data.schedule || []);
+        }
+      } catch (error) {
+        console.error("Error fetching today schedule:", error);
+        // Không hiển thị error toast vì đây là phần phụ
+      } finally {
+        setLoadingSchedule(false);
+      }
+    };
+    fetchTodaySchedule();
+  }, [facilityId]);
+
   // Transform revenue chart data for TrendChart
   const trendData = dashboardData?.revenueChart
     ? dashboardData.revenueChart.map((item) => ({
@@ -84,16 +106,6 @@ const Dashboard = () => {
     : [];
   const pieColors = ["#10b981", "#f59e0b"];
 
-  // Mock today schedule (not available in API yet)
-  const todaySchedule = [
-    { time: "08:00", status: "booked", customer: "Nguyễn Văn An", court: "Sân 1" },
-    { time: "10:00", status: "available", customer: null, court: "Tất cả sân" },
-    { time: "12:00", status: "booked", customer: "Trần Thị Bình", court: "Sân 2" },
-    { time: "14:00", status: "booked", customer: "Lê Hoàng", court: "Sân 1" },
-    { time: "16:00", status: "booked", customer: "Phạm Văn Đức", court: "Sân 2" },
-    { time: "18:00", status: "booked", customer: "Võ Thị Hoa", court: "Sân 1" },
-    { time: "20:00", status: "available", customer: null, court: "Tất cả sân" },
-  ];
 
   if (loading && !dashboardData) {
     return (

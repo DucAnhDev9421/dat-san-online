@@ -161,5 +161,18 @@ export const bookingApi = {
       throw handleApiError(error);
     }
   },
+
+  /**
+   * Lấy tất cả bookings (chỉ admin)
+   * @param {Object} params - Query parameters (page, limit, status, paymentStatus, date, startDate, endDate, facilityId, search)
+   */
+  getAllBookings: async (params = {}) => {
+    try {
+      const response = await api.get('/bookings/admin/all', { params });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 

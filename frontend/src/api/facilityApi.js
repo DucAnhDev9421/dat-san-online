@@ -193,6 +193,64 @@ export const facilityApi = {
       return false;
     }
   },
+
+  // --- ADMIN ONLY OPERATIONS ---
+
+  /**
+   * Get all facilities (Admin only) with search and filters
+   * GET /api/facilities/admin/all?page=1&limit=10&search=xxx&status=xxx&city=xxx&district=xxx&sport=xxx&date=xxx
+   * @param {Object} params - { page?, limit?, search?, status?, city?, district?, sport?, date? }
+   * @returns {Promise} Facilities list with pagination and stats
+   */
+  getAllFacilities: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+      
+      const queryString = queryParams.toString();
+      const url = `/facilities/admin/all${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await api.get(url);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Approve facility (Admin only)
+   * PUT /api/facilities/:id/approve
+   * @param {String} facilityId
+   * @returns {Promise} Updated facility object
+   */
+  approveFacility: async (facilityId) => {
+    try {
+      const response = await api.put(`/facilities/${facilityId}/approve`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Reject facility (Admin only)
+   * PUT /api/facilities/:id/reject
+   * @param {String} facilityId
+   * @param {String} reason - Optional rejection reason
+   * @returns {Promise} Updated facility object
+   */
+  rejectFacility: async (facilityId, reason = '') => {
+    try {
+      const response = await api.put(`/facilities/${facilityId}/reject`, { reason });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 
 export default facilityApi;

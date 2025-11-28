@@ -592,3 +592,115 @@ export const getOwnerCancellations = asyncHandler(async (req, res) => {
     },
   });
 });
+
+/**
+ * API 8: GET /api/analytics/owner/today-schedule
+ * Lịch sân hôm nay (theo time slots)
+ */
+export const getOwnerTodaySchedule = asyncHandler(async (req, res) => {
+  const facilityId = req.facilityId;
+  const facilityObjectId = new mongoose.Types.ObjectId(facilityId);
+
+  // Lấy ngày hôm nay (00:00:00 - 23:59:59)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  // Lấy facility để có operatingHours
+  const facility = await Facility.findById(facilityId).select("operatingHours");
+
+  // Lấy tất cả bookings hôm nay (pending, confirmed, completed)
+  const todayBookings = await Booking.find({
+    facility: facilityObjectId,
+    date: { $gte: today, $lt: tomorrow },
+    status: { $in: ["pending", "confirmed", "completed"] },
+  })
+    .populate("court", "name courtNumber")
+    .populate("user", "name")
+    .select("timeSlots court user contactInfo status");
+
+  // Lấy operating hours hôm nay
+  const dayOfWeek = today.getDay();
+  const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const dayName = dayNames[dayOfWeek];
+  const dayOperatingHours = facility?.operatingHours?.[dayName];
+
+  // Tạo map để track các time slots đã được đặt
+  const scheduleMap = new Map();
+
+  // Nếu facility có operating hours, tạo tất cả slots có thể
+  if (dayOperatingHours && dayOperatingHours.isOpen) {
+    const openTime = dayOperatingHours.open || "06:00";
+    const closeTime = dayOperatingHours.close || "22:00";
+    
+    const [openHour, openMin] = openTime.split(":").map(Number);
+    const [closeHour, closeMin] = closeTime.split(":").map(Number);
+    
+    const openMinutes = openHour * 60 + openMin;
+    const closeMinutes = closeHour * 60 + closeMin;
+    
+    // Tạo tất cả slots có thể
+    let currentMinutes = openMinutes;
+    while (currentMinutes < closeMinutes) {
+      const currentHour = Math.floor(currentMinutes / 60);
+      const currentMin = currentMinutes % 60;
+      const nextMinutes = currentMinutes + 60;
+      
+      if (nextMinutes > closeMinutes) break;
+      
+      const startTime = `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`;
+      const nextHour = Math.floor(nextMinutes / 60);
+      const nextMin = nextMinutes % 60;
+      const endTime = `${String(nextHour).padStart(2, "0")}:${String(nextMin).padStart(2, "0")}`;
+      
+      scheduleMap.set(startTime, {
+        time: startTime,
+        status: "available",
+        customer: null,
+        court: null,
+      });
+      
+      currentMinutes = nextMinutes;
+    }
+  }
+
+  // Cập nhật schedule với các booking thực tế
+  todayBookings.forEach((booking) => {
+    booking.timeSlots.forEach((slot) => {
+      // Parse slot: "18:00-19:00" -> lấy startTime "18:00"
+      const [startTime] = slot.split("-");
+      const timeKey = startTime.trim();
+      
+      if (scheduleMap.has(timeKey)) {
+        // Cập nhật slot đã đặt
+        scheduleMap.set(timeKey, {
+          time: timeKey,
+          status: "booked",
+          customer: booking.user?.name || booking.contactInfo?.name || "Khách vãng lai",
+          court: booking.court?.name || `Sân ${booking.court?.courtNumber || ""}`,
+        });
+      } else {
+        // Thêm slot mới nếu không có trong operating hours
+        scheduleMap.set(timeKey, {
+          time: timeKey,
+          status: "booked",
+          customer: booking.user?.name || booking.contactInfo?.name || "Khách vãng lai",
+          court: booking.court?.name || `Sân ${booking.court?.courtNumber || ""}`,
+        });
+      }
+    });
+  });
+
+  // Chuyển thành array và sắp xếp theo giờ
+  const schedule = Array.from(scheduleMap.values())
+    .sort((a, b) => a.time.localeCompare(b.time));
+
+  res.json({
+    success: true,
+    data: {
+      date: today,
+      schedule,
+    },
+  });
+});

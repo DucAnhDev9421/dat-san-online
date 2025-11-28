@@ -91,4 +91,7 @@ router.get("/owner/loyal-customers", analyticsController.getOwnerLoyalCustomers)
 // GET /api/analytics/owner/cancellations?facilityId=xxx&startDate=xxx&endDate=xxx
 router.get("/owner/cancellations", analyticsController.getOwnerCancellations);
 
+// GET /api/analytics/owner/today-schedule?facilityId=xxx
+router.get("/owner/today-schedule", analyticsController.getOwnerTodaySchedule);
+
 export default router;

@@ -517,4 +517,232 @@ router.delete(
   }
 );
 
+// === ADMIN ONLY ROUTES ===
+
+/**
+ * BE: GET /api/facilities/admin/all
+ * Lấy tất cả cơ sở với filters và pagination (chỉ Admin)
+ */
+router.get(
+  "/admin/all",
+  authenticateToken,
+  requireAdmin,
+  async (req, res, next) => {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const skip = (page - 1) * limit;
+
+      // Build filter
+      const filter = {};
+
+      // Status filter
+      if (req.query.status) {
+        filter.status = req.query.status;
+      }
+
+      // Search functionality
+      if (req.query.search) {
+        const searchTerm = req.query.search.trim();
+        filter.$or = [
+          { name: { $regex: searchTerm, $options: "i" } },
+          { address: { $regex: searchTerm, $options: "i" } },
+          { phoneNumber: { $regex: searchTerm, $options: "i" } },
+        ];
+      }
+
+      // City/Province filter (từ address)
+      if (req.query.city && req.query.city !== "all") {
+        filter.address = { $regex: req.query.city, $options: "i" };
+      }
+
+      // District filter (từ address)
+      if (req.query.district && req.query.district !== "all") {
+        if (filter.address && typeof filter.address === "object") {
+          // Nếu đã có city filter, combine với district
+          filter.$and = [
+            { address: filter.address },
+            { address: { $regex: req.query.district, $options: "i" } },
+          ];
+          delete filter.address;
+        } else {
+          filter.address = { $regex: req.query.district, $options: "i" };
+        }
+      }
+
+      // Sport filter (từ types)
+      if (req.query.sport && req.query.sport !== "all") {
+        filter.types = { $in: [req.query.sport] };
+      }
+
+      // Date filter (createdAt)
+      if (req.query.date) {
+        const specificDate = new Date(req.query.date);
+        specificDate.setHours(0, 0, 0, 0);
+        const nextDay = new Date(specificDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        filter.createdAt = { $gte: specificDate, $lt: nextDay };
+      } else if (req.query.startDate && req.query.endDate) {
+        const startDate = new Date(req.query.startDate);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(req.query.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        filter.createdAt = { $gte: startDate, $lte: endDate };
+      }
+
+      // Fetch facilities
+      const facilities = await Facility.find(filter)
+        .populate("owner", "name email phone avatar")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit);
+
+      const total = await Facility.countDocuments(filter);
+
+      // Get stats
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const todayCount = await Facility.countDocuments({
+        ...filter,
+        createdAt: { $gte: today, $lt: tomorrow },
+      });
+
+      const pendingCount = await Facility.countDocuments({
+        ...filter,
+        status: "pending",
+      });
+
+      const activeCount = await Facility.countDocuments({
+        ...filter,
+        status: "opening",
+      });
+
+      res.json({
+        success: true,
+        data: {
+          facilities,
+          pagination: {
+            page,
+            limit,
+            total,
+            pages: Math.ceil(total / limit),
+          },
+          stats: {
+            total,
+            today: todayCount,
+            pending: pendingCount,
+            active: activeCount,
+          },
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * BE: PUT /api/facilities/:id/approve
+ * Duyệt cơ sở (chỉ Admin)
+ */
+router.put(
+  "/:id/approve",
+  authenticateToken,
+  requireAdmin,
+  async (req, res, next) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy cơ sở",
+        });
+      }
+
+      const facility = await Facility.findById(req.params.id);
+      if (!facility) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy cơ sở",
+        });
+      }
+
+      facility.status = "opening";
+      await facility.save();
+
+      await logAudit(
+        "APPROVE_FACILITY",
+        req.user._id,
+        req,
+        {
+          facilityId: facility._id,
+          facilityName: facility.name,
+        }
+      );
+
+      res.json({
+        success: true,
+        message: "Duyệt cơ sở thành công",
+        data: facility,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * BE: PUT /api/facilities/:id/reject
+ * Từ chối cơ sở (chỉ Admin)
+ */
+router.put(
+  "/:id/reject",
+  authenticateToken,
+  requireAdmin,
+  async (req, res, next) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy cơ sở",
+        });
+      }
+
+      const facility = await Facility.findById(req.params.id);
+      if (!facility) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy cơ sở",
+        });
+      }
+
+      const { reason } = req.body;
+
+      facility.status = "closed";
+      await facility.save();
+
+      await logAudit(
+        "REJECT_FACILITY",
+        req.user._id,
+        req,
+        {
+          facilityId: facility._id,
+          facilityName: facility.name,
+          reason: reason || null,
+        }
+      );
+
+      res.json({
+        success: true,
+        message: "Từ chối cơ sở thành công",
+        data: facility,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export default router;

@@ -64,7 +64,10 @@ const auditLogSchema = new mongoose.Schema(
         "ASSIGN_COURT_TO_LEAGUE",
         "REGISTER_TO_LEAGUE",
         "APPROVE_TEAM_REGISTRATION",
-        "REJECT_TEAM_REGISTRATION"
+        "REJECT_TEAM_REGISTRATION",
+        "CREATE_PARTNER_APPLICATION",
+        "APPROVE_PARTNER_APPLICATION",
+        "REJECT_PARTNER_APPLICATION"
       ],
     },
     ipAddress: {

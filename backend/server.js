@@ -46,6 +46,7 @@ import aiRoutes from "./routes/ai.js";
 import User from "./models/User.js";
 import loyaltyRoutes from "./routes/loyalty.js";
 import referralRoutes from "./routes/referral.js";
+import partnerRoutes from "./routes/partner.js";
 
 const app = express();
 
@@ -137,6 +138,7 @@ app.use("/api/checkin", checkinRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/sport-categories", sportCategoryRoutes);
 app.use("/api/court-types", courtTypeRoutes);
+app.use("/api/partner-applications", partnerRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/provinces", provinceRoutes);

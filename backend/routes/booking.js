@@ -547,6 +547,190 @@ router.get("/my-bookings", authenticateToken, async (req, res, next) => {
 });
 
 /**
+ * GET /api/bookings/admin/all
+ * Lấy tất cả bookings (chỉ admin)
+ */
+router.get(
+  "/admin/all",
+  authenticateToken,
+  requireAdmin,
+  async (req, res, next) => {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const skip = (page - 1) * limit;
+
+      // Build filter
+      const filter = {};
+
+      // Status filter
+      if (req.query.status) {
+        filter.status = req.query.status;
+      }
+
+      // Payment status filter
+      if (req.query.paymentStatus) {
+        filter.paymentStatus = req.query.paymentStatus;
+      }
+
+      // Date filter
+      if (req.query.date) {
+        const date = new Date(req.query.date);
+        date.setHours(0, 0, 0, 0);
+        const nextDay = new Date(date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        filter.date = { $gte: date, $lt: nextDay };
+      }
+
+      // Date range filter
+      if (req.query.startDate && req.query.endDate) {
+        const startDate = new Date(req.query.startDate);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(req.query.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        filter.date = { $gte: startDate, $lte: endDate };
+      }
+
+      // Facility filter
+      if (req.query.facilityId) {
+        filter.facility = req.query.facilityId;
+      }
+
+      // Search functionality
+      if (req.query.search) {
+        const searchTerm = req.query.search.trim();
+
+        // Check if search term looks like a booking code (BK-YYYYMMDD-XXXX)
+        if (/^BK-\d{8}-\d{4}$/i.test(searchTerm)) {
+          filter.bookingCode = searchTerm.toUpperCase();
+        } else {
+          // Search in facility name, user name, email, phone
+          const facilities = await Facility.find({
+            name: { $regex: searchTerm, $options: "i" },
+          }).select("_id");
+
+          const facilityIds = facilities.map((f) => f._id);
+
+          // Also search in user fields
+          const users = await User.find({
+            $or: [
+              { name: { $regex: searchTerm, $options: "i" } },
+              { email: { $regex: searchTerm, $options: "i" } },
+              { phone: { $regex: searchTerm, $options: "i" } },
+            ],
+          }).select("_id");
+
+          const userIds = users.map((u) => u._id);
+
+          // Combine filters - search in multiple fields
+          filter.$or = [
+            { facility: { $in: facilityIds } },
+            { user: { $in: userIds } },
+            { "contactInfo.name": { $regex: searchTerm, $options: "i" } },
+            { "contactInfo.email": { $regex: searchTerm, $options: "i" } },
+            { "contactInfo.phone": { $regex: searchTerm, $options: "i" } },
+            { bookingCode: { $regex: searchTerm, $options: "i" } },
+          ];
+        }
+      }
+
+      // Get bookings - Sort by createdAt descending first (newest first), then by date
+      const bookings = await Booking.find(filter)
+        .populate("court", "name type price")
+        .populate("user", "name email phone avatar")
+        .populate({
+          path: "facility",
+          select: "name address location owner",
+          populate: {
+            path: "owner",
+            select: "name email",
+          },
+        })
+        .sort({ createdAt: -1, date: 1 })
+        .skip(skip)
+        .limit(limit);
+
+      // Auto-update status for past bookings
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const updatePromises = [];
+      for (const booking of bookings) {
+        const bookingDate = new Date(booking.date);
+        bookingDate.setHours(0, 0, 0, 0);
+
+        // If booking date has passed and status is still pending/confirmed, update to completed
+        if (
+          bookingDate < today &&
+          (booking.status === "pending" || booking.status === "confirmed")
+        ) {
+          booking.status = "completed";
+          booking.completedAt = new Date();
+          updatePromises.push(booking.save());
+        }
+      }
+
+      // Wait for all updates to complete (don't block response)
+      if (updatePromises.length > 0) {
+        Promise.all(updatePromises).catch((err) => {
+          console.error("Error auto-updating booking statuses:", err);
+        });
+      }
+
+      const total = await Booking.countDocuments(filter);
+
+      // Get stats
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const todayBookings = await Booking.countDocuments({
+        date: { $gte: today, $lt: tomorrow },
+      });
+
+      const pendingBookings = await Booking.countDocuments({
+        status: "pending",
+      });
+
+      const todayRevenue = await Booking.aggregate([
+        {
+          $match: {
+            date: { $gte: today, $lt: tomorrow },
+            paymentStatus: "paid",
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: "$totalAmount" },
+          },
+        },
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          bookings,
+          pagination: {
+            page,
+            limit,
+            total,
+            pages: Math.ceil(total / limit),
+          },
+          stats: {
+            total,
+            today: todayBookings,
+            pending: pendingBookings,
+            revenueToday: todayRevenue[0]?.total || 0,
+          },
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * GET /api/bookings/facility/:facilityId
  * Lấy danh sách bookings của facility (chỉ owner)
  */

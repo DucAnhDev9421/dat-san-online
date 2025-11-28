@@ -1,7 +1,7 @@
 import React from 'react'
 import '../../../../styles/Partner.css'
 
-export default function RegistrationForm({ formData, onInputChange, onSubmit }) {
+export default function RegistrationForm({ formData, onInputChange, onSubmit, isSubmitting = false }) {
   return (
     <section id="register-form" className="registration-section">
       <div className="form-container">
@@ -26,6 +26,7 @@ export default function RegistrationForm({ formData, onInputChange, onSubmit }) 
               onChange={e => onInputChange('name', e.target.value)}
               className="form-input"
               placeholder="Nguyễn Văn A"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -40,6 +41,7 @@ export default function RegistrationForm({ formData, onInputChange, onSubmit }) 
               onChange={e => onInputChange('email', e.target.value)}
               className="form-input"
               placeholder="email@example.com"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -54,11 +56,12 @@ export default function RegistrationForm({ formData, onInputChange, onSubmit }) 
               onChange={e => onInputChange('phone', e.target.value)}
               className="form-input"
               placeholder="0901234567"
+              disabled={isSubmitting}
             />
           </div>
 
-          <button type="submit" className="submit-btn">
-            Gửi Đăng Ký →
+          <button type="submit" className="submit-btn" disabled={isSubmitting}>
+            {isSubmitting ? 'Đang gửi...' : 'Gửi Đăng Ký →'}
           </button>
 
           <p className="form-footer">

@@ -173,6 +173,26 @@ export const analyticsApi = {
       throw handleApiError(error);
     }
   },
+
+  /**
+   * Get owner today schedule
+   * GET /api/analytics/owner/today-schedule?facilityId=xxx
+   * @param {String} facilityId - Facility ID
+   * @returns {Promise} Today schedule with time slots
+   */
+  getOwnerTodaySchedule: async (facilityId) => {
+    try {
+      if (!facilityId) {
+        throw new Error('facilityId is required');
+      }
+      const response = await api.get('/analytics/owner/today-schedule', {
+        params: { facilityId },
+      });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 
 export default analyticsApi;

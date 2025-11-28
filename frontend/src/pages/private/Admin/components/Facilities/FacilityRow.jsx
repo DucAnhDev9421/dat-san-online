@@ -5,7 +5,6 @@ const FacilityRow = ({
   facility,
   statusMap,
   formatPrice,
-  activeTab,
   onView,
   onApprove,
   onReject,
@@ -47,7 +46,10 @@ const FacilityRow = ({
       </td>
       <td style={{ padding: 12 }}>
         <button
-          onClick={() => onNavigateToOwner(facility.ownerId)}
+          onClick={() => {
+            const ownerId = facility.ownerId || facility.ownerObject?._id || facility.ownerObject;
+            onNavigateToOwner(ownerId, facility);
+          }}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -59,9 +61,16 @@ const FacilityRow = ({
             fontWeight: 500,
             fontSize: 14,
             padding: 0,
+            textDecoration: "none",
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.textDecoration = "underline";
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.textDecoration = "none";
           }}
         >
-          {facility.owner}
+          {facility.owner || "N/A"}
           <ExternalLink size={14} />
         </button>
       </td>
@@ -84,71 +93,26 @@ const FacilityRow = ({
       </td>
       <td style={{ padding: 12, color: "#6b7280" }}>{facility.createdAt}</td>
       <td style={{ padding: 12, whiteSpace: "nowrap" }}>
-        {activeTab === "pending" ? (
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              onClick={() => onApprove(facility)}
-              style={{
-                background: "#10b981",
-                color: "#fff",
-                border: 0,
-                borderRadius: 8,
-                padding: "8px 12px",
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-              title="Duyệt cơ sở"
-            >
-              <Check size={14} />
-              Duyệt
-            </button>
-            <button
-              onClick={() => onReject(facility)}
-              style={{
-                background: "#ef4444",
-                color: "#fff",
-                border: 0,
-                borderRadius: 8,
-                padding: "8px 12px",
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-              title="Từ chối cơ sở"
-            >
-              <X size={14} />
-              Từ chối
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => onView(facility)}
-            style={{
-              background: "#06b6d4",
-              color: "#fff",
-              border: 0,
-              borderRadius: 8,
-              padding: "8px 12px",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-            title="Xem chi tiết"
-          >
-            <Eye size={14} />
-            Xem chi tiết
-          </button>
-        )}
+        <button
+          onClick={() => onView(facility)}
+          style={{
+            background: "#06b6d4",
+            color: "#fff",
+            border: 0,
+            borderRadius: 8,
+            padding: "8px 12px",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+          title="Xem chi tiết"
+        >
+          <Eye size={14} />
+          Xem chi tiết
+        </button>
       </td>
     </tr>
   );

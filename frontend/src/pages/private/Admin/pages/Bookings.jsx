@@ -1,15 +1,18 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Download, FileSpreadsheet } from "lucide-react";
-import { bookingData } from "../data/mockData";
+import { bookingApi } from "../../../../api/bookingApi";
+import { toast } from "react-toastify";
 import BookingDetailModal from "../modals/BookingDetailModal";
 import BookingFilters from "../components/Bookings/BookingFilters";
 import BookingTable from "../components/Bookings/BookingTable";
 
 const Bookings = () => {
-  const [bookings, setBookings] = useState(bookingData);
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
 
   // Bộ lọc
   const [statusFilter, setStatusFilter] = useState("all");
@@ -21,13 +24,87 @@ const Bookings = () => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
 
-  // Lấy danh sách duy nhất
+  // Fetch bookings từ API
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        setLoading(true);
+        const params = {
+          page,
+          limit: pageSize,
+        };
+
+        if (statusFilter !== "all") {
+          params.status = statusFilter;
+        }
+
+        if (dateFilter) {
+          params.date = dateFilter;
+        }
+
+        if (searchQuery) {
+          params.search = searchQuery;
+        }
+
+        const result = await bookingApi.getAllBookings(params);
+        if (result.success) {
+          // Transform data từ API sang format của component
+          const transformedBookings = result.data.bookings.map((booking) => {
+            const firstSlot = booking.timeSlots?.[0] || "";
+            const [startTime] = firstSlot.split("-");
+            const lastSlot = booking.timeSlots?.[booking.timeSlots.length - 1] || "";
+            const [, endTime] = lastSlot.split("-");
+
+            return {
+              id: booking.bookingCode || booking._id,
+              _id: booking._id,
+              customer: booking.user?.name || booking.contactInfo?.name || "Khách vãng lai",
+              phone: booking.user?.phone || booking.contactInfo?.phone || "",
+              email: booking.user?.email || booking.contactInfo?.email || "",
+              facility: booking.facility?.name || "",
+              facilityId: booking.facility?._id || booking.facility,
+              court: booking.court?.name || "",
+              date: new Date(booking.date).toISOString().split("T")[0],
+              startTime: startTime || "",
+              endTime: endTime || "",
+              time: booking.timeSlots?.join(", ") || "",
+              timeSlots: booking.timeSlots || [],
+              price: booking.totalAmount || 0,
+              status: booking.status || "pending",
+              pay: booking.paymentStatus || "pending",
+              paymentMethod: booking.paymentMethod === "momo" ? "Momo" : 
+                            booking.paymentMethod === "vnpay" ? "VNPay" : 
+                            booking.paymentMethod === "cash" ? "Tiền mặt" : booking.paymentMethod || "",
+              bookingDate: new Date(booking.createdAt).toISOString().split("T")[0],
+              bookingTime: new Date(booking.createdAt).toTimeString().split(" ")[0].substring(0, 5),
+              notes: booking.notes || booking.ownerNotes || "",
+              user: booking.user,
+              courtData: booking.court,
+              facilityData: booking.facility,
+            };
+          });
+
+          setBookings(transformedBookings);
+          setTotalItems(result.data.pagination?.total || 0);
+        }
+      } catch (error) {
+        console.error("Error fetching bookings:", error);
+        toast.error(error.message || "Không thể tải danh sách đặt sân");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBookings();
+  }, [page, pageSize, statusFilter, dateFilter, searchQuery]);
+
+  // Lấy danh sách duy nhất (cần fetch riêng hoặc từ API)
   const uniqueFacilities = useMemo(() => {
-    return [...new Set(bookings.map((b) => b.facility))].sort();
+    return [...new Set(bookings.map((b) => b.facility).filter(Boolean))].sort();
   }, [bookings]);
 
   const uniqueCustomers = useMemo(() => {
-    return [...new Set(bookings.map((b) => b.customer))].sort();
+    return [...new Set(bookings.map((b) => b.customer).filter(Boolean))].sort();
   }, [bookings]);
 
   // Payment method map (statusMap không còn cần vì đã dùng StatusBadge từ shared)
@@ -38,62 +115,18 @@ const Bookings = () => {
     "Tiền mặt": { label: "Tiền mặt", color: "#059669", bg: "#e6f9f0" },
   };
 
-  // Lọc dữ liệu
+  // Lọc dữ liệu (client-side filtering cho facility và customer vì API chưa hỗ trợ)
   const filteredBookings = useMemo(() => {
     return bookings.filter((booking) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        [
-          booking.id,
-          booking.customer,
-          booking.facility,
-          booking.phone,
-          booking.email,
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
-
-      const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "confirmed" && booking.status === "confirmed") ||
-        (statusFilter === "pending" && booking.status === "pending") ||
-        (statusFilter === "completed" && booking.status === "completed") ||
-        (statusFilter === "cancelled" && booking.status === "cancelled");
-
       const matchesFacility =
         facilityFilter === "all" || booking.facility === facilityFilter;
 
       const matchesCustomer =
         customerFilter === "all" || booking.customer === customerFilter;
 
-      const matchesDate = !dateFilter || booking.date === dateFilter;
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesFacility &&
-        matchesCustomer &&
-        matchesDate
-      );
+      return matchesFacility && matchesCustomer;
     });
-  }, [
-    bookings,
-    searchQuery,
-    statusFilter,
-    facilityFilter,
-    customerFilter,
-    dateFilter,
-  ]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredBookings.length / pageSize)
-  );
-  const bookingSlice = filteredBookings.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
+  }, [bookings, facilityFilter, customerFilter]);
 
   // Handlers
   const handleViewDetails = (booking) => {
@@ -123,8 +156,8 @@ const Bookings = () => {
       booking.id,
       booking.facility,
       booking.customer,
-      `${booking.date} ${booking.startTime}`,
-      `${booking.date} ${booking.endTime}`,
+      `${booking.date} ${booking.startTime || ""}`,
+      `${booking.date} ${booking.endTime || ""}`,
       booking.status === "confirmed" ? "Đã xác nhận" :
       booking.status === "pending" ? "Chờ xác nhận" :
       booking.status === "completed" ? "Đã hoàn thành" :
@@ -253,20 +286,43 @@ const Bookings = () => {
         onReset={resetFilters}
       />
 
-      <BookingTable
-        bookings={bookingSlice}
-        page={page}
-        pageSize={pageSize}
-        totalItems={filteredBookings.length}
-        paymentMethodMap={paymentMethodMap}
-        formatPrice={formatPrice}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setPage(1);
-        }}
-        onView={handleViewDetails}
-      />
+      {loading ? (
+        <div style={{ textAlign: "center", padding: "40px" }}>
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              border: "4px solid #e5e7eb",
+              borderTop: "4px solid #3b82f6",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite",
+              margin: "0 auto 1rem",
+            }}
+          />
+          <p style={{ color: "#6b7280" }}>Đang tải dữ liệu...</p>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      ) : (
+        <BookingTable
+          bookings={filteredBookings}
+          page={page}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          paymentMethodMap={paymentMethodMap}
+          formatPrice={formatPrice}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+          onView={handleViewDetails}
+        />
+      )}
 
       <BookingDetailModal
         isOpen={isDetailModalOpen}

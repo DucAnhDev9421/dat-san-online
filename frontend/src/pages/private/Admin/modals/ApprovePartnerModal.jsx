@@ -1,22 +1,15 @@
 import React, { useState } from "react";
-import { X, XCircle, AlertTriangle } from "lucide-react";
+import { X, CheckCircle, User, Mail, Phone } from "lucide-react";
 import useClickOutside from "../../../../hook/use-click-outside";
 import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
 import useEscapeKey from "../../../../hook/use-escape-key";
 
-const RejectFacilityModal = ({ isOpen, onClose, onConfirm, facility }) => {
+const ApprovePartnerModal = ({ isOpen, onClose, onConfirm, application }) => {
   useBodyScrollLock(isOpen);
   useEscapeKey(onClose, isOpen);
   const modalRef = useClickOutside(onClose, isOpen);
-  const [rejectionReason, setRejectionReason] = useState("");
 
-  if (!isOpen || !facility) return null;
-
-  const handleConfirm = () => {
-    if (onConfirm) onConfirm(rejectionReason);
-    if (onClose) onClose();
-    setRejectionReason(""); // Reset sau khi đóng
-  };
+  if (!isOpen || !application) return null;
 
   return (
     <div
@@ -41,7 +34,7 @@ const RejectFacilityModal = ({ isOpen, onClose, onConfirm, facility }) => {
           background: "#fff",
           borderRadius: 16,
           width: "100%",
-          maxWidth: "480px",
+          maxWidth: "520px",
           overflow: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -62,16 +55,16 @@ const RejectFacilityModal = ({ isOpen, onClose, onConfirm, facility }) => {
                 width: 40,
                 height: 40,
                 borderRadius: "50%",
-                background: "#fee2e2",
+                background: "#e6f9f0",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <XCircle size={20} color="#ef4444" />
+              <CheckCircle size={20} color="#10b981" />
             </div>
             <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#111827" }}>
-              Từ chối cơ sở
+              Duyệt đơn đăng ký đối tác
             </h3>
           </div>
           <button
@@ -91,51 +84,59 @@ const RejectFacilityModal = ({ isOpen, onClose, onConfirm, facility }) => {
 
         {/* Body */}
         <div style={{ padding: "24px" }}>
-          <p style={{ fontSize: 15, color: "#374151", marginBottom: 12, lineHeight: 1.6 }}>
-            Bạn có chắc muốn từ chối cơ sở <strong>"{facility.name}"</strong>?
+          <p style={{ fontSize: 15, color: "#374151", marginBottom: 20, lineHeight: 1.6 }}>
+            Bạn có chắc muốn duyệt đơn đăng ký đối tác này? Người dùng sẽ được cấp quyền <strong>Owner</strong> và có thể tạo cơ sở.
           </p>
+
+          {/* Thông tin đơn đăng ký */}
           <div
             style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 8,
-              padding: "12px",
-              background: "#fef3c7",
-              borderRadius: 8,
-              marginBottom: 12,
+              background: "#f9fafb",
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 20,
             }}
           >
-            <AlertTriangle size={16} color="#d97706" style={{ marginTop: 2, flexShrink: 0 }} />
-            <p style={{ fontSize: 13, color: "#92400e", margin: 0, lineHeight: 1.5 }}>
-              Cơ sở này sẽ bị xóa khỏi hệ thống và không thể khôi phục.
-            </p>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <User size={16} color="#6b7280" />
+                <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>
+                  Họ và tên
+                </span>
+              </div>
+              <div style={{ fontSize: 15, color: "#1f2937", fontWeight: 500 }}>
+                {application.name || application.user?.name || "N/A"}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <Mail size={16} color="#6b7280" />
+                <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>
+                  Email
+                </span>
+              </div>
+              <div style={{ fontSize: 15, color: "#1f2937", fontWeight: 500 }}>
+                {application.email || application.user?.email || "N/A"}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <Phone size={16} color="#6b7280" />
+                <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>
+                  Số điện thoại
+                </span>
+              </div>
+              <div style={{ fontSize: 15, color: "#1f2937", fontWeight: 500 }}>
+                {application.phone || application.user?.phone || "N/A"}
+              </div>
+            </div>
           </div>
-          <p style={{ fontSize: 13, color: "#ef4444", marginBottom: 16 }}>
-            ⚠️ Hành động này không thể hoàn tác.
+
+          <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
+            Sau khi duyệt, người dùng sẽ nhận được thông báo và có thể đăng nhập với quyền Owner.
           </p>
-          <div>
-            <label
-              htmlFor="rejectionReason"
-              style={{ display: "block", fontSize: 13, color: "#374151", marginBottom: 6 }}
-            >
-              Lý do từ chối (tùy chọn):
-            </label>
-            <textarea
-              id="rejectionReason"
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              rows="4"
-              style={{
-                width: "100%",
-                padding: "10px",
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-                fontSize: 14,
-                resize: "vertical",
-              }}
-              placeholder="Nhập lý do từ chối..."
-            ></textarea>
-          </div>
         </div>
 
         {/* Footer */}
@@ -172,10 +173,12 @@ const RejectFacilityModal = ({ isOpen, onClose, onConfirm, facility }) => {
             Hủy
           </button>
           <button
-            onClick={handleConfirm}
+            onClick={() => {
+              if (onConfirm) onConfirm();
+            }}
             style={{
               padding: "10px 24px",
-              background: "#ef4444",
+              background: "#10b981",
               color: "#fff",
               border: "none",
               borderRadius: 10,
@@ -185,13 +188,13 @@ const RejectFacilityModal = ({ isOpen, onClose, onConfirm, facility }) => {
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) => {
-              e.target.style.background = "#dc2626";
+              e.target.style.background = "#059669";
             }}
             onMouseLeave={(e) => {
-              e.target.style.background = "#ef4444";
+              e.target.style.background = "#10b981";
             }}
           >
-            Từ chối
+            Duyệt và cấp quyền Owner
           </button>
         </div>
       </div>
@@ -199,5 +202,5 @@ const RejectFacilityModal = ({ isOpen, onClose, onConfirm, facility }) => {
   );
 };
 
-export default RejectFacilityModal;
+export default ApprovePartnerModal;
 
