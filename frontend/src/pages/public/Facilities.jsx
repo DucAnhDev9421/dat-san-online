@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import SearchBar from "./Facilities/components/SearchBar"
 import FilterBar from "./Facilities/components/FilterBar"
 import ViewControls from "./Facilities/components/ViewControls"
@@ -13,6 +13,7 @@ import "../../styles/Facilities.css"
 
 export default function Facilities() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { userLocation } = useUserLocation()
   const [query, setQuery] = useState("")
   const [sport, setSport] = useState("Tất cả")
@@ -30,6 +31,96 @@ export default function Facilities() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const limit = 20
+
+  // Map sport values from HomePage (English) to FilterBar format (Vietnamese)
+  const mapSportFromUrl = (sportParam) => {
+    const sportMap = {
+      'football': 'Bóng đá',
+      'badminton': 'Cầu lông',
+      'tennis': 'Tennis',
+      'pickleball': 'Tennis', // Map pickleball to Tennis if not available
+    }
+    return sportMap[sportParam] || 'Tất cả'
+  }
+
+  // Map sport from Vietnamese to English format (for URL)
+  const mapSportToUrl = (sport) => {
+    const sportMap = {
+      'Bóng đá': 'football',
+      'Cầu lông': 'badminton',
+      'Tennis': 'tennis',
+    }
+    return sportMap[sport] || null
+  }
+
+  // Normalize province name (remove prefix like "Thành phố", "TP.", "Tỉnh")
+  const normalizeProvinceName = (name) => {
+    if (!name) return ""
+    return name
+      .replace(/^Thành phố\s+/i, "")
+      .replace(/^TP\.\s*/i, "")
+      .replace(/^Tỉnh\s+/i, "")
+      .trim()
+  }
+
+  // Track if we're initializing from URL to avoid infinite loop
+  const [isInitializing, setIsInitializing] = useState(true)
+
+  // Read URL params and apply to state when component mounts or URL changes
+  // Wait for provinces to be loaded before applying province/district filters
+  useEffect(() => {
+    // Only apply URL params if provinces are already loaded
+    if (provinces.length === 0) return
+
+    const sportParam = searchParams.get('sport')
+    const provinceParam = searchParams.get('province')
+    const districtParam = searchParams.get('district')
+
+    // Mark as initializing to prevent URL update loop
+    setIsInitializing(true)
+
+    if (sportParam) {
+      const mappedSport = mapSportFromUrl(sportParam)
+      setSport(mappedSport)
+    }
+
+    if (provinceParam) {
+      // Normalize province name from URL to compare with provinces list
+      // (e.g., "Hồ Chí Minh" should match "Thành phố Hồ Chí Minh")
+      const normalizedParam = normalizeProvinceName(provinceParam)
+      const province = provinces.find(p => {
+        const normalizedName = normalizeProvinceName(p.name)
+        // Try both normalized and exact match
+        return normalizedName === normalizedParam || p.name === provinceParam
+      })
+      
+      if (province) {
+        // Set with original name from API (not normalized)
+        setSelectedProvince(province.name)
+      }
+    }
+
+    if (districtParam && provinceParam) {
+      // District will be set after province is set (via the districts useEffect)
+      // We'll handle this in the districts useEffect
+    }
+
+    // Mark initialization complete after a short delay
+    setTimeout(() => setIsInitializing(false), 100)
+  }, [searchParams, provinces])
+
+  // Apply district from URL params after districts are loaded
+  useEffect(() => {
+    if (districts.length === 0) return
+
+    const districtParam = searchParams.get('district')
+    if (districtParam) {
+      const districtExists = districts.some(d => d.name === districtParam)
+      if (districtExists) {
+        setSelectedDistrict(districtParam)
+      }
+    }
+  }, [districts, searchParams])
 
   // Fetch provinces data from API
   useEffect(() => {
@@ -64,13 +155,17 @@ export default function Facilities() {
       const province = provinces.find(p => p.name === selectedProvince)
       if (province && province.districts) {
         setDistricts(province.districts)
-        setSelectedDistrict("")
+        // Only reset district if it's not from URL params
+        const districtParam = searchParams.get('district')
+        if (!districtParam) {
+          setSelectedDistrict("")
+        }
       }
     } else {
       setDistricts([])
       setSelectedDistrict("")
     }
-  }, [selectedProvince, provinces])
+  }, [selectedProvince, provinces, searchParams])
 
   // Transform facility data to component format
   const transformFacilityToVenue = (facility) => {
@@ -132,6 +227,38 @@ export default function Facilities() {
     setPage(1)
   }, [query, sport, selectedProvince, selectedDistrict, quick, filterNearby, maxDistance])
 
+  // Sync filters with URL params (update URL when filters change)
+  useEffect(() => {
+    // Don't update URL if we're still initializing from URL params
+    if (isInitializing) return
+
+    const params = new URLSearchParams()
+    
+    // Map sport from Vietnamese to English format (for URL compatibility with HomePage)
+    const sportUrl = mapSportToUrl(sport)
+    if (sportUrl && sport !== "Tất cả") {
+      params.set('sport', sportUrl)
+    }
+    
+    if (selectedProvince) {
+      params.set('province', selectedProvince)
+    }
+    
+    if (selectedDistrict) {
+      params.set('district', selectedDistrict)
+    }
+    
+    // Only update URL if params have changed
+    const currentParams = new URLSearchParams(searchParams)
+    const paramsString = params.toString()
+    const currentParamsString = currentParams.toString()
+    
+    if (paramsString !== currentParamsString) {
+      // Update URL without causing a page reload
+      setSearchParams(params, { replace: true })
+    }
+  }, [sport, selectedProvince, selectedDistrict, isInitializing, searchParams, setSearchParams])
+
   // Fetch facilities from API
   useEffect(() => {
     const fetchFacilities = async () => {
@@ -148,36 +275,28 @@ export default function Facilities() {
           status: 'opening' // Only get opening facilities
         }
 
-        // Add search query
-        if (query.trim()) {
-          params.address = query.trim()
-        }
-
         // Add sport filter
         if (sport !== "Tất cả") {
           params.type = sport
         }
 
-        // Add province/district filter
-        if (selectedProvince) {
-          // Try to find province code or use name
+        // Add location filter (province/district)
+        // Priority: district > province > query text
+        // If district is selected, use only district (most specific)
+        // If only province is selected, use province
+        // If query text exists, use it separately
+        if (selectedDistrict) {
+          // District is most specific, use it alone
+          params.address = selectedDistrict
+        } else if (selectedProvince) {
+          // Use province if no district selected
           const province = provinces.find(p => p.name === selectedProvince)
           if (province) {
-            // Add province to address search
-            if (!params.address) {
-              params.address = selectedProvince
-            } else {
-              params.address = `${params.address}, ${selectedProvince}`
-            }
+            params.address = selectedProvince
           }
-        }
-
-        if (selectedDistrict) {
-          if (!params.address) {
-            params.address = selectedDistrict
-          } else {
-            params.address = `${params.address}, ${selectedDistrict}`
-          }
+        } else if (query.trim()) {
+          // Use query text if no location filter
+          params.address = query.trim()
         }
 
         // Add location-based filter if enabled and user location is available
@@ -249,6 +368,8 @@ export default function Facilities() {
     setSelectedDistrict("")
     setSport("Tất cả")
     setFilterNearby(false)
+    // Clear URL params
+    setSearchParams({}, { replace: true })
   }
 
   const handleToggleNearby = () => {

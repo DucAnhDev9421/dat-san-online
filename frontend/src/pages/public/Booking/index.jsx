@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import useDeviceType from '../../../hook/use-device-type'
 import VenueGallery from './components/VenueGallery'
 import VenueInfo from './components/VenueInfo'
@@ -10,15 +10,18 @@ import TimeSlotSelector from './components/TimeSlotSelector'
 import BookingSummary from './components/BookingSummary'
 import CalendarModal from './modals/CalendarModal'
 import BookingModal from './modals/BookingModal'
-import { facilityApi } from '../../../api/facilityApi'
-import { courtApi } from '../../../api/courtApi'
-import { categoryApi } from '../../../api/categoryApi'
-import { bookingApi } from '../../../api/bookingApi'
-import { reviewApi } from '../../../api/reviewApi'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useSocket } from '../../../contexts/SocketContext'
 import { toast } from 'react-toastify'
-import { formatDateToYYYYMMDD } from './utils/dateHelpers'
+
+// Custom hooks
+import { useFacilityData } from './hooks/useFacilityData'
+import { useCourtData } from './hooks/useCourtData'
+import { useSlotLocking } from './hooks/useSlotLocking'
+import { useAutoDeselect } from './hooks/useAutoDeselect'
+import { useSlotCleanup } from './hooks/useSlotCleanup'
+import { useBookingSubmission } from './hooks/useBookingSubmission'
+import { useUnlockOnUnmount } from './hooks/useUnlockOnUnmount'
 
 function Booking() {
   const navigate = useNavigate()
@@ -28,13 +31,7 @@ function Booking() {
   const { user, isAuthenticated } = useAuth()
   const { defaultSocket, isConnected, joinFacility, leaveFacility, joinCourt, leaveCourt } = useSocket()
 
-  // State management
-  const [venueData, setVenueData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [courts, setCourts] = useState([])
-  const [courtTypes, setCourtTypes] = useState([])
-  const [sportCategories, setSportCategories] = useState([])
+  // Local UI state
   const [selectedSportCategory, setSelectedSportCategory] = useState(null)
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date()
@@ -42,733 +39,122 @@ function Booking() {
     return today
   })
   const [selectedSlots, setSelectedSlots] = useState([])
-  const [selectedCourt, setSelectedCourt] = useState(null)
   const [selectedFieldType, setSelectedFieldType] = useState(null)
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
   const [contactInfo, setContactInfo] = useState(null)
   const [timeSlotsData, setTimeSlotsData] = useState([])
-  const [lockedSlots, setLockedSlots] = useState({}) // Track locked slots: { "courtId_date_timeSlot": { lockedBy, expiresAt, isLockedByMe, isLockedByOther } }
-  const [bookedSlots, setBookedSlots] = useState(new Set()) // Track booked slots: Set of "courtId_date_timeSlot"
-  const hasUnlockedRef = useRef(false) // Track if we've already unlocked on unmount
-  const lockedSlotsByMeRef = useRef(new Set()) // Track all slot keys locked by current user for quick unlock
-  const [reviews, setReviews] = useState([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
-  const [reviewsStats, setReviewsStats] = useState({ averageRating: 0, totalReviews: 0 })
   const [reviewsPage, setReviewsPage] = useState(1)
-  const [reviewsTotal, setReviewsTotal] = useState(0)
   const [promotionData, setPromotionData] = useState(null) // { code, promotion, discountAmount }
 
-  // Transform facility data to venue format for components
-  const transformFacilityToVenue = (facility) => {
-    // Format operating hours
-    const formatOperatingHours = (hours) => {
-      if (!hours) return '06:00 - 22:00'
-      
-      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-      const today = days[new Date().getDay()]
-      const todayHours = hours[today]
-      
-      if (todayHours && todayHours.isOpen) {
-        return `${todayHours.open} - ${todayHours.close}`
-      }
-      
-      // Fallback: return first available day
-      for (const day of days) {
-        if (hours[day] && hours[day].isOpen) {
-          return `${hours[day].open} - ${hours[day].close}`
-        }
-      }
-      
-      return '06:00 - 22:00'
-    }
+  // Custom hooks - tất cả logic phức tạp ở đây
+  const {
+    venueData,
+    loading,
+    error,
+    reviews,
+    reviewsStats,
+    reviewsTotal,
+    sportCategories,
+    timeSlotDuration,
+    setVenueData,
+    setReviews,
+    setReviewsStats,
+    setReviewsTotal
+  } = useFacilityData(venueId)
 
-    // Format price
-    const formatPrice = (pricePerHour) => {
-      if (!pricePerHour) return '0 VNĐ/giờ'
-      return new Intl.NumberFormat('vi-VN', {
-        style: 'currency',
-        currency: 'VND',
-        minimumFractionDigits: 0
-      }).format(pricePerHour) + '/giờ'
-    }
+  const {
+    courts,
+    courtTypes,
+    selectedCourt,
+    setSelectedCourt
+  } = useCourtData(venueId, selectedSportCategory, selectedFieldType)
 
-    // Get images array
-    const images = facility.images && facility.images.length > 0
-      ? facility.images.map(img => img.url)
-      : ['/sports-meeting.webp']
+  const {
+    lockedSlots,
+    bookedSlots,
+    setLockedSlots,
+    setBookedSlots,
+    handleSlotLock: handleSlotLockBase,
+    handleSlotUnlock,
+    lockedSlotsByMeRef
+  } = useSlotLocking(
+    venueId,
+    selectedCourt,
+    selectedDate,
+    user,
+    defaultSocket,
+    isAuthenticated,
+    { isConnected, joinFacility, leaveFacility, joinCourt, leaveCourt }
+  )
 
-    return {
-      id: facility._id || facility.id,
-      name: facility.name,
-      address: facility.address,
-      rating: facility.averageRating || facility.rating || 0,
-      reviewCount: facility.reviewCount || 0,
-      phone: facility.phoneNumber || '',
-      price: formatPrice(facility.pricePerHour),
-      pricePerHour: facility.pricePerHour || 0,
-      operatingHours: formatOperatingHours(facility.operatingHours),
-      capacity: facility.capacity || 'N/A',
-      facilities: facility.types || [],
-      services: facility.services || [],
-      description: facility.description || 'Không có mô tả',
-      images: images,
-      location: facility.location || null,
-      sport: facility.types?.[0] || 'Bóng đá'
-    }
+  // Wrapper for handleSlotLock to pass setSelectedSlots
+  const handleSlotLock = (timeSlot) => {
+    handleSlotLockBase(timeSlot, setSelectedSlots)
   }
 
-  // Fetch facility data, courts, and court types from API
+  const { slotTimeoutRef } = useAutoDeselect(
+    selectedSlots,
+    selectedCourt,
+    selectedDate,
+    timeSlotDuration,
+    defaultSocket,
+    isAuthenticated,
+    setSelectedSlots
+  )
+
+  useSlotCleanup(
+    selectedCourt,
+    selectedDate,
+    lockedSlots,
+    bookedSlots,
+    defaultSocket,
+    isAuthenticated,
+    setLockedSlots,
+    setBookedSlots,
+    lockedSlotsByMeRef,
+    setSelectedSlots,
+    slotTimeoutRef
+  )
+
+  useUnlockOnUnmount(defaultSocket, isAuthenticated, lockedSlotsByMeRef, slotTimeoutRef)
+
+  const { handleBookingSubmit, isProcessing } = useBookingSubmission(
+    venueData,
+    selectedCourt,
+    selectedFieldType,
+    selectedSlots,
+    selectedDate,
+    courts,
+    timeSlotDuration,
+    promotionData,
+    contactInfo,
+    user,
+    venueId,
+    setShowBookingModal,
+    slotTimeoutRef,
+    isAuthenticated,
+    timeSlotsData
+  )
+
+  // Reset field type when sport category changes
   useEffect(() => {
-    const fetchData = async () => {
-      if (!venueId) {
-        setError('Không tìm thấy ID cơ sở')
-        setLoading(false)
-        toast.error('Không tìm thấy ID cơ sở')
-        return
-      }
-
-      try {
-        setLoading(true)
-        setError(null)
-        
-        // Fetch facility data
-        const facilityResult = await facilityApi.getFacilityById(venueId)
-        
-        if (!facilityResult.success || !facilityResult.data) {
-          setError('Không tìm thấy cơ sở')
-          toast.error('Không tìm thấy cơ sở')
-          return
-        }
-
-        const transformedData = transformFacilityToVenue(facilityResult.data)
-        setVenueData(transformedData)
-
-        // Fetch reviews for this facility
-        try {
-          const reviewsResult = await reviewApi.getFacilityReviews(venueId, {
-            page: 1,
-            limit: 10
-          })
-          
-          if (reviewsResult.reviews) {
-            // Transform API reviews to component format
-            const transformedReviews = reviewsResult.reviews.map(review => ({
-              id: review._id || review.id,
-              user: review.user?.name || 'Người dùng',
-              rating: review.rating,
-              date: review.createdAt || review.date,
-              comment: review.comment || '',
-              avatar: review.user?.avatar 
-                ? review.user.avatar 
-                : (review.user?.name?.charAt(0) || 'U').toUpperCase()
-            }))
-            
-            setReviews(transformedReviews)
-            
-            // Update stats if available
-            if (reviewsResult.stats) {
-              const avgRating = reviewsResult.stats.averageRating || 0
-              const totalRev = reviewsResult.stats.totalReviews || 0
-              
-              setReviewsStats({
-                averageRating: avgRating,
-                totalReviews: totalRev
-              })
-              setReviewsTotal(reviewsResult.pagination?.total || reviewsResult.reviews.length)
-              
-              // Update venueData rating from stats
-              transformedData.rating = avgRating
-              transformedData.reviewCount = totalRev
-              setVenueData(transformedData)
-            } else {
-              // Fallback: calculate from reviews if no stats
-              if (transformedReviews.length > 0) {
-                const calculatedAvg = transformedReviews.reduce((sum, r) => sum + r.rating, 0) / transformedReviews.length
-                console.log('No stats, calculating average:', calculatedAvg)
-                setReviewsStats({
-                  averageRating: calculatedAvg,
-                  totalReviews: transformedReviews.length
-                })
-                transformedData.rating = calculatedAvg
-                transformedData.reviewCount = transformedReviews.length
-                setVenueData(transformedData)
-              }
-            }
-          }
-        } catch (reviewsError) {
-          // Silently fail reviews fetch, just show empty state
-          console.error('Error fetching reviews:', reviewsError)
-        }
-
-        // Fetch sport categories and filter by facility types
-        try {
-          const categoriesResult = await categoryApi.getSportCategories({
-            status: 'active'
-          })
-          
-          if (categoriesResult.success && categoriesResult.data) {
-            const categoriesList = Array.isArray(categoriesResult.data)
-              ? categoriesResult.data
-              : []
-            
-            // Get facility types (array of sport names)
-            const facilityTypes = facilityResult.data.types || []
-            
-            // Filter categories to only include those that match facility types
-            const matchingCategories = categoriesList
-              .filter(cat => {
-                const categoryName = cat.name || ''
-                // Check if category name matches any facility type (case-insensitive)
-                return facilityTypes.some(facilityType => 
-                  categoryName.toLowerCase() === facilityType.toLowerCase()
-                )
-              })
-              .map(cat => ({
-                id: cat._id || cat.id,
-                name: cat.name
-              }))
-            
-            setSportCategories(matchingCategories)
-          }
-        } catch (categoriesError) {
-          console.error('Error fetching sport categories:', categoriesError)
-        }
-
-        // Courts and court types will be fetched when sport category is selected
-
-      } catch (error) {
-        setError('Không thể tải thông tin cơ sở')
-        toast.error('Không thể tải thông tin cơ sở. Vui lòng thử lại sau.')
-      } finally {
-        setLoading(false)
-      }
+    if (selectedSportCategory) {
+      setSelectedFieldType(null)
     }
-
-    fetchData()
-  }, [venueId])
+  }, [selectedSportCategory])
 
   // Scroll to top when component mounts or venue changes
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [venueId, venueData])
 
-  // Fetch court types when sport category is selected
-  useEffect(() => {
-    const fetchCourtTypes = async () => {
-      if (!selectedSportCategory) {
-        setCourtTypes([])
-        return
-      }
-
-      try {
-        const courtTypesResult = await categoryApi.getCourtTypes({
-          sportCategory: selectedSportCategory,
-          status: 'active'
-        })
-        
-        if (courtTypesResult.success && courtTypesResult.data) {
-          const typesList = Array.isArray(courtTypesResult.data)
-            ? courtTypesResult.data
-            : courtTypesResult.data.courtTypes || []
-          
-          const types = typesList.map(type => ({
-            id: type._id || type.id,
-            name: type.name,
-            description: type.description
-          }))
-          setCourtTypes(types)
-          
-          // Reset field type when sport category changes
-          setSelectedFieldType(null)
-        }
-      } catch (typesError) {
-        console.error('Error fetching court types:', typesError)
-        setCourtTypes([])
-      }
-    }
-
-    fetchCourtTypes()
-  }, [selectedSportCategory])
-
-  // Fetch courts when sport category or field type changes (using API filter)
-  useEffect(() => {
-    if (!venueId || !selectedSportCategory) {
-      setCourts([])
-      setSelectedCourt(null)
-      return
-    }
-
-    const fetchCourtsByType = async () => {
-      try {
-        // Build query params
-        const params = {
-          facility: venueId,
-          sportCategory: selectedSportCategory,
-          status: 'active',
-          limit: 100
-        }
-
-        // Add typeId filter if field type is selected
-        if (selectedFieldType) {
-          // Find courtType object from courtTypes array by name
-          const selectedCourtType = courtTypes.find(ct => ct.name === selectedFieldType)
-          if (selectedCourtType && selectedCourtType.id) {
-            // Use typeId (preferred method - by reference)
-            params.typeId = selectedCourtType.id
-          } else {
-            // Fallback: use type name (backward compatible)
-            params.type = selectedFieldType
-          }
-        }
-
-        const courtsResult = await courtApi.getCourts(params)
-        
-        if (courtsResult.success && courtsResult.data && courtsResult.data.courts) {
-          const courtsList = courtsResult.data.courts.map(court => ({
-            id: court._id || court.id,
-            name: court.name,
-            type: court.type,
-            price: court.price,
-            capacity: court.capacity,
-            status: court.status
-          }))
-          
-          setCourts(courtsList)
-          
-          // Auto-select first court if available
-          if (courtsList.length > 0) {
-            setSelectedCourt(prev => {
-              // Check if current selected court is still valid
-              const isValid = prev && courtsList.some(c => (c.id || c._id) === prev)
-              if (!isValid) {
-                // Reset to first available court if current selection is invalid
-                return courtsList[0].id || courtsList[0]._id
-              }
-              // Keep current selection if valid, or select first if none
-              return prev || courtsList[0].id || courtsList[0]._id
-            })
-          } else {
-            // Clear selection if no courts available
-            setSelectedCourt(null)
-            setCourts([])
-          }
-        } else {
-          setCourts([])
-          setSelectedCourt(null)
-        }
-      } catch (error) {
-        console.error('Error fetching courts:', error)
-        setCourts([])
-        setSelectedCourt(null)
-      }
-    }
-
-    fetchCourtsByType()
-  }, [selectedFieldType, selectedSportCategory, venueId, courtTypes])
-
-  // Socket.IO: Join facility and court rooms, listen for slot lock events
-  useEffect(() => {
-    if (!venueId || !selectedCourt || !isConnected || !defaultSocket || !isAuthenticated) return
-
-    // Join facility room to receive updates
-    joinFacility(venueId, 'default')
-    
-    // Join court room for specific court updates
-    // Pass selectedDate so backend can filter locked slots by date
-    const dateStr = selectedDate ? formatDateToYYYYMMDD(selectedDate) : null
-    joinCourt(selectedCourt, venueId, 'default', dateStr)
-
-    // Listen for initial locked slots when joining court
-    const handleLockedSlots = (data) => {
-      const { courtId, date, lockedSlots: receivedLockedSlots } = data
-      
-      // Only process if it's for the current court and date
-      if (courtId === selectedCourt) {
-        const currentDateStr = selectedDate ? formatDateToYYYYMMDD(selectedDate) : null
-        if (!date || date === currentDateStr) {
-          const newLockedSlots = {}
-          receivedLockedSlots.forEach(lock => {
-            const lockKey = `${lock.courtId}_${lock.date}_${lock.timeSlot}`
-            // Only mark as locked by other if it's not locked by current user
-            if (lock.lockedBy !== user?._id) {
-              newLockedSlots[lockKey] = {
-                lockedBy: lock.lockedBy,
-                expiresAt: lock.expiresAt,
-                isLockedByOther: true
-              }
-            }
-          })
-          
-          if (Object.keys(newLockedSlots).length > 0) {
-            setLockedSlots(prev => ({ ...prev, ...newLockedSlots }))
-          }
-        }
-      }
-    }
-
-    // Listen for slot lock events from other users
-    const handleSlotLocked = (data) => {
-      const { courtId, date, timeSlot, lockedBy, expiresAt } = data
-      
-      // Only update if it's not locked by current user
-      if (lockedBy !== user?._id) {
-        const lockKey = `${courtId}_${date}_${timeSlot}`
-        setLockedSlots(prev => ({
-          ...prev,
-          [lockKey]: { lockedBy, expiresAt, isLockedByOther: true }
-        }))
-      }
-    }
-
-    const handleSlotUnlocked = (data) => {
-      const { courtId, date, timeSlot } = data
-      const lockKey = `${courtId}_${date}_${timeSlot}`
-      setLockedSlots(prev => {
-        const newState = { ...prev }
-        delete newState[lockKey]
-        return newState
-      })
-    }
-
-    const handleSlotConfirmed = (data) => {
-      const { courtId, date, timeSlots } = data
-      markSlotsAsBooked(courtId, date, timeSlots)
-    }
-
-    const handleSlotBooked = (data) => {
-      const { courtId, date, timeSlots } = data
-      markSlotsAsBooked(courtId, date, timeSlots)
-    }
-
-    const handleSlotCancelled = (data) => {
-      const { courtId, date, timeSlots } = data
-      markSlotsAsAvailable(courtId, date, timeSlots)
-    }
-
-    const handleStatusUpdated = (data) => {
-      // If booking is cancelled, mark slots as available
-      if (data.status === 'cancelled' && data.timeSlots) {
-        const { courtId, date, timeSlots } = data
-        markSlotsAsAvailable(courtId, date, timeSlots)
-      }
-    }
-
-    // Helper function to mark slots as available (when cancelled)
-    const markSlotsAsAvailable = (courtId, date, timeSlots) => {
-      // date can be Date object or string (YYYY-MM-DD), handle both cases
-      let dateStr
-      if (date instanceof Date) {
-        dateStr = formatDateToYYYYMMDD(date)
-      } else if (typeof date === 'string') {
-        dateStr = date.includes('T') ? formatDateToYYYYMMDD(new Date(date)) : date
-      } else {
-        dateStr = formatDateToYYYYMMDD(new Date(date))
-      }
-      
-      timeSlots.forEach(timeSlot => {
-        const lockKey = `${courtId}_${dateStr}_${timeSlot}`
-        
-        // Remove from booked slots
-        setBookedSlots(prev => {
-          const newSet = new Set(prev)
-          newSet.delete(lockKey)
-          return newSet
-        })
-      })
-    }
-
-    // Helper function to mark slots as booked
-    const markSlotsAsBooked = (courtId, date, timeSlots) => {
-      // date can be Date object or string (YYYY-MM-DD), handle both cases
-      let dateStr
-      if (date instanceof Date) {
-        dateStr = formatDateToYYYYMMDD(date)
-      } else if (typeof date === 'string') {
-        // If it's already in YYYY-MM-DD format, use it directly
-        dateStr = date.includes('T') ? formatDateToYYYYMMDD(new Date(date)) : date
-      } else {
-        dateStr = formatDateToYYYYMMDD(new Date(date))
-      }
-      
-      timeSlots.forEach(timeSlot => {
-        const lockKey = `${courtId}_${dateStr}_${timeSlot}`
-        lockedSlotsByMeRef.current.delete(lockKey) // Remove from tracking
-        
-        // Remove from locked slots
-        setLockedSlots(prev => {
-          const newState = { ...prev }
-          delete newState[lockKey]
-          return newState
-        })
-        
-        // Mark as booked
-        setBookedSlots(prev => {
-          const newSet = new Set(prev)
-          newSet.add(lockKey)
-          return newSet
-        })
-      })
-    }
-
-    defaultSocket.on('booking:locked:slots', handleLockedSlots)
-    defaultSocket.on('booking:slot:locked', handleSlotLocked)
-    defaultSocket.on('booking:slot:unlocked', handleSlotUnlocked)
-    defaultSocket.on('booking:slot:confirmed', handleSlotConfirmed)
-    defaultSocket.on('booking:slot:booked', handleSlotBooked)
-    defaultSocket.on('booking:slot:cancelled', handleSlotCancelled)
-    defaultSocket.on('booking:status:updated', handleStatusUpdated)
-
-    return () => {
-      defaultSocket.off('booking:locked:slots', handleLockedSlots)
-      defaultSocket.off('booking:slot:locked', handleSlotLocked)
-      defaultSocket.off('booking:slot:unlocked', handleSlotUnlocked)
-      defaultSocket.off('booking:slot:confirmed', handleSlotConfirmed)
-      defaultSocket.off('booking:slot:booked', handleSlotBooked)
-      defaultSocket.off('booking:slot:cancelled', handleSlotCancelled)
-      defaultSocket.off('booking:status:updated', handleStatusUpdated)
-      leaveFacility(venueId, 'default')
-      leaveCourt(selectedCourt, 'default')
-    }
-  }, [venueId, selectedCourt, selectedDate, isConnected, defaultSocket, isAuthenticated, user?._id, joinFacility, leaveFacility, joinCourt, leaveCourt])
-
   // Reset slots when date changes
   const handleDateChange = (newDate) => {
     setSelectedDate(newDate)
     setSelectedSlots([])
   }
-
-  // Handle slot lock (when user selects a slot)
-  const handleSlotLock = (timeSlot) => {
-    if (!selectedCourt || !selectedDate || !defaultSocket || !isAuthenticated) return
-    
-    // Use local timezone format, not UTC
-    const dateStr = formatDateToYYYYMMDD(selectedDate)
-    const timeSlotStr = timeSlot // Format: "18:00-19:00"
-    
-    defaultSocket.emit('booking:lock', {
-      courtId: selectedCourt,
-      date: dateStr,
-      timeSlot: timeSlotStr
-    })
-
-    // Listen for lock success
-    const handleLockSuccess = (data) => {
-      if (data.courtId === selectedCourt && data.timeSlot === timeSlotStr) {
-        const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
-        lockedSlotsByMeRef.current.add(lockKey) // Track this slot
-        setLockedSlots(prev => ({
-          ...prev,
-          [lockKey]: { 
-            lockedBy: user?._id, 
-            expiresAt: data.expiresAt,
-            isLockedByMe: true 
-          }
-        }))
-        defaultSocket.off('booking:lock:success', handleLockSuccess)
-        defaultSocket.off('booking:lock:error', handleLockError)
-      }
-    }
-
-    const handleLockError = (error) => {
-      toast.error(error.message || 'Không thể giữ chỗ. Slot có thể đang được người khác chọn.')
-      // Remove slot from selection if lock fails
-      const slotKey = `${dateStr}-${timeSlotStr.split('-')[0]}`
-      setSelectedSlots(prev => prev.filter(slot => slot !== slotKey))
-      defaultSocket.off('booking:lock:success', handleLockSuccess)
-      defaultSocket.off('booking:lock:error', handleLockError)
-    }
-
-    defaultSocket.once('booking:lock:success', handleLockSuccess)
-    defaultSocket.once('booking:lock:error', handleLockError)
-  }
-
-  // Handle slot unlock (when user deselects a slot)
-  const handleSlotUnlock = (timeSlot) => {
-    if (!selectedCourt || !selectedDate || !defaultSocket || !isAuthenticated) return
-    
-    // Use local timezone format, not UTC
-    const dateStr = formatDateToYYYYMMDD(selectedDate)
-    const timeSlotStr = timeSlot
-    
-    defaultSocket.emit('booking:unlock', {
-      courtId: selectedCourt,
-      date: dateStr,
-      timeSlot: timeSlotStr
-    })
-
-    // Remove from lockedSlots on success
-    const handleUnlockSuccess = () => {
-      const lockKey = `${selectedCourt}_${dateStr}_${timeSlotStr}`
-      lockedSlotsByMeRef.current.delete(lockKey) // Remove from tracking
-      setLockedSlots(prev => {
-        const newState = { ...prev }
-        delete newState[lockKey]
-        return newState
-      })
-      defaultSocket.off('booking:unlock:success', handleUnlockSuccess)
-      defaultSocket.off('booking:unlock:error', handleUnlockError)
-    }
-
-    const handleUnlockError = (error) => {
-      // Silently fail unlock error, slot will expire anyway
-      defaultSocket.off('booking:unlock:success', handleUnlockSuccess)
-      defaultSocket.off('booking:unlock:error', handleUnlockError)
-    }
-
-    defaultSocket.once('booking:unlock:success', handleUnlockSuccess)
-    defaultSocket.once('booking:unlock:error', handleUnlockError)
-  }
-
-  // Unlock all slots when component unmounts, user navigates away, or socket disconnects
-  useEffect(() => {
-    const unlockAllSlots = () => {
-      if (hasUnlockedRef.current) return
-      
-      // Check if there are any slots locked by current user
-      const hasLockedSlots = lockedSlotsByMeRef.current.size > 0
-      
-      if (hasLockedSlots && defaultSocket && isAuthenticated) {
-        // Try to unlock via socket if connected
-        if (defaultSocket.connected) {
-          hasUnlockedRef.current = true
-          defaultSocket.emit('booking:unlock:all')
-        } else {
-          // Socket already disconnected, backend will handle via disconnect event
-          hasUnlockedRef.current = true
-        }
-      }
-    }
-
-    const handleBeforeUnload = () => {
-      unlockAllSlots()
-    }
-
-    const handleVisibilityChange = () => {
-      // If page becomes hidden (user switched tab or minimized), don't unlock yet
-      // Only unlock when actually leaving
-      if (document.hidden) {
-        // Could unlock here if needed, but let's wait for actual disconnect
-      }
-    }
-
-    // Handle socket disconnect
-    const handleDisconnect = () => {
-      hasUnlockedRef.current = true // Mark as unlocked to prevent duplicate attempts
-    }
-
-    // Handle page unload (closing tab, navigating away)
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    
-    // Listen for socket disconnect
-    if (defaultSocket) {
-      defaultSocket.on('disconnect', handleDisconnect)
-    }
-
-    // Cleanup on unmount
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      
-      if (defaultSocket) {
-        defaultSocket.off('disconnect', handleDisconnect)
-      }
-      
-      unlockAllSlots()
-    }
-  }, [defaultSocket, isAuthenticated])
-
-  // Track previous court to detect changes
-  const previousCourtRef = useRef(selectedCourt)
-  const previousDateRef = useRef(selectedDate)
-
-  // Cleanup locked slots and validate selected slots when court or date changes
-  useEffect(() => {
-    const dateStr = formatDateToYYYYMMDD(selectedDate)
-    const courtChanged = previousCourtRef.current !== selectedCourt
-    const dateChanged = previousDateRef.current?.getTime() !== selectedDate?.getTime()
-
-    if (!selectedCourt) {
-      // If no court selected, clear all selected slots and locked slots
-      setSelectedSlots([])
-      setLockedSlots({})
-      previousCourtRef.current = selectedCourt
-      previousDateRef.current = selectedDate
-      return
-    }
-
-    // When court changes, unlock all slots from previous court and clear selected slots
-    if (courtChanged && previousCourtRef.current && defaultSocket && isAuthenticated) {
-      // Unlock all slots from previous court
-      const previousLocks = Object.keys(lockedSlots)
-        .filter(key => {
-          const parts = key.split('_')
-          if (parts.length >= 3) {
-            const lockCourtId = parts[0]
-            return lockCourtId === previousCourtRef.current
-          }
-          return false
-        })
-        .map(key => {
-          const parts = key.split('_')
-          if (parts.length >= 3) {
-            const lockInfo = lockedSlots[key]
-            if (lockInfo?.isLockedByMe) {
-              return {
-                courtId: parts[0],
-                date: parts[1],
-                timeSlot: parts.slice(2).join('_')
-              }
-            }
-          }
-          return null
-        })
-        .filter(item => item !== null)
-
-      // Unlock slots from previous court
-      previousLocks.forEach(({ courtId, date, timeSlot }) => {
-        const lockKey = `${courtId}_${date}_${timeSlot}`
-        lockedSlotsByMeRef.current.delete(lockKey) // Remove from tracking
-        defaultSocket.emit('booking:unlock', { courtId, date, timeSlot })
-      })
-
-      // Clear selected slots when court changes
-      setSelectedSlots(prev => {
-        if (prev.length > 0) {
-          toast.info('Đã xóa các khung giờ đã chọn vì bạn đã đổi sân. Vui lòng chọn lại.')
-          return []
-        }
-        return prev
-      })
-    }
-
-    // Clear locked slots that don't match current court/date
-    setLockedSlots(prev => {
-      const newState = {}
-      Object.keys(prev).forEach(key => {
-        if (key.startsWith(`${selectedCourt}_${dateStr}_`)) {
-          newState[key] = prev[key]
-        }
-      })
-      return newState
-    })
-    
-    // Clear booked slots that don't match current court/date
-    setBookedSlots(prev => {
-      const newSet = new Set()
-      prev.forEach(key => {
-        if (key.startsWith(`${selectedCourt}_${dateStr}_`)) {
-          newSet.add(key)
-        }
-      })
-      return newSet
-    })
-
-    previousCourtRef.current = selectedCourt
-    previousDateRef.current = selectedDate
-  }, [selectedCourt, selectedDate, defaultSocket, isAuthenticated])
 
   const handleBookNow = () => {
     // Validate all required fields before showing booking modal
@@ -789,171 +175,6 @@ function Booking() {
     
     // All validations passed, show booking modal
     setShowBookingModal(true)
-  }
-
-  const handleBookingSubmit = async (bookingData) => {
-    // Validate all required fields
-    if (!venueData) {
-      toast.error('Không tìm thấy thông tin cơ sở')
-      return
-    }
-    
-    if (!selectedFieldType) {
-      toast.error('Vui lòng chọn loại sân')
-      return
-    }
-    
-    if (!selectedCourt) {
-      toast.error('Vui lòng chọn sân')
-      return
-    }
-    
-    if (selectedSlots.length === 0) {
-      toast.error('Vui lòng chọn khung giờ')
-      return
-    }
-
-    // Check authentication
-    if (!isAuthenticated) {
-      toast.error('Vui lòng đăng nhập để đặt sân')
-      navigate('/login')
-      return
-    }
-
-    setIsProcessing(true)
-    setShowBookingModal(false)
-
-    try {
-      // Get court data
-      const selectedCourtData = courts.find(c => (c.id || c._id) === selectedCourt)
-      if (!selectedCourtData) {
-        toast.error('Không tìm thấy thông tin sân')
-        setIsProcessing(false)
-        return
-      }
-
-      // Parse timeSlots from format "YYYY-MM-DD-HH:MM" to "HH:MM-HH:MM"
-      const formatTimeSlots = (slots) => {
-        return slots.map(slot => {
-          // Parse slot: "2024-01-15-18:00" -> "18:00-19:00"
-          const parts = slot.split('-')
-          if (parts.length >= 4) {
-            const hourStr = parts[3] // "18:00"
-            const [hours, minutes] = hourStr.split(':').map(Number)
-            const startTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
-            // Calculate end time (add 1 hour)
-            const endHours = (hours + 1) % 24
-            const endTime = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
-            return `${startTime}-${endTime}`
-          }
-          return slot
-        })
-      }
-
-      const formattedTimeSlots = formatTimeSlots(selectedSlots)
-
-      // Prepare booking data for API
-      const subtotal = calculateTotalAmount()
-      const discount = promotionData?.discountAmount || 0
-      const finalTotal = Math.max(0, subtotal - discount)
-
-      const bookingPayload = {
-        courtId: selectedCourt,
-        facilityId: venueId,
-        date: formatDateToYYYYMMDD(selectedDate), // Format: YYYY-MM-DD in local timezone
-        timeSlots: formattedTimeSlots,
-        contactInfo: contactInfo || {
-          name: user?.name || '',
-          phone: user?.phone || '',
-          email: user?.email || '',
-          notes: ''
-        },
-        totalAmount: subtotal, // Subtotal before discount
-        promotionCode: promotionData?.code || null,
-        discountAmount: discount
-      }
-
-      // Create booking via API
-      const result = await bookingApi.createBooking(bookingPayload)
-
-      if (result.success) {
-        // API returns { booking: {...}, paymentPending: true }
-        const booking = result.data?.booking || result.data
-        const courtName = selectedCourtData.name
-
-        // Get bookingId
-        const bookingId = booking?._id || booking?.id
-        
-        if (!bookingId) {
-          toast.error('Không thể lấy ID booking. Vui lòng thử lại.')
-          setIsProcessing(false)
-          return
-        }
-    
-    // Prepare booking data to pass to payment page
-    const bookingInfo = {
-          bookingId: bookingId,
-      venueId: venueData.id,
-      venueName: venueData.name,
-      sport: venueData.sport,
-          courtId: selectedCourt,
-          courtNumber: courtName,
-      fieldType: selectedFieldType,
-      date: selectedDate.toLocaleDateString('vi-VN'),
-          time: formattedTimeSlots.join(', '),
-      duration: selectedSlots.length,
-          pricePerHour: selectedCourtData.price || venueData.pricePerHour,
-      subtotal: calculateTotalAmount(),
-          serviceFee: 0,
-      discount: promotionData?.discountAmount || 0,
-      promotionCode: promotionData?.code || null,
-      promotion: promotionData?.promotion || null,
-          total: Math.max(0, calculateTotalAmount() - (promotionData?.discountAmount || 0)),
-      selectedSlots: selectedSlots,
-          timeSlotsData: timeSlotsData,
-          venueData: venueData,
-          booking: booking
-        }
-
-        // Save pending booking to localStorage for recovery if user leaves payment page
-        const pendingBookingKey = `pending_booking_${bookingId}`
-        const pendingBookingData = {
-          bookingId: bookingId,
-          bookingInfo: bookingInfo,
-          createdAt: Date.now(),
-          expiresAt: Date.now() + (5 * 60 * 1000) // 5 minutes
-        }
-        localStorage.setItem(pendingBookingKey, JSON.stringify(pendingBookingData))
-
-        toast.success('Đặt sân thành công! Đang chuyển đến trang thanh toán...')
-
-      // Navigate to payment with booking data
-      navigate('/payment', { 
-        state: { bookingData: bookingInfo } 
-      })
-      } else {
-        throw new Error(result.message || 'Có lỗi xảy ra khi đặt sân')
-      }
-    } catch (error) {
-      const errorMessage = error.message || 'Có lỗi xảy ra khi đặt sân. Vui lòng thử lại.'
-      toast.error(errorMessage)
-      setIsProcessing(false)
-      setShowBookingModal(true) // Reopen modal on error
-    }
-  }
-
-  // Calculate total amount based on selected slots
-  const calculateTotalAmount = () => {
-    if (!selectedCourt || selectedSlots.length === 0) return 0
-    
-    // Get court data to get price
-    const selectedCourtData = courts.find(c => (c.id || c._id) === selectedCourt)
-    const pricePerHour = selectedCourtData?.price || venueData?.pricePerHour || 0
-    
-    if (!pricePerHour) return 0
-    
-    // Each slot is 1 hour, so multiply by pricePerHour
-    return selectedSlots.length * pricePerHour
   }
 
   // Loading state
@@ -1138,6 +359,7 @@ function Booking() {
             timeSlotsData={timeSlotsData}
             onBookNow={handleBookNow}
             venueId={venueId}
+            timeSlotDuration={timeSlotDuration}
             onPromotionChange={setPromotionData}
           />
         </div>
@@ -1218,6 +440,7 @@ function Booking() {
             setContactInfo(contactInfoData)
             handleBookingSubmit()
           }}
+          timeSlotsData={timeSlotsData}
         />
       )}
       

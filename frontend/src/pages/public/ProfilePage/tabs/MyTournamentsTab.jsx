@@ -110,10 +110,41 @@ export default function MyTournamentsTab() {
       completed: { 
         text: 'Đã kết thúc', 
         className: 'status-badge status-completed'
+      },
+      cancelled: { 
+        text: 'Đã hủy', 
+        className: 'status-badge status-completed'
       }
     }
     return badges[status] || badges.upcoming
   }
+
+  // Tính toán status dựa trên endDate nếu cần
+  const getComputedStatus = (tournament) => {
+    if (!tournament.endDate) return tournament.status || 'upcoming'
+    
+    const now = new Date();
+    const endDate = new Date(tournament.endDate);
+    const startDate = tournament.startDate ? new Date(tournament.startDate) : null;
+    
+    // Nếu đã bị hủy, giữ nguyên
+    if (tournament.status === 'cancelled') {
+      return 'cancelled';
+    }
+    
+    // Nếu endDate đã qua, tự động là completed
+    if (endDate < now) {
+      return 'completed';
+    }
+    
+    // Nếu startDate đã qua nhưng endDate chưa qua, là ongoing
+    if (startDate && startDate <= now && endDate >= now) {
+      return 'ongoing';
+    }
+    
+    // Còn lại là upcoming (hoặc giữ nguyên status từ DB nếu hợp lệ)
+    return tournament.status || 'upcoming';
+  };
 
   const handleViewDetails = (tournamentId) => {
     navigate(`/tournament/${tournamentId}`)
@@ -550,7 +581,8 @@ export default function MyTournamentsTab() {
       ) : (
         <div className="tournaments-list">
           {filteredTournaments.map(tournament => {
-            const statusBadge = getStatusBadge(tournament.status)
+            const computedStatus = getComputedStatus(tournament)
+            const statusBadge = getStatusBadge(computedStatus)
             return (
               <div 
                 key={tournament.id} 

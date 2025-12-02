@@ -18,6 +18,7 @@ export default function BookingSummary({
   timeSlotsData, 
   onBookNow,
   venueId,
+  timeSlotDuration = 60, // Khung giờ đặt sân (30 hoặc 60 phút)
   onPromotionChange // Callback to pass promotion data to parent
 }) {
   const { isMobile, isTablet } = useDeviceType()
@@ -277,7 +278,21 @@ export default function BookingSummary({
             <span style={{ fontSize: '14px', color: '#6b7280' }}>Khung giờ:</span>
           </div>
           <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-            {selectedSlots.length > 0 ? `${selectedSlots.length} tiếng` : 'Chưa chọn khung giờ'}
+            {selectedSlots.length > 0 
+              ? (() => {
+                  const totalMinutes = selectedSlots.length * (timeSlotDuration || 60)
+                  const hours = Math.floor(totalMinutes / 60)
+                  const minutes = totalMinutes % 60
+                  
+                  if (hours === 0) {
+                    return `${minutes} phút`
+                  } else if (minutes === 0) {
+                    return `${hours} giờ`
+                  } else {
+                    return `${hours} giờ ${minutes} phút`
+                  }
+                })()
+              : 'Chưa chọn khung giờ'}
           </span>
         </div>
         
@@ -302,16 +317,22 @@ export default function BookingSummary({
                   slotPrice = slotData.price || courtPrice
                   endTime = slotData.endTime || ''
                 } else {
-                  // Calculate end time if not available
+                  // Calculate end time based on timeSlotDuration
                   const [hours, minutes] = actualTime.split(':').map(Number)
-                  const nextHour = (hours + 1) % 24
-                  endTime = `${String(nextHour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+                  const slotDurationMinutes = timeSlotDuration || 60
+                  const totalMinutes = hours * 60 + minutes + slotDurationMinutes
+                  const endHours = Math.floor(totalMinutes / 60) % 24
+                  const endMinutes = totalMinutes % 60
+                  endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`
                 }
               } else {
-                // Fallback: calculate end time
+                // Fallback: calculate end time based on timeSlotDuration
                 const [hours, minutes] = actualTime.split(':').map(Number)
-                const nextHour = (hours + 1) % 24
-                endTime = `${String(nextHour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+                const slotDurationMinutes = timeSlotDuration || 60
+                const totalMinutes = hours * 60 + minutes + slotDurationMinutes
+                const endHours = Math.floor(totalMinutes / 60) % 24
+                const endMinutes = totalMinutes % 60
+                endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`
               }
               
               return (
@@ -325,7 +346,7 @@ export default function BookingSummary({
                 }}>
                   <span>{actualTime} - {endTime}</span>
                   <span style={{ fontWeight: '500' }}>
-                    {slotPrice.toLocaleString('vi-VN')} đ
+                    {slotPrice.toLocaleString('vi-VN')} VND
                   </span>
                 </div>
               )

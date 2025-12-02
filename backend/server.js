@@ -47,6 +47,7 @@ import User from "./models/User.js";
 import loyaltyRoutes from "./routes/loyalty.js";
 import referralRoutes from "./routes/referral.js";
 import partnerRoutes from "./routes/partner.js";
+import feedbackRoutes from "./routes/feedback.js";
 
 const app = express();
 
@@ -149,6 +150,7 @@ app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/referrals", referralRoutes);
 app.use("/api/leagues", leagueRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/feedbacks", feedbackRoutes);
 // 404 handler
 app.use(notFound);
 

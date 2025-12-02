@@ -194,8 +194,20 @@ router.get("/", async (req, res, next) => {
       query.types = { $in: [req.query.type] };
     }
     if (req.query.address) {
-      // Tìm kiếm address gần đúng
-      query.address = { $regex: req.query.address, $options: "i" };
+      // Tìm kiếm address với pattern chính xác hơn
+      // Escape special regex characters
+      const addressPattern = req.query.address
+        .trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special regex characters
+      
+      // Tối ưu pattern để tránh match sai:
+      // - "Quận 1" không match "Quận 10", "Quận 11"
+      // - Match "Quận 1" trong "123, Quận 1, Hà Nội", "Quận 1, Hà Nội"
+      // Pattern: match ở đầu string, sau dấu phẩy/dấu cách, hoặc không có số trước
+      // Và kết thúc bằng dấu phẩy/dấu cách, cuối string, hoặc không có số sau
+      // Điều này đảm bảo "Quận 1" không match "Quận 10" (vì có số 0 sau)
+      const regexPattern = `(^|[, ]|[^0-9])${addressPattern}([, ]|[^0-9]|$)`;
+      query.address = { $regex: regexPattern, $options: "i" };
     }
     if (req.query.ownerId) {
       query.owner = req.query.ownerId;
@@ -311,6 +323,81 @@ router.get("/", async (req, res, next) => {
           pages: Math.ceil(total / limit),
         },
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * BE: GET /api/facilities/popular-cities
+ * Lấy top 6 thành phố có nhiều cơ sở nhất (Public)
+ */
+router.get("/popular-cities", async (req, res, next) => {
+  try {
+    // Sử dụng aggregation để group theo thành phố và đếm số lượng facilities
+    const popularCitiesRaw = await Facility.aggregate([
+      {
+        $match: {
+          status: "opening", // Chỉ lấy các cơ sở đang mở
+        },
+      },
+      {
+        $project: {
+          // Extract thành phố từ address (thường là phần cuối sau dấu phẩy cuối)
+          // Format address thường: "Số nhà, Đường, Quận/Huyện, Thành phố"
+          fullCity: {
+            $trim: {
+              input: {
+                $arrayElemAt: [
+                  {
+                    $split: ["$address", ","],
+                  },
+                  -1, // Lấy phần tử cuối cùng (thành phố đầy đủ)
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$fullCity",
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $match: {
+          count: { $gt: 0 }, // Chỉ lấy các thành phố có ít nhất 1 cơ sở
+        },
+      },
+      {
+        $sort: { count: -1 }, // Sort theo số lượng giảm dần
+      },
+      {
+        $limit: 6, // Chỉ lấy top 6
+      },
+    ]);
+
+    // Normalize tên thành phố (loại bỏ "Thành phố", "TP.", "Tỉnh" prefix)
+    const normalizeCityName = (cityName) => {
+      if (!cityName) return "";
+      return cityName
+        .replace(/^Thành phố\s+/i, "")
+        .replace(/^TP\.\s*/i, "")
+        .replace(/^Tỉnh\s+/i, "")
+        .trim();
+    };
+
+    const popularCities = popularCitiesRaw.map((city) => ({
+      name: normalizeCityName(city._id),
+      fullName: city._id,
+      count: city.count,
+    }));
+
+    res.json({
+      success: true,
+      data: popularCities,
     });
   } catch (error) {
     next(error);

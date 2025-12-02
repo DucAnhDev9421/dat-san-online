@@ -26,6 +26,33 @@ const TournamentDetailContent = () => {
     return badges[status] || badges.upcoming
   }
 
+  // Tính toán status dựa trên endDate nếu cần
+  const getComputedStatus = () => {
+    if (!tournament?.endDate) return tournament?.status || 'upcoming'
+    
+    const now = new Date();
+    const endDate = new Date(tournament.endDate);
+    const startDate = tournament.startDate ? new Date(tournament.startDate) : null;
+    
+    // Nếu đã bị hủy, giữ nguyên
+    if (tournament.status === 'cancelled') {
+      return 'cancelled';
+    }
+    
+    // Nếu endDate đã qua, tự động là completed
+    if (endDate < now) {
+      return 'completed';
+    }
+    
+    // Nếu startDate đã qua nhưng endDate chưa qua, là ongoing
+    if (startDate && startDate <= now && endDate >= now) {
+      return 'ongoing';
+    }
+    
+    // Còn lại là upcoming (hoặc giữ nguyên status từ DB nếu hợp lệ)
+    return tournament.status || 'upcoming';
+  };
+
   // Get current tab from URL
   const getCurrentTab = () => {
     const path = location.pathname
@@ -110,7 +137,8 @@ const TournamentDetailContent = () => {
     )
   }
 
-  const statusBadge = getStatusBadge(tournament.status)
+  const computedStatus = getComputedStatus();
+  const statusBadge = getStatusBadge(computedStatus)
 
   return (
     <div className="tournament-detail-page">
@@ -132,7 +160,7 @@ const TournamentDetailContent = () => {
           <div className="hero-main-content">
             <div className="hero-badges">
               <span className={statusBadge.className}>
-                {tournament.status === 'ongoing' && (
+                {computedStatus === 'ongoing' && (
                   <span className="relative flex h-2 w-2 mr-1.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-600 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600"></span>

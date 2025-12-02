@@ -1,63 +1,90 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, ArrowRight } from 'lucide-react'
+import { facilityApi } from '../../../../api/facilityApi'
+import { toast } from 'react-toastify'
+import { cityAssets, defaultAssets } from '../cityAssets'
 import '../../../../styles/HomePage.css'
-
-const locations = [
-  {
-    id: 1,
-    name: 'Hồ Chí Minh',
-    district: 'TP.HCM',
-    venuesCount: 85,
-    image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=600&h=400&fit=crop',
-    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-  },
-  {
-    id: 2,
-    name: 'Hà Nội',
-    district: 'Thủ đô',
-    venuesCount: 72,
-    image: 'https://images.unsplash.com/photo-1515542622106-78bda8ba0e5b?w=600&h=400&fit=crop',
-    gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
-  },
-  {
-    id: 3,
-    name: 'Đà Nẵng',
-    district: 'Miền Trung',
-    venuesCount: 45,
-    image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=600&h=400&fit=crop',
-    gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
-  },
-  {
-    id: 4,
-    name: 'Cần Thơ',
-    district: 'Đồng bằng sông Cửu Long',
-    venuesCount: 38,
-    image: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=600&h=400&fit=crop',
-    gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'
-  },
-  {
-    id: 5,
-    name: 'Nha Trang',
-    district: 'Khánh Hòa',
-    venuesCount: 28,
-    image: 'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=600&h=400&fit=crop',
-    gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
-  },
-  {
-    id: 6,
-    name: 'Hải Phòng',
-    district: 'Miền Bắc',
-    venuesCount: 32,
-    image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=400&fit=crop',
-    gradient: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)'
-  }
-]
 
 export default function PopularLocationsSection() {
   const navigate = useNavigate()
   const [isVisible, setIsVisible] = useState(false)
+  const [locations, setLocations] = useState([])
+  const [loading, setLoading] = useState(true)
   const sectionRef = useRef(null)
+
+  // Fetch popular cities from API và merge với cityAssets
+  useEffect(() => {
+    const fetchPopularCities = async () => {
+      try {
+        setLoading(true)
+        
+        // Tạo locations từ cityAssets trước (luôn hiển thị)
+        const initialLocations = Object.keys(cityAssets).map((cityName, index) => {
+          const assets = cityAssets[cityName]
+          return {
+            id: index + 1,
+            name: cityName,
+            fullName: cityName,
+            district: assets.district || '',
+            venuesCount: 0, // Mặc định 0, sẽ được cập nhật từ API
+            image: assets.image,
+            gradient: assets.gradient
+          }
+        })
+        
+        // Set locations ban đầu để hiển thị ngay
+        setLocations(initialLocations)
+        
+        // Fetch dữ liệu từ API để cập nhật count
+        try {
+          const result = await facilityApi.getPopularCities()
+          
+          if (result.success && result.data && Array.isArray(result.data)) {
+            // Tạo map từ API data để dễ lookup
+            const apiDataMap = new Map()
+            result.data.forEach(city => {
+              apiDataMap.set(city.name, city.count)
+            })
+            
+            // Cập nhật venuesCount từ API data
+            const updatedLocations = initialLocations.map(location => {
+              const count = apiDataMap.get(location.name) || 0
+              return {
+                ...location,
+                venuesCount: count
+              }
+            })
+            
+            setLocations(updatedLocations)
+          }
+        } catch (apiError) {
+          // Nếu API fail, vẫn giữ locations từ cityAssets với count = 0
+          console.warn('Could not fetch city counts from API, using default data:', apiError)
+        }
+      } catch (error) {
+        console.error('Error initializing popular cities:', error)
+        // Fallback: vẫn hiển thị locations từ cityAssets
+        const fallbackLocations = Object.keys(cityAssets).map((cityName, index) => {
+          const assets = cityAssets[cityName]
+          return {
+            id: index + 1,
+            name: cityName,
+            fullName: cityName,
+            district: assets.district || '',
+            venuesCount: 0,
+            image: assets.image,
+            gradient: assets.gradient
+          }
+        })
+        setLocations(fallbackLocations)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPopularCities()
+  }, [])
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -84,7 +111,9 @@ export default function PopularLocationsSection() {
   }, [])
 
   const handleLocationClick = (location) => {
-    navigate(`/facilities?province=${location.name}`)
+    // Navigate với province filter sử dụng fullName hoặc name
+    const provinceName = location.fullName || location.name
+    navigate(`/facilities?province=${encodeURIComponent(provinceName)}`)
   }
 
   return (
@@ -103,45 +132,53 @@ export default function PopularLocationsSection() {
           </p>
         </div>
 
-        <div className={`locations-grid ${isVisible ? 'visible' : ''}`}>
-          {locations.map((location, index) => (
-            <div
-              key={location.id}
-              className="location-card"
-              onClick={() => handleLocationClick(location)}
-              style={{
-                animationDelay: `${index * 100}ms`
-              }}
-            >
-              <div className="location-image-wrapper">
-                <img 
-                  src={location.image} 
-                  alt={location.name}
-                  className="location-image"
-                />
-                <div 
-                  className="location-overlay"
-                  style={{
-                    background: location.gradient
-                  }}
-                />
-              </div>
-              
-              <div className="location-content">
-                <div className="location-info">
-                  <h3 className="location-name">{location.name}</h3>
-                  <p className="location-district">{location.district}</p>
+        {loading ? (
+          <div className="locations-loading">
+            <p>Đang tải danh sách thành phố...</p>
+          </div>
+        ) : (
+          <div className={`locations-grid ${isVisible ? 'visible' : ''}`}>
+            {locations.map((location, index) => (
+              <div
+                key={location.id}
+                className="location-card"
+                onClick={() => handleLocationClick(location)}
+                style={{
+                  animationDelay: `${index * 100}ms`
+                }}
+              >
+                <div className="location-image-wrapper">
+                  <img 
+                    src={location.image} 
+                    alt={location.name}
+                    className="location-image"
+                  />
+                  <div 
+                    className="location-overlay"
+                    style={{
+                      background: location.gradient
+                    }}
+                  />
                 </div>
-                <div className="location-stats">
-                  <span className="location-venues-count">
-                    {location.venuesCount}+ sân
-                  </span>
-                  <ArrowRight size={18} className="location-arrow" />
+                
+                <div className="location-content">
+                  <div className="location-info">
+                    <h3 className="location-name">{location.name}</h3>
+                    {location.district && (
+                      <p className="location-district">{location.district}</p>
+                    )}
+                  </div>
+                  <div className="location-stats">
+                    <span className="location-venues-count">
+                      {location.venuesCount > 0 ? `${location.venuesCount}+ sân` : 'Chưa có sân'}
+                    </span>
+                    <ArrowRight size={18} className="location-arrow" />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   )

@@ -251,6 +251,20 @@ export const facilityApi = {
       throw handleApiError(error);
     }
   },
+
+  /**
+   * Get popular cities (top 6 cities with most facilities)
+   * GET /api/facilities/popular-cities
+   * @returns {Promise} Array of cities with count
+   */
+  getPopularCities: async () => {
+    try {
+      const response = await api.get('/facilities/popular-cities');
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 
 export default facilityApi;

@@ -54,8 +54,28 @@ const facilitySchema = new mongoose.Schema(
     },
     pricePerHour: {
       type: Number,
-      required: [true, "Giá mỗi giờ là bắt buộc"],
+      required: false, // Không bắt buộc nữa, dùng priceRange thay thế
       min: 0,
+    },
+    // Khoảng giá (min - max) cho mỗi khung giờ
+    priceRange: {
+      min: {
+        type: Number,
+        required: [true, "Giá tối thiểu là bắt buộc"],
+        min: 0,
+      },
+      max: {
+        type: Number,
+        required: [true, "Giá tối đa là bắt buộc"],
+        min: 0,
+      },
+    },
+    // Khung giờ đặt sân (30 phút hoặc 60 phút)
+    timeSlotDuration: {
+      type: Number,
+      enum: [30, 60],
+      default: 60, // Mặc định 1 giờ
+      required: false,
     },
     description: {
       type: String,
@@ -150,6 +170,13 @@ facilitySchema.pre('save', function(next) {
       .filter(type => type && type.length > 0);
     // Loại bỏ trùng lặp
     this.types = [...new Set(this.types)];
+  }
+  
+  // Validate priceRange: max phải >= min
+  if (this.priceRange && this.priceRange.min !== undefined && this.priceRange.max !== undefined) {
+    if (this.priceRange.max < this.priceRange.min) {
+      return next(new Error('Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu'));
+    }
   }
   
   next();

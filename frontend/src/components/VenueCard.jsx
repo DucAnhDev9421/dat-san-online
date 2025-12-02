@@ -1,6 +1,6 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiMapPin, FiClock, FiDollarSign, FiNavigation } from 'react-icons/fi'
+import { FiMapPin, FiClock, FiNavigation } from 'react-icons/fi'
 import { AiFillStar, AiFillHeart, AiOutlineHeart } from 'react-icons/ai'
 import { calculateDistance, formatDistance } from '../utils/distance'
 import { useAuth } from '../contexts/AuthContext'
@@ -384,37 +384,8 @@ export default function VenueCard({
         {price && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
             <span style={{ color: '#16a34a', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <FiDollarSign /> {price}
+              {price}
             </span>
-            {onBook && (
-              <button 
-                className="venue-card-button"
-                onClick={onBook} 
-                style={{ 
-                  marginLeft: 'auto', 
-                  background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)', 
-                  color: '#fff', 
-                  fontWeight: 700, 
-                  border: 'none', 
-                  borderRadius: 10, 
-                  padding: '10px 16px', 
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 4px 8px rgba(17, 24, 39, 0.2)',
-                  transform: 'translateZ(5px)'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.transform = 'translateZ(5px) translateY(-2px)'
-                  e.target.style.boxShadow = '0 6px 16px rgba(17, 24, 39, 0.3)'
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.transform = 'translateZ(5px)'
-                  e.target.style.boxShadow = '0 4px 8px rgba(17, 24, 39, 0.2)'
-                }}
-              >
-                Đặt sân ngay
-              </button>
-            )}
           </div>
         )}
       </div>

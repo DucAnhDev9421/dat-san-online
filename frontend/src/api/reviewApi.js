@@ -147,6 +147,23 @@ export const reviewApi = {
       throw handleApiError(error);
     }
   },
+
+  /**
+   * Lấy danh sách báo cáo đánh giá (Admin only)
+   * @param {Object} params - Tham số tìm kiếm
+   * @param {number} [params.page=1] - Trang hiện tại
+   * @param {number} [params.limit=10] - Số lượng mỗi trang
+   * @param {string} [params.status] - Lọc theo trạng thái: "pending", "approved", "rejected"
+   * @param {string} [params.search] - Tìm kiếm theo từ khóa
+   */
+  getReviewReports: async (params = {}) => {
+    try {
+      const response = await api.get("/reviews/reports", { params });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 
 export default reviewApi;

@@ -31,7 +31,36 @@ const TournamentDetailContent = () => {
     return badges[status] || badges.upcoming
   }
 
-  const isRegistrationOpen = tournament?.status === 'upcoming' && 
+  // Tính toán status dựa trên endDate nếu cần
+  const getComputedStatus = () => {
+    if (!tournament?.endDate) return tournament?.status || 'upcoming'
+    
+    const now = new Date();
+    const endDate = new Date(tournament.endDate);
+    const startDate = tournament.startDate ? new Date(tournament.startDate) : null;
+    
+    // Nếu đã bị hủy, giữ nguyên
+    if (tournament.status === 'cancelled') {
+      return 'cancelled';
+    }
+    
+    // Nếu endDate đã qua, tự động là completed
+    if (endDate < now) {
+      return 'completed';
+    }
+    
+    // Nếu startDate đã qua nhưng endDate chưa qua, là ongoing
+    if (startDate && startDate <= now && endDate >= now) {
+      return 'ongoing';
+    }
+    
+    // Còn lại là upcoming (hoặc giữ nguyên status từ DB nếu hợp lệ)
+    return tournament.status || 'upcoming';
+  };
+
+  const computedStatus = getComputedStatus();
+  const isRegistrationOpen = computedStatus === 'upcoming' && 
+    tournament?.registrationDeadline &&
     new Date(tournament.registrationDeadline) > new Date()
   const isFull = tournament?.participants >= tournament?.maxParticipants
 
@@ -97,7 +126,7 @@ const TournamentDetailContent = () => {
     )
   }
 
-  const statusBadge = getStatusBadge(tournament.status)
+  const statusBadge = getStatusBadge(computedStatus)
 
   return (
     <div className="tournament-detail-page">
@@ -110,7 +139,7 @@ const TournamentDetailContent = () => {
         <div className="hero-content">
           <div className="hero-badges">
             <span className={statusBadge.className}>
-              {tournament.status === 'ongoing' && (
+              {computedStatus === 'ongoing' && (
                 <span className="relative flex h-2 w-2 mr-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-600 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600"></span>

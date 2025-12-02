@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiMapPin, FiDollarSign, FiPhone } from 'react-icons/fi';
+import { FiMapPin, FiPhone } from 'react-icons/fi';
 import './ChatButton.css';
 
 const FacilityCard = ({ facility, userLocation = null }) => {
@@ -63,8 +63,7 @@ const FacilityCard = ({ facility, userLocation = null }) => {
         <div className="chat-facility-footer">
           {facility.pricePerHour && (
             <div className="chat-facility-price">
-              <FiDollarSign size={14} />
-              <span>{facility.pricePerHour.toLocaleString('vi-VN')}đ/giờ</span>
+              <span>{facility.pricePerHour.toLocaleString('vi-VN')} VND/giờ</span>
             </div>
           )}
           {distance && (

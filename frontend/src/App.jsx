@@ -39,6 +39,7 @@ import Partner from "./pages/public/Partner.jsx";
 import Facilities from "./pages/public/Facilities.jsx";
 import Promotion from "./pages/public/Promotion.jsx";
 import Tournament from "./pages/public/Tournament.jsx";
+import Feedback from "./pages/public/Feedback.jsx";
 import TournamentDetail from "./pages/public/Tournament/TournamentDetail.jsx";
 import CreateTournament from "./pages/public/Tournament/CreateTournament.jsx";
 import CreateInternalTournament from "./pages/public/Tournament/CreateInternalTournament.jsx";
@@ -184,6 +185,7 @@ function App() {
                 <Route path="/facilities" element={<Facilities />} />
                 <Route path="/promotion" element={<Promotion />} />
                 <Route path="/tournament" element={<Tournament />} />
+                <Route path="/feedback" element={<Feedback />} />
                 <Route path="/tournament/create" element={<CreateTournament />} />
                 <Route path="/tournament/create/internal" element={<CreateInternalTournament />} />
                 <Route path="/tournament/:id/*" element={<TournamentDetail />} />

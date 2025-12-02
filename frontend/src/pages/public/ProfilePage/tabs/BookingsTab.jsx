@@ -4,9 +4,10 @@ import { reviewApi } from '../../../../api/reviewApi'
 import { toast } from 'react-toastify'
 import Dialog from '../../../../components/ui/Dialog'
 import CreateReviewModal from '../modals/CreateReviewModal'
+import ReportBookingModal from '../modals/ReportBookingModal'
 import { QRCodeSVG } from 'qrcode.react'
 import html2canvas from 'html2canvas'
-import { Download, Star, Loader } from 'lucide-react'
+import { Download, Star, Loader, AlertCircle } from 'lucide-react'
 
 export default function BookingsTab() {
   const [bookings, setBookings] = useState([])
@@ -15,6 +16,7 @@ export default function BookingsTab() {
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showReviewModal, setShowReviewModal] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
   const [selectedReview, setSelectedReview] = useState(null) // Review đang được edit
   const [cancelReason, setCancelReason] = useState('')
   const [otherReason, setOtherReason] = useState('')
@@ -56,6 +58,11 @@ export default function BookingsTab() {
       setSelectedReview(review)
       setShowReviewModal(true)
     }
+  }
+
+  const openReportModal = (booking) => {
+    setSelectedBooking(booking)
+    setShowReportModal(true)
   }
 
   const handleReviewSuccess = () => {
@@ -469,6 +476,23 @@ export default function BookingsTab() {
                       </button>
                     </div>
                   )}
+                  {/* Nút Khiếu nại - hiển thị cho tất cả booking */}
+                  <button 
+                    className="btn btn-outline small" 
+                    onClick={() => openReportModal(booking)}
+                    style={{ 
+                      minHeight: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px',
+                      color: '#d97706',
+                      borderColor: '#fbbf24'
+                    }}
+                  >
+                    <AlertCircle size={14} />
+                    Khiếu nại
+                  </button>
                 </div>
               </div>
             </div>
@@ -745,6 +769,22 @@ export default function BookingsTab() {
           setShowReviewModal(false)
           setSelectedBooking(null)
           setSelectedReview(null)
+        }}
+      />
+
+      {/* Report Booking Modal */}
+      <ReportBookingModal
+        isOpen={showReportModal}
+        onClose={() => {
+          setShowReportModal(false)
+          setSelectedBooking(null)
+        }}
+        booking={selectedBooking}
+        onSubmit={(reportData) => {
+          console.log('Report submitted:', reportData)
+          // TODO: Handle report submission
+          setShowReportModal(false)
+          setSelectedBooking(null)
         }}
       />
       <style>{`

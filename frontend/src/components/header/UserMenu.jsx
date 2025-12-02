@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { User, LogOut, Settings, ChevronDown, Calendar, Wallet, Trophy } from 'lucide-react'
+import { User, LogOut, Settings, ChevronDown, Calendar, Wallet, Trophy, MessageSquare } from 'lucide-react'
 import useClickOutside from '../../hook/use-click-outside'
 import { walletApi } from '../../api/walletApi'
 
@@ -12,7 +12,8 @@ const UserMenu = ({
   onSettingsClick,
   onBookingHistoryClick,
   onTopUpClick,
-  onTournamentManagementClick
+  onTournamentManagementClick,
+  onFeedbackClick
 }) => {
   const menuRef = useClickOutside(() => onToggle(), isOpen)
   const [balance, setBalance] = useState(user?.walletBalance || user?.balance || 0)
@@ -283,6 +284,29 @@ const UserMenu = ({
             >
               <Settings size={16} />
               Cài đặt
+            </button>
+            
+            <button
+              onClick={onFeedbackClick}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '10px 12px',
+                border: 'none',
+                background: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                color: '#374151',
+                textAlign: 'left'
+              }}
+              onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+              onMouseLeave={(e) => e.target.style.background = 'none'}
+            >
+              <MessageSquare size={16} />
+              Góp ý
             </button>
             
             <hr style={{ margin: '8px 0', border: 'none', borderTop: '1px solid #e5e7eb' }} />

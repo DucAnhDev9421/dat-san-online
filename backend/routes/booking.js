@@ -207,10 +207,13 @@ router.get("/availability", async (req, res, next) => {
     const allSlots = [];
     let currentMinutes = openMinutes;
 
+    // Lấy timeSlotDuration từ facility (mặc định 60 phút nếu không có)
+    const slotDuration = facility.timeSlotDuration || 60;
+
     while (currentMinutes < closeMinutes) {
       const currentHour = Math.floor(currentMinutes / 60);
       const currentMin = currentMinutes % 60;
-      const nextMinutes = currentMinutes + 60; // Each slot is 1 hour
+      const nextMinutes = currentMinutes + slotDuration; // Sử dụng slotDuration thay vì hardcode 60
       const nextHour = Math.floor(nextMinutes / 60);
       const nextMin = nextMinutes % 60;
 
@@ -258,6 +261,7 @@ router.get("/availability", async (req, res, next) => {
           name: facility.name,
           address: facility.address,
           location: facility.location,
+          timeSlotDuration: facility.timeSlotDuration || 60, // Khung giờ đặt sân
         },
         operatingHours: {
           day: dayName,
