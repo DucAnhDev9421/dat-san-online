@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { Lock, Unlock, Trash2, UserPlus } from "lucide-react";
 import { userApi } from "../../../../api/userApi";
+import { partnerApi } from "../../../../api/partnerApi";
+import { toast } from "react-toastify";
 import ActionConfirmationModal from "../modals/ActionConfirmationModal";
 import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
+import ApprovePartnerModal from "../modals/ApprovePartnerModal";
+import RejectPartnerModal from "../modals/RejectPartnerModal";
 import UserFilters from "../components/Users/UserFilters";
 import UserTable from "../components/Users/UserTable";
 import UserDetailModal from "../components/Users/UserDetailModal";
+import PendingPartnerApplications from "../components/Facilities/PendingPartnerApplications";
 
 const Users = () => {
+  const [activeTab, setActiveTab] = useState("all");
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -18,6 +24,13 @@ const Users = () => {
   const [pageSize, setPageSize] = useState(10);
   const [totalUsers, setTotalUsers] = useState(0);
 
+  // Partner applications
+  const [pendingApplications, setPendingApplications] = useState([]);
+  const [loadingApplications, setLoadingApplications] = useState(false);
+  const [partnerPage, setPartnerPage] = useState(1);
+  const [partnerPageSize, setPartnerPageSize] = useState(10);
+  const [totalApplications, setTotalApplications] = useState(0);
+
   // Modal states
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isLockModalOpen, setIsLockModalOpen] = useState(false);
@@ -25,7 +38,10 @@ const Users = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
+  const [isApprovePartnerModalOpen, setIsApprovePartnerModalOpen] = useState(false);
+  const [isRejectPartnerModalOpen, setIsRejectPartnerModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedApplication, setSelectedApplication] = useState(null);
 
   // Debounce search query
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
@@ -40,6 +56,8 @@ const Users = () => {
 
   // Fetch users
   useEffect(() => {
+    if (activeTab !== "all") return; // Chỉ fetch users khi ở tab "all"
+
     const fetchUsers = async () => {
       try {
         setLoading(true);
@@ -78,7 +96,41 @@ const Users = () => {
     };
 
     fetchUsers();
-  }, [page, pageSize, debouncedSearch, roleFilter, statusFilter]);
+  }, [page, pageSize, debouncedSearch, roleFilter, statusFilter, activeTab]);
+
+  // Fetch partner applications
+  useEffect(() => {
+    if (activeTab !== "pending") return; // Chỉ fetch khi ở tab "pending"
+
+    const fetchApplications = async () => {
+      try {
+        setLoadingApplications(true);
+        const params = {
+          page: partnerPage,
+          limit: partnerPageSize,
+          status: "pending",
+        };
+
+        const result = await partnerApi.getAllApplications(params);
+
+        if (result.success && result.data) {
+          setPendingApplications(result.data.applications || []);
+          setTotalApplications(result.data.pagination?.total || 0);
+        } else {
+          toast.error(result.message || "Không thể tải danh sách đơn đăng ký");
+          setPendingApplications([]);
+        }
+      } catch (error) {
+        console.error("Error fetching applications:", error);
+        toast.error(error.message || "Không thể tải danh sách đơn đăng ký");
+        setPendingApplications([]);
+      } finally {
+        setLoadingApplications(false);
+      }
+    };
+
+    fetchApplications();
+  }, [activeTab, partnerPage, partnerPageSize]);
 
   // Handlers
   const handleViewDetails = async (user) => {
@@ -247,6 +299,97 @@ const Users = () => {
     setPage(1);
   };
 
+  // Handlers cho đơn đăng ký đối tác
+  const handleApprovePartner = (application) => {
+    setSelectedApplication(application);
+    setIsApprovePartnerModalOpen(true);
+  };
+
+  const handleConfirmApprovePartner = async () => {
+    if (!selectedApplication) return;
+
+    try {
+      const applicationId = selectedApplication._id || selectedApplication.id;
+      if (!applicationId) {
+        toast.error("Không tìm thấy đơn đăng ký");
+        return;
+      }
+
+      const result = await partnerApi.approveApplication(applicationId);
+      if (result.success) {
+        toast.success(result.message || "Duyệt đơn đăng ký và cấp quyền Owner thành công");
+        // Refresh danh sách
+        setPartnerPage(1);
+        // Cập nhật local state
+        setPendingApplications((current) =>
+          current.filter((app) => (app._id || app.id) !== applicationId)
+        );
+      } else {
+        toast.error(result.message || "Không thể duyệt đơn đăng ký");
+      }
+    } catch (error) {
+      console.error("Error approving partner:", error);
+      toast.error(error.message || "Không thể duyệt đơn đăng ký");
+    } finally {
+      setIsApprovePartnerModalOpen(false);
+      setSelectedApplication(null);
+    }
+  };
+
+  const handleRejectPartner = (application) => {
+    setSelectedApplication(application);
+    setIsRejectPartnerModalOpen(true);
+  };
+
+  const handleConfirmRejectPartner = async (rejectionReason) => {
+    if (!selectedApplication) return;
+
+    try {
+      const applicationId = selectedApplication._id || selectedApplication.id;
+      if (!applicationId) {
+        toast.error("Không tìm thấy đơn đăng ký");
+        return;
+      }
+
+      const result = await partnerApi.rejectApplication(applicationId, rejectionReason);
+      if (result.success) {
+        toast.success(result.message || "Từ chối đơn đăng ký thành công");
+        // Refresh danh sách
+        setPartnerPage(1);
+        // Cập nhật local state
+        setPendingApplications((current) =>
+          current.filter((app) => (app._id || app.id) !== applicationId)
+        );
+      } else {
+        toast.error(result.message || "Không thể từ chối đơn đăng ký");
+      }
+    } catch (error) {
+      console.error("Error rejecting partner:", error);
+      toast.error(error.message || "Không thể từ chối đơn đăng ký");
+    } finally {
+      setIsRejectPartnerModalOpen(false);
+      setSelectedApplication(null);
+    }
+  };
+
+  const handleViewUser = async (userId) => {
+    try {
+      const result = await userApi.getUserById(userId);
+      if (result.success) {
+        const userData = result.data.user || result.data;
+        setSelectedUser(userData);
+        setIsDetailModalOpen(true);
+      } else {
+        toast.error(result.message || "Không thể tải thông tin người dùng");
+      }
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      toast.error(error.message || "Không thể tải thông tin người dùng");
+    }
+  };
+
+  const partnerApplicationCount = totalApplications;
+
   return (
     <div>
       <div
@@ -260,6 +403,98 @@ const Users = () => {
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Quản lý người dùng</h1>
       </div>
 
+      {/* Tabs */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 20,
+          background: "#fff",
+          padding: 8,
+          borderRadius: 12,
+          boxShadow: "0 2px 8px rgba(0,0,0,.08)",
+        }}
+      >
+        <button
+          onClick={() => {
+            setActiveTab("all");
+            setPage(1);
+          }}
+          style={{
+            padding: "10px 20px",
+            borderRadius: 8,
+            border: "none",
+            background: activeTab === "all" ? "#10b981" : "transparent",
+            color: activeTab === "all" ? "#fff" : "#6b7280",
+            cursor: "pointer",
+            fontWeight: 600,
+            fontSize: 14,
+            transition: "all 0.2s",
+          }}
+        >
+          Tất cả người dùng
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("pending");
+            setPartnerPage(1);
+          }}
+          style={{
+            padding: "10px 20px",
+            borderRadius: 8,
+            border: "none",
+            background: activeTab === "pending" ? "#10b981" : "transparent",
+            color: activeTab === "pending" ? "#fff" : "#6b7280",
+            cursor: "pointer",
+            fontWeight: 600,
+            fontSize: 14,
+            transition: "all 0.2s",
+            position: "relative",
+          }}
+        >
+          Đơn đăng ký đối tác ({partnerApplicationCount})
+          {partnerApplicationCount > 0 && (
+            <span
+              style={{
+                position: "absolute",
+                top: 4,
+                right: 4,
+                width: 8,
+                height: 8,
+                background: "#ef4444",
+                borderRadius: "50%",
+              }}
+            />
+          )}
+        </button>
+      </div>
+
+      {activeTab === "pending" ? (
+        <>
+          {/* Hiển thị đơn đăng ký đối tác chờ duyệt */}
+          {loadingApplications ? (
+            <div style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
+              Đang tải dữ liệu...
+            </div>
+          ) : (
+            <PendingPartnerApplications
+              applications={pendingApplications}
+              page={partnerPage}
+              pageSize={partnerPageSize}
+              totalItems={totalApplications}
+              onPageChange={setPartnerPage}
+              onPageSizeChange={(size) => {
+                setPartnerPageSize(size);
+                setPartnerPage(1);
+              }}
+              onApprove={handleApprovePartner}
+              onReject={handleRejectPartner}
+              onViewUser={handleViewUser}
+            />
+          )}
+        </>
+      ) : (
+        <>
       <UserFilters
         searchQuery={searchQuery}
         roleFilter={roleFilter}
@@ -298,6 +533,8 @@ const Users = () => {
         onRestore={handleRestore}
         onPromote={handlePromoteToOwner}
       />
+        </>
+      )}
 
       <UserDetailModal
         isOpen={isDetailModalOpen}
@@ -387,6 +624,28 @@ const Users = () => {
         iconBg="#dbeafe"
         iconColor="#3b82f6"
         warningMessage="Người dùng này sẽ có thể đăng ký mở cơ sở."
+      />
+
+      {/* Approve Partner Modal */}
+      <ApprovePartnerModal
+        isOpen={isApprovePartnerModalOpen}
+        onClose={() => {
+          setIsApprovePartnerModalOpen(false);
+          setSelectedApplication(null);
+        }}
+        onConfirm={handleConfirmApprovePartner}
+        application={selectedApplication}
+      />
+
+      {/* Reject Partner Modal */}
+      <RejectPartnerModal
+        isOpen={isRejectPartnerModalOpen}
+        onClose={() => {
+          setIsRejectPartnerModalOpen(false);
+          setSelectedApplication(null);
+        }}
+        onConfirm={handleConfirmRejectPartner}
+        application={selectedApplication}
       />
     </div>
   );

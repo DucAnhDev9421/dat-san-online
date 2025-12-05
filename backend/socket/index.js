@@ -11,6 +11,9 @@ import { getLockedSlotsForCourt } from './bookingSocket.js';
 
 let io;
 
+// Track online users
+const onlineUsers = new Map(); // userId -> { socketIds: Set, lastSeen: Date }
+
 /**
  * Socket authentication middleware
  */
@@ -96,6 +99,22 @@ export const initializeSocket = (httpServer) => {
   io.on('connection', (socket) => {
     console.log(`✅ Socket connected [default]: ${socket.userId} (${socket.user.email}) - Role: ${socket.userRole}`);
 
+    // Track user as online
+    if (!onlineUsers.has(socket.userId)) {
+      onlineUsers.set(socket.userId, {
+        socketIds: new Set(),
+        lastSeen: new Date(),
+      });
+    }
+    onlineUsers.get(socket.userId).socketIds.add(socket.id);
+    onlineUsers.get(socket.userId).lastSeen = new Date();
+
+    // Broadcast user online status
+    io.emit('user:online_status', {
+      userId: socket.userId,
+      online: true,
+    });
+
     // Join user's personal room
     socket.join(`user_${socket.userId}`);
 
@@ -154,8 +173,117 @@ export const initializeSocket = (httpServer) => {
       socket.emit('left_court', { courtId });
     });
 
+    // ==================== CHAT HANDLERS FOR CUSTOMERS ====================
+    
+    // Customer gửi tin nhắn đến owner
+    socket.on('chat:send_to_owner', async (data) => {
+      try {
+        const { ownerId, message, facilityId } = data;
+
+        if (!ownerId || !message || !message.trim()) {
+          socket.emit('chat:error', { message: 'Owner ID and message are required' });
+          return;
+        }
+
+        // Import ChatMessage
+        const ChatMessage = (await import('../models/ChatMessage.js')).default;
+
+        // Tạo tin nhắn mới
+        const chatMessage = new ChatMessage({
+          sender: socket.userId,
+          receiver: ownerId,
+          message: message.trim(),
+          facility: facilityId || null,
+        });
+
+        await chatMessage.save();
+
+        // Populate để lấy thông tin
+        await chatMessage.populate('sender', 'name avatar');
+        await chatMessage.populate('receiver', 'name avatar');
+
+        const messageData = {
+          id: chatMessage._id.toString(),
+          text: chatMessage.message,
+          sender: 'customer',
+          senderAvatar: chatMessage.sender.avatar || null,
+          receiverAvatar: chatMessage.receiver.avatar || null,
+          timestamp: chatMessage.createdAt.getTime(),
+          showTime: true,
+          isRead: false,
+        };
+
+        // Gửi tin nhắn đến owner (qua owner namespace)
+        const ownerNamespace = io.of('/owner');
+        ownerNamespace.to(`owner_${ownerId}`).emit('chat:new_message', {
+          message: messageData,
+          customerId: socket.userId,
+        });
+
+        // Gửi lại cho customer để confirm
+        socket.emit('chat:message_sent', { message: messageData });
+
+        console.log(`💬 Customer ${socket.userId} sent message to owner ${ownerId}`);
+      } catch (error) {
+        console.error('Error sending message to owner:', error);
+        socket.emit('chat:error', { message: 'Failed to send message' });
+      }
+    });
+
+    // Lắng nghe tin nhắn mới từ owner
+    socket.on('chat:new_message', (data) => {
+      // Handler này được gọi khi owner gửi tin nhắn (đã được xử lý ở ownerSocket)
+      // Customer chỉ cần lắng nghe event này
+    });
+
+    // Handle typing indicator cho customer
+    socket.on('chat:typing', (data) => {
+      const { ownerId, isTyping } = data;
+      if (!ownerId) return;
+
+      // Gửi typing status đến owner
+      const ownerNamespace = io.of('/owner');
+      ownerNamespace.to(`owner_${ownerId}`).emit('chat:typing', {
+        userId: socket.userId,
+        isTyping: isTyping,
+      });
+    });
+
+    // Handle check user online status
+    socket.on('check_user_online', (data, callback) => {
+      const { userId } = data;
+      if (!userId) {
+        if (callback) callback({ online: false });
+        return;
+      }
+
+      const userStatus = onlineUsers.get(userId);
+      const isOnline = userStatus && userStatus.socketIds.size > 0;
+      
+      if (callback) {
+        callback({ online: isOnline });
+      }
+    });
+
     socket.on('disconnect', (reason) => {
       console.log(`❌ Socket disconnected [default]: ${socket.userId} - Reason: ${reason}`);
+      
+      // Remove socket from online users
+      const userStatus = onlineUsers.get(socket.userId);
+      if (userStatus) {
+        userStatus.socketIds.delete(socket.id);
+        
+        // If no more sockets for this user, mark as offline
+        if (userStatus.socketIds.size === 0) {
+          onlineUsers.delete(socket.userId);
+          
+          // Broadcast user offline status
+          io.emit('user:online_status', {
+            userId: socket.userId,
+            online: false,
+          });
+        }
+      }
     });
 
     socket.on('error', (error) => {

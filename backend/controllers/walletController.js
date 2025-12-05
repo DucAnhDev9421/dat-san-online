@@ -10,6 +10,7 @@ import {
   verifyWebhook as verifyPayOSWebhook,
 } from "../utils/payosService.js";
 import { credit } from "../utils/walletService.js";
+
 // Hàm helper sắp xếp object (lấy từ paymentController)
 function sortObject(obj) {
   let sorted = {};
@@ -82,13 +83,17 @@ export const initTopUp = asyncHandler(async (req, res) => {
   const { amount, method } = req.body;
   const user = req.user;
 
-  if (!amount || amount <= 0) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Số tiền không hợp lệ" });
+  // === SỬ DỤNG LOGIC TỪ STASH: Ràng buộc số tiền tối thiểu ===
+  const MIN_TOPUP_AMOUNT = 10000; // 10.000 VNĐ
+  if (!amount || amount < MIN_TOPUP_AMOUNT) {
+    return res.status(400).json({
+      success: false,
+      message: `Số tiền nạp tối thiểu là ${MIN_TOPUP_AMOUNT.toLocaleString(
+        "vi-VN"
+      )} VNĐ`,
+    });
   }
 
-  // === DÒNG ĐÃ SỬA ===
   if (!["momo", "vnpay", "payos"].includes(method)) {
     return res
       .status(400)
@@ -110,14 +115,15 @@ export const initTopUp = asyncHandler(async (req, res) => {
   // 2. Sử dụng _id của transaction làm mã giao dịch (paymentId)
   const paymentId = `WALLET_${transaction._id.toString()}`;
   // Rút ngắn description cho PayOS (tối đa 25 ký tự)
-  const orderInfo = method === "payos"
-    ? `Nap tien ${transaction._id.toString().slice(-8)}`
-    : `Nap tien vao vi ${user.email} - ${transaction._id}`;
+  const orderInfo =
+    method === "payos"
+      ? `Nap tien ${transaction._id.toString().slice(-8)}`
+      : `Nap tien vao vi ${user.email} - ${transaction._id}`;
 
   // 3. Xử lý logic cổng thanh toán (tương tự paymentController)
 
   if (method === "vnpay") {
-    // ... (logic VNPay của bạn)
+    // ... (logic VNPay)
     const ipAddr = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
     const tmnCode = config.vnpay.tmnCode;
     const secretKey = config.vnpay.hashSecret;
@@ -149,7 +155,7 @@ export const initTopUp = asyncHandler(async (req, res) => {
       vnpUrl + "?" + qs.stringify(vnp_Params, { encode: false });
     res.status(200).json({ success: true, paymentUrl });
   } else if (method === "momo") {
-    // ... (logic Momo của bạn)
+    // ... (logic Momo)
     const partnerCode = config.momo.partnerCode;
     const accessKey = config.momo.accessKey;
     const secretKey = config.momo.secretKey;
@@ -201,7 +207,7 @@ export const initTopUp = asyncHandler(async (req, res) => {
         .json({ success: false, message: "Lỗi kết nối tới MoMo" });
     }
   } else if (method === "payos") {
-    // ... (logic PayOS của bạn)
+    // ... (logic PayOS)
     const orderCode = parseInt(transaction._id.toString().substring(18), 16);
 
     transaction.metadata.transactionCode = `PAYOS_WALLET_${orderCode}`;
@@ -209,8 +215,10 @@ export const initTopUp = asyncHandler(async (req, res) => {
 
     try {
       // Rút ngắn description cho PayOS (tối đa 25 ký tự)
-      const payosDescription = `Nap tien ${transaction._id.toString().slice(-8)}`.substring(0, 25);
-      
+      const payosDescription = `Nap tien ${transaction._id
+        .toString()
+        .slice(-8)}`.substring(0, 25);
+
       const paymentLinkData = await createPayOSLink({
         orderCode,
         amount: amount,
@@ -322,7 +330,7 @@ export const payosWalletCallback = asyncHandler(async (req, res) => {
       console.log(
         `PayOS Wallet: Giao dịch ${webhookBody.data?.orderCode} thất bại/hủy (code: ${webhookBody.code}).`
       );
-      
+
       // Tìm và cập nhật transaction thành "failed" nếu có orderCode
       if (webhookBody.data?.orderCode) {
         const orderCode = webhookBody.data.orderCode;
@@ -332,24 +340,27 @@ export const payosWalletCallback = asyncHandler(async (req, res) => {
         });
 
         for (const trans of pendingTransactions) {
-          const transOrderCode = parseInt(trans._id.toString().substring(18), 16);
+          const transOrderCode = parseInt(
+            trans._id.toString().substring(18),
+            16
+          );
           if (transOrderCode === orderCode) {
             trans.status = "failed";
             await trans.save();
-            console.log(`PayOS Wallet: Đã cập nhật transaction ${trans._id} thành failed`);
+            console.log(
+              `PayOS Wallet: Đã cập nhật transaction ${trans._id} thành failed`
+            );
             break;
           }
         }
       }
-      
+
       return res
         .status(200)
         .json({ success: false, message: "Giao dịch thất bại" });
     }
 
     // BƯỚC 2: Xác thực chữ ký.
-    // Hàm này sẽ trả về "data" object nếu thành công,
-    // hoặc ném lỗi (bị catch) nếu chữ ký sai.
     const verifiedData = await verifyPayOSWebhook(webhookBody, headers);
 
     // BƯỚC 3: Xử lý logic (verifiedData bây giờ chính là "data" object)

@@ -41,7 +41,16 @@ import provinceRoutes from "./routes/province.js";
 import promotionRoutes from "./routes/promotion.js";
 import analyticsRoutes from "./routes/analytics.js";
 import walletRouters from "./routes/wallet.js";
+import leagueRoutes from "./routes/league.js";
+import aiRoutes from "./routes/ai.js";
 import User from "./models/User.js";
+import loyaltyRoutes from "./routes/loyalty.js";
+import referralRoutes from "./routes/referral.js";
+import partnerRoutes from "./routes/partner.js";
+import feedbackRoutes from "./routes/feedback.js";
+import chatRoutes from "./routes/chat.js";
+import { startReservationExpiryJob } from "./jobs/reservationExpiry.js";
+import { startBookingAutoCancelJob } from "./jobs/bookingAutoCancel.js";
 
 const app = express();
 
@@ -133,12 +142,19 @@ app.use("/api/checkin", checkinRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/sport-categories", sportCategoryRoutes);
 app.use("/api/court-types", courtTypeRoutes);
+app.use("/api/partner-applications", partnerRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/provinces", provinceRoutes);
 app.use("/api/promotions", promotionRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/wallet", walletRouters);
+app.use("/api/loyalty", loyaltyRoutes);
+app.use("/api/referrals", referralRoutes);
+app.use("/api/leagues", leagueRoutes);
+app.use("/api/ai", aiRoutes);
+app.use("/api/feedbacks", feedbackRoutes);
+app.use("/api/chat", chatRoutes);
 // 404 handler
 app.use(notFound);
 
@@ -159,6 +175,12 @@ httpServer.listen(PORT, () => {
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Google OAuth: http://localhost:${PORT}/api/auth/google`);
   console.log(`🔌 Socket.IO server initialized with namespaces`);
+  
+  // Start reservation expiry job
+  startReservationExpiryJob();
+  
+  // Start booking auto-cancel job (hủy đơn không xác nhận trước 15 phút vào sân)
+  startBookingAutoCancelJob();
 });
 
 // Schedule cleanup job for unverified users every hour

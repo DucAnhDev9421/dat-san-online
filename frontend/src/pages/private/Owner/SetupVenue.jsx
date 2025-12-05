@@ -28,7 +28,11 @@ const SetupVenue = () => {
     city: "", // Tỉnh/Thành phố
     district: "", // Quận/Huyện
     phoneNumber: "", // Số điện thoại
-    pricePerHour: "", // Giá mỗi giờ
+    priceRange: {
+      min: "", // Giá tối thiểu
+      max: "", // Giá tối đa
+    },
+    timeSlotDuration: 60, // Khung giờ: 30 hoặc 60 phút (mặc định 60)
     types: [], // Mảng các loại cơ sở (required, ít nhất 1 loại)
     description: "", // Mô tả
     services: [], // Tiện ích
@@ -145,6 +149,19 @@ const SetupVenue = () => {
     }
   };
 
+  const handlePriceRangeChange = (field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      priceRange: {
+        ...prev.priceRange,
+        [field]: value,
+      },
+    }));
+    if (errors.priceRange) {
+      setErrors((prev) => ({ ...prev, priceRange: "" }));
+    }
+  };
+
   const handleCheckbox = (field, value) => {
     setFormData((prev) => {
       const currentArray = prev[field] || [];
@@ -241,9 +258,13 @@ const SetupVenue = () => {
           formData.city.trim() !== "" &&
           formData.district.trim() !== "" &&
           formData.types.length > 0 &&
-          formData.pricePerHour !== "" &&
-          !isNaN(formData.pricePerHour) &&
-          parseFloat(formData.pricePerHour) >= 0
+          formData.priceRange.min !== "" &&
+          formData.priceRange.max !== "" &&
+          !isNaN(formData.priceRange.min) &&
+          !isNaN(formData.priceRange.max) &&
+          parseFloat(formData.priceRange.min) >= 0 &&
+          parseFloat(formData.priceRange.max) >= 0 &&
+          parseFloat(formData.priceRange.max) >= parseFloat(formData.priceRange.min)
       },
       // Thông tin liên hệ (15%)
       {
@@ -294,10 +315,16 @@ const SetupVenue = () => {
       newErrors.phoneNumber = "Số điện thoại phải có 10-11 chữ số";
     if (!formData.types || formData.types.length === 0)
       newErrors.types = "Vui lòng chọn ít nhất một loại cơ sở";
-    if (!formData.pricePerHour || formData.pricePerHour === "")
-      newErrors.pricePerHour = "Vui lòng nhập giá mỗi giờ";
-    else if (isNaN(formData.pricePerHour) || parseFloat(formData.pricePerHour) < 0)
-      newErrors.pricePerHour = "Giá mỗi giờ phải là số và lớn hơn hoặc bằng 0";
+    if (!formData.priceRange.min || formData.priceRange.min === "")
+      newErrors.priceRange = "Vui lòng nhập giá tối thiểu";
+    else if (isNaN(formData.priceRange.min) || parseFloat(formData.priceRange.min) < 0)
+      newErrors.priceRange = "Giá tối thiểu phải là số và lớn hơn hoặc bằng 0";
+    else if (!formData.priceRange.max || formData.priceRange.max === "")
+      newErrors.priceRange = "Vui lòng nhập giá tối đa";
+    else if (isNaN(formData.priceRange.max) || parseFloat(formData.priceRange.max) < 0)
+      newErrors.priceRange = "Giá tối đa phải là số và lớn hơn hoặc bằng 0";
+    else if (parseFloat(formData.priceRange.max) < parseFloat(formData.priceRange.min))
+      newErrors.priceRange = "Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu";
     if (!formData.description.trim())
       newErrors.description = "Vui lòng nhập mô tả";
 
@@ -344,7 +371,11 @@ const SetupVenue = () => {
         address: fullAddress,
         types: formData.types, // Mảng các loại cơ sở
         phoneNumber: formData.phoneNumber.trim(),
-        pricePerHour: parseFloat(formData.pricePerHour), // Giá mỗi giờ
+        priceRange: {
+          min: parseFloat(formData.priceRange.min),
+          max: parseFloat(formData.priceRange.max),
+        },
+        timeSlotDuration: formData.timeSlotDuration, // Khung giờ: 30 hoặc 60 phút
         description: formData.description.trim(),
         services: formData.services.length > 0 ? formData.services : undefined,
         operatingHours: formData.operatingHours,
@@ -678,35 +709,219 @@ const SetupVenue = () => {
                 display: "block",
                 marginBottom: 8,
                 fontWeight: 600,
-                color: errors.pricePerHour ? "#ef4444" : "#374151",
+                color: errors.priceRange ? "#ef4444" : "#374151",
               }}
             >
-              Giá mỗi giờ (VNĐ) *
+              Khoảng giá (VNĐ) *
             </label>
-            <input
-              type="number"
-              name="pricePerHour"
-              value={formData.pricePerHour}
-              onChange={handleChange}
-              placeholder="VD: 200000"
-              min="0"
-              step="1000"
-              style={{
-                width: "100%",
-                padding: "12px 16px",
-                borderRadius: 10,
-                border: `2px solid ${errors.pricePerHour ? "#ef4444" : "#e5e7eb"}`,
-                fontSize: 15,
-                transition: "border-color 0.2s",
-              }}
-            />
-            {errors.pricePerHour && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={{ display: "block", marginBottom: 6, fontSize: 13, color: "#6b7280" }}>
+                  Giá tối thiểu
+                </label>
+                <input
+                  type="number"
+                  value={formData.priceRange.min}
+                  onChange={(e) => handlePriceRangeChange("min", e.target.value)}
+                  placeholder="VD: 1050"
+                  min="0"
+                  step="1000"
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    borderRadius: 10,
+                    border: `2px solid ${errors.priceRange ? "#ef4444" : "#e5e7eb"}`,
+                    fontSize: 15,
+                    transition: "border-color 0.2s",
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: 6, fontSize: 13, color: "#6b7280" }}>
+                  Giá tối đa
+                </label>
+                <input
+                  type="number"
+                  value={formData.priceRange.max}
+                  onChange={(e) => handlePriceRangeChange("max", e.target.value)}
+                  placeholder="VD: 10500"
+                  min="0"
+                  step="1000"
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    borderRadius: 10,
+                    border: `2px solid ${errors.priceRange ? "#ef4444" : "#e5e7eb"}`,
+                    fontSize: 15,
+                    transition: "border-color 0.2s",
+                  }}
+                />
+              </div>
+            </div>
+            {errors.priceRange && (
               <div style={{ color: "#ef4444", fontSize: 13, marginTop: 4 }}>
-                {errors.pricePerHour}
+                {errors.priceRange}
               </div>
             )}
             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
-              Giá thuê sân mỗi giờ (đơn vị: VNĐ)
+              Khoảng giá cho mỗi khung giờ (đơn vị: VNĐ). Sẽ hiển thị dạng "X - Y VND/khung giờ"
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: 8,
+                fontWeight: 600,
+                color: "#374151",
+              }}
+            >
+              Khung giờ đặt sân *
+            </label>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "16px",
+                  border: `2px solid ${
+                    formData.timeSlotDuration === 30 ? "#3b82f6" : "#e5e7eb"
+                  }`,
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  background:
+                    formData.timeSlotDuration === 30 ? "#dbeafe" : "#fff",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  if (formData.timeSlotDuration !== 30) {
+                    e.currentTarget.style.borderColor = "#9ca3af";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (formData.timeSlotDuration !== 30) {
+                    e.currentTarget.style.borderColor = "#e5e7eb";
+                  }
+                }}
+              >
+                <input
+                  type="radio"
+                  name="timeSlotDuration"
+                  value={30}
+                  checked={formData.timeSlotDuration === 30}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      timeSlotDuration: parseInt(e.target.value),
+                    }))
+                  }
+                  style={{
+                    width: 18,
+                    height: 18,
+                    cursor: "pointer",
+                    accentColor: "#3b82f6",
+                  }}
+                />
+                <div>
+                  <div
+                    style={{
+                      fontSize: 15,
+                      fontWeight: formData.timeSlotDuration === 30 ? 600 : 400,
+                      color:
+                        formData.timeSlotDuration === 30 ? "#1e40af" : "#374151",
+                    }}
+                  >
+                    30 phút
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#6b7280",
+                      marginTop: 2,
+                    }}
+                  >
+                    Khách đặt sân theo khung 30 phút
+                  </div>
+                </div>
+              </label>
+
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "16px",
+                  border: `2px solid ${
+                    formData.timeSlotDuration === 60 ? "#3b82f6" : "#e5e7eb"
+                  }`,
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  background:
+                    formData.timeSlotDuration === 60 ? "#dbeafe" : "#fff",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  if (formData.timeSlotDuration !== 60) {
+                    e.currentTarget.style.borderColor = "#9ca3af";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (formData.timeSlotDuration !== 60) {
+                    e.currentTarget.style.borderColor = "#e5e7eb";
+                  }
+                }}
+              >
+                <input
+                  type="radio"
+                  name="timeSlotDuration"
+                  value={60}
+                  checked={formData.timeSlotDuration === 60}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      timeSlotDuration: parseInt(e.target.value),
+                    }))
+                  }
+                  style={{
+                    width: 18,
+                    height: 18,
+                    cursor: "pointer",
+                    accentColor: "#3b82f6",
+                  }}
+                />
+                <div>
+                  <div
+                    style={{
+                      fontSize: 15,
+                      fontWeight: formData.timeSlotDuration === 60 ? 600 : 400,
+                      color:
+                        formData.timeSlotDuration === 60 ? "#1e40af" : "#374151",
+                    }}
+                  >
+                    1 giờ
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#6b7280",
+                      marginTop: 2,
+                    }}
+                  >
+                    Khách đặt sân theo khung 1 giờ
+                  </div>
+                </div>
+              </label>
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+              Chọn khung giờ mà khách hàng có thể đặt sân (30 phút hoặc 1 giờ)
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { X, XCircle, AlertTriangle } from "lucide-react";
 import useClickOutside from "../../../../hook/use-click-outside";
 import useBodyScrollLock from "../../../../hook/use-body-scroll-lock";
@@ -8,8 +8,15 @@ const RejectFacilityModal = ({ isOpen, onClose, onConfirm, facility }) => {
   useBodyScrollLock(isOpen);
   useEscapeKey(onClose, isOpen);
   const modalRef = useClickOutside(onClose, isOpen);
+  const [rejectionReason, setRejectionReason] = useState("");
 
   if (!isOpen || !facility) return null;
+
+  const handleConfirm = () => {
+    if (onConfirm) onConfirm(rejectionReason);
+    if (onClose) onClose();
+    setRejectionReason(""); // Reset sau khi đóng
+  };
 
   return (
     <div
@@ -103,9 +110,32 @@ const RejectFacilityModal = ({ isOpen, onClose, onConfirm, facility }) => {
               Cơ sở này sẽ bị xóa khỏi hệ thống và không thể khôi phục.
             </p>
           </div>
-          <p style={{ fontSize: 13, color: "#ef4444", margin: 0 }}>
+          <p style={{ fontSize: 13, color: "#ef4444", marginBottom: 16 }}>
             ⚠️ Hành động này không thể hoàn tác.
           </p>
+          <div>
+            <label
+              htmlFor="rejectionReason"
+              style={{ display: "block", fontSize: 13, color: "#374151", marginBottom: 6 }}
+            >
+              Lý do từ chối (tùy chọn):
+            </label>
+            <textarea
+              id="rejectionReason"
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              rows="4"
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: 8,
+                border: "1px solid #e5e7eb",
+                fontSize: 14,
+                resize: "vertical",
+              }}
+              placeholder="Nhập lý do từ chối..."
+            ></textarea>
+          </div>
         </div>
 
         {/* Footer */}
@@ -142,10 +172,7 @@ const RejectFacilityModal = ({ isOpen, onClose, onConfirm, facility }) => {
             Hủy
           </button>
           <button
-            onClick={() => {
-              if (onConfirm) onConfirm();
-              if (onClose) onClose();
-            }}
+            onClick={handleConfirm}
             style={{
               padding: "10px 24px",
               background: "#ef4444",

@@ -17,6 +17,7 @@ const Bookings = () => {
   const { ownerSocket, defaultSocket, isConnected, joinFacility, leaveFacility } = useSocket();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("");
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
@@ -76,6 +77,10 @@ const Bookings = () => {
           params.status = statusFilter;
         }
 
+        if (dateFilter) {
+          params.date = dateFilter; // Format: YYYY-MM-DD
+        }
+
         if (searchQuery) {
           params.search = searchQuery;
         }
@@ -98,6 +103,8 @@ const Bookings = () => {
             pay: booking.paymentStatus || 'pending',
             bookingDate: booking.createdAt ? new Date(booking.createdAt).toLocaleDateString('vi-VN') : 'N/A',
             notes: booking.contactInfo?.notes || booking.ownerNotes || '',
+            cancellationReason: booking.cancellationReason || null,
+            cancelledAt: booking.cancelledAt || null,
             _original: booking
           }));
 
@@ -115,7 +122,7 @@ const Bookings = () => {
     };
 
     fetchBookings();
-  }, [selectedFacilityId, page, pageSize, statusFilter, searchQuery, refreshKey]);
+  }, [selectedFacilityId, page, pageSize, statusFilter, dateFilter, searchQuery, refreshKey]);
 
   useEffect(() => {
     if (selectedFacilityId && isConnected) {
@@ -358,6 +365,11 @@ const Bookings = () => {
           statusFilter={statusFilter}
           onStatusFilterChange={(value) => {
             setStatusFilter(value);
+            setPage(1);
+          }}
+          dateFilter={dateFilter}
+          onDateFilterChange={(value) => {
+            setDateFilter(value);
             setPage(1);
           }}
           pageSize={pageSize}

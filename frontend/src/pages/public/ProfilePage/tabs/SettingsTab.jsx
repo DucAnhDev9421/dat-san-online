@@ -1,18 +1,62 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import ToggleSwitch from '../components/ToggleSwitch'
 import ChangePasswordModal from '../modals/ChangePasswordModal'
 import Dialog from '@/components/ui/Dialog'
 import { AlertTriangle } from 'lucide-react'
+import { userApi } from '@/api/userApi'
+import { useAuth } from '@/contexts/AuthContext'
 import '../modals/ChangePasswordModal.css'
 
 export default function SettingsTab({ notifications, setNotifications }) {
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [confirmText, setConfirmText] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+
+  const handleDeleteAccount = async () => {
+    if (confirmText !== 'XÓA') {
+      setDeleteError('Vui lòng nhập "XÓA" để xác nhận')
+      return
+    }
+
+    setIsDeleting(true)
+    setDeleteError('')
+
+    try {
+      const result = await userApi.deleteAccount()
+      
+      if (result.success) {
+        // Đăng xuất và xóa tokens
+        await logout()
+        
+        // Redirect về trang chủ
+        navigate('/', { replace: true })
+        
+        // Hiển thị thông báo thành công
+        alert('Tài khoản đã được xóa thành công')
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      setDeleteError(error.message || 'Không thể xóa tài khoản. Vui lòng thử lại sau.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   return (
-    <div className="settings-section">
-      <h3 style={{ marginBottom: '24px', fontSize: '20px', fontWeight: '600' }}>Cài đặt tài khoản</h3>
+    <>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+      <div className="settings-section">
+        <h3 style={{ marginBottom: '24px', fontSize: '20px', fontWeight: '600' }}>Cài đặt tài khoản</h3>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
         {/* Thông báo */}
@@ -182,8 +226,11 @@ export default function SettingsTab({ notifications, setNotifications }) {
       <Dialog 
         open={showDeleteDialog} 
         onClose={() => {
-          setShowDeleteDialog(false)
-          setConfirmText('')
+          if (!isDeleting) {
+            setShowDeleteDialog(false)
+            setConfirmText('')
+            setDeleteError('')
+          }
         }}
         maxWidth="500px"
       >
@@ -226,25 +273,42 @@ export default function SettingsTab({ notifications, setNotifications }) {
             type="text"
             placeholder='Nhập "XÓA" để xác nhận'
             value={confirmText}
-            onChange={(e) => setConfirmText(e.target.value)}
+            onChange={(e) => {
+              setConfirmText(e.target.value)
+              setDeleteError('')
+            }}
+            disabled={isDeleting}
             style={{
               width: '100%',
               padding: '12px 16px',
-              border: '1px solid #e5e7eb',
+              border: deleteError ? '1px solid #dc2626' : '1px solid #e5e7eb',
               borderRadius: '8px',
               fontSize: '14px',
               outline: 'none',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              opacity: isDeleting ? 0.6 : 1,
+              cursor: isDeleting ? 'not-allowed' : 'text'
             }}
             onFocus={(e) => {
-              e.target.style.borderColor = '#dc2626'
-              e.target.style.boxShadow = '0 0 0 3px rgba(220, 38, 38, 0.1)'
+              if (!isDeleting) {
+                e.target.style.borderColor = '#dc2626'
+                e.target.style.boxShadow = '0 0 0 3px rgba(220, 38, 38, 0.1)'
+              }
             }}
             onBlur={(e) => {
-              e.target.style.borderColor = '#e5e7eb'
+              e.target.style.borderColor = deleteError ? '#dc2626' : '#e5e7eb'
               e.target.style.boxShadow = 'none'
             }}
           />
+          {deleteError && (
+            <div style={{
+              marginTop: '8px',
+              fontSize: '13px',
+              color: '#dc2626'
+            }}>
+              {deleteError}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -257,7 +321,9 @@ export default function SettingsTab({ notifications, setNotifications }) {
             onClick={() => {
               setShowDeleteDialog(false)
               setConfirmText('')
+              setDeleteError('')
             }}
+            disabled={isDeleting}
             style={{
               padding: '10px 20px',
               background: 'white',
@@ -266,61 +332,77 @@ export default function SettingsTab({ notifications, setNotifications }) {
               borderRadius: '8px',
               fontSize: '14px',
               fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
+              cursor: isDeleting ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+              opacity: isDeleting ? 0.6 : 1
             }}
             onMouseEnter={(e) => {
-              e.target.style.background = '#f9fafb'
-              e.target.style.borderColor = '#d1d5db'
+              if (!isDeleting) {
+                e.target.style.background = '#f9fafb'
+                e.target.style.borderColor = '#d1d5db'
+              }
             }}
             onMouseLeave={(e) => {
-              e.target.style.background = 'white'
-              e.target.style.borderColor = '#e5e7eb'
+              if (!isDeleting) {
+                e.target.style.background = 'white'
+                e.target.style.borderColor = '#e5e7eb'
+              }
             }}
           >
             Hủy
           </button>
           <button
-            onClick={() => {
-              if (confirmText === 'XÓA') {
-                alert('Tài khoản đã được xóa')
-                setShowDeleteDialog(false)
-                setConfirmText('')
-              } else {
-                alert('Vui lòng nhập "XÓA" để xác nhận')
-              }
-            }}
-            disabled={confirmText !== 'XÓA'}
+            onClick={handleDeleteAccount}
+            disabled={confirmText !== 'XÓA' || isDeleting}
             style={{
               padding: '10px 20px',
-              background: confirmText === 'XÓA' ? 'linear-gradient(135deg, #dc2626, #b91c1c)' : '#fca5a5',
+              background: (confirmText === 'XÓA' && !isDeleting) ? 'linear-gradient(135deg, #dc2626, #b91c1c)' : '#fca5a5',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
               fontSize: '14px',
               fontWeight: '600',
-              cursor: confirmText === 'XÓA' ? 'pointer' : 'not-allowed',
+              cursor: (confirmText === 'XÓA' && !isDeleting) ? 'pointer' : 'not-allowed',
               transition: 'all 0.2s',
-              boxShadow: confirmText === 'XÓA' ? '0 4px 12px rgba(220, 38, 38, 0.4)' : 'none'
+              boxShadow: (confirmText === 'XÓA' && !isDeleting) ? '0 4px 12px rgba(220, 38, 38, 0.4)' : 'none',
+              opacity: isDeleting ? 0.7 : 1,
+              position: 'relative',
+              minWidth: '160px'
             }}
             onMouseEnter={(e) => {
-              if (confirmText === 'XÓA') {
+              if (confirmText === 'XÓA' && !isDeleting) {
                 e.target.style.boxShadow = '0 6px 16px rgba(220, 38, 38, 0.5)'
                 e.target.style.transform = 'translateY(-1px)'
               }
             }}
             onMouseLeave={(e) => {
-              if (confirmText === 'XÓA') {
+              if (confirmText === 'XÓA' && !isDeleting) {
                 e.target.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.4)'
                 e.target.style.transform = 'translateY(0)'
               }
             }}
           >
-            Xác nhận xóa tài khoản
+            {isDeleting ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                <span style={{
+                  width: '14px',
+                  height: '14px',
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  borderTopColor: 'white',
+                  borderRadius: '50%',
+                  animation: 'spin 0.6s linear infinite',
+                  display: 'inline-block'
+                }}></span>
+                Đang xóa...
+              </span>
+            ) : (
+              'Xác nhận xóa tài khoản'
+            )}
           </button>
         </div>
       </Dialog>
-    </div>
+      </div>
+    </>
   )
 }
 

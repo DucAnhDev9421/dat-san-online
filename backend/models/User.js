@@ -1,9 +1,10 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 const userSchema = new mongoose.Schema(
   {
-    // Thông tin cơ bản
+    // ================== THÔNG TIN CƠ BẢN ==================
     email: {
       type: String,
       required: true,
@@ -25,14 +26,14 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
-    // OAuth2 thông tin
+    // ================== OAUTH2 ==================
     googleId: {
       type: String,
       unique: true,
       sparse: true, // Cho phép null nhưng unique khi có giá trị
     },
 
-    // Thông tin bổ sung
+    // ================== THÔNG TIN BỔ SUNG ==================
     phone: {
       type: String,
       trim: true,
@@ -45,29 +46,76 @@ const userSchema = new mongoose.Schema(
       type: Date,
     },
 
-    // Vai trò người dùng
+    // ================== VAI TRÒ & CÀI ĐẶT ==================
     role: {
       type: String,
       enum: ["user", "owner", "admin"],
       default: "user",
     },
-    // Ngôn ngữ (CHO API SỐ 10)
     language: {
       type: String,
-      default: "vi", // hoặc 'en'
+      default: "vi",
     },
 
-    // Ví điện tử
+    // ================== VÍ & LOYALTY (Đã sửa vị trí) ==================
     walletBalance: {
       type: Number,
       default: 0,
       min: 0,
     },
+    loyaltyPoints: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    lifetimePoints: {
+      // Dùng để xét hạng
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    // Sân yêu thích
+    favorites: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Facility'
+    }],
+
+    // Cấu hình phí giải đấu (chỉ cho owner)
+    tournamentFeeConfig: {
+      // Phí đăng ký tham gia giải đấu
+      registrationFee: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      // Phí tổ chức giải đấu nội bộ
+      internalTournamentFees: {
+        // Phí tạo giải (Service Fee)
+        serviceFee: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+        // Phí sử dụng sân cho từng loại sân (Map: courtTypeId -> fee per hour)
+        courtTypeFees: {
+          type: Map,
+          of: Number,
+          default: new Map(),
+        },
+        // Phí trọng tài
+        refereeFee: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+      },
+    },
 
     // Trạng thái tài khoản
     isActive: {
       type: Boolean,
-      default: false, // User needs OTP verification before activation
+      default: false,
     },
     isEmailVerified: {
       type: Boolean,
@@ -75,18 +123,18 @@ const userSchema = new mongoose.Schema(
     },
     isLocked: {
       type: Boolean,
-      default: false, // Admin có thể khóa tài khoản
+      default: false,
     },
     isDeleted: {
       type: Boolean,
-      default: false, // Soft delete
+      default: false,
     },
     deletedAt: {
       type: Date,
       default: null,
     },
 
-    // Thông tin đăng nhập
+    // ================== AUTH & SECURITY ==================
     lastLogin: {
       type: Date,
     },
@@ -94,15 +142,11 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-
-    // Mật khẩu (cho đăng ký thông thường, không bắt buộc với OAuth)
     password: {
       type: String,
       minlength: 6,
-      select: false, // Không trả về password trong query mặc định
+      select: false,
     },
-
-    // Refresh token cho JWT
     refreshTokens: [
       {
         token: String,
@@ -121,8 +165,6 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
-
-    // Token reset mật khẩu (CHO API SỐ 4 & 5)
     resetPasswordToken: {
       type: String,
       select: false,
@@ -132,30 +174,28 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
   },
-
+  // ================== OPTIONS (Tham số thứ 2) ==================
   {
-    timestamps: true, // Tự động thêm createdAt và updatedAt
+    timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }
 );
 
-// Index để tối ưu hóa truy vấn
-// Note: email and googleId indexes are automatically created by unique: true
+// ================== INDEXES & VIRTUALS ==================
 userSchema.index({ role: 1 });
 
-// Virtual field cho tên hiển thị
 userSchema.virtual("displayName").get(function () {
   return this.name || this.email.split("@")[0];
 });
 
-// Middleware trước khi lưu - hash password nếu có
+// ================== MIDDLEWARE (PRE-SAVE) ==================
+
+// 1. Hash password
 userSchema.pre("save", async function (next) {
-  // Chỉ hash password nếu nó được modify và không phải OAuth user
   if (!this.isModified("password") || !this.password) {
     return next();
   }
-
   try {
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
@@ -165,7 +205,29 @@ userSchema.pre("save", async function (next) {
   }
 });
 
-// Method để so sánh password
+// 2. Tạo Referral Code tự động
+userSchema.pre("save", async function (next) {
+  if (!this.referralCode && this.name) {
+    // Tạo mã ví dụ: NAM1234
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    // Lấy 3 ký tự đầu của tên, viết hoa
+    const namePrefix = this.name
+      .replace(/\s/g, "")
+      .substring(0, 3)
+      .toUpperCase();
+    // Xử lý tiếng Việt không dấu
+    const cleanPrefix = namePrefix
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    let code = `${cleanPrefix}${randomSuffix}`;
+    this.referralCode = code;
+  }
+  next();
+});
+
+// ================== METHODS ==================
+
 userSchema.methods.comparePassword = async function (candidatePassword) {
   if (!this.password) {
     return false;
@@ -173,14 +235,12 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Method để cập nhật thông tin đăng nhập
 userSchema.methods.updateLoginInfo = function () {
   this.lastLogin = new Date();
   this.loginCount += 1;
   return this.save();
 };
 
-// Method để thêm refresh token
 userSchema.methods.addRefreshToken = async function (token) {
   try {
     if (!this.refreshTokens || !Array.isArray(this.refreshTokens)) {
@@ -190,7 +250,6 @@ userSchema.methods.addRefreshToken = async function (token) {
     return await this.save();
   } catch (error) {
     if (error.name === "VersionError") {
-      // Nếu có xung đột version, thử lại với document mới nhất
       const freshUser = await this.constructor.findById(this._id);
       if (freshUser) {
         if (
@@ -207,7 +266,6 @@ userSchema.methods.addRefreshToken = async function (token) {
   }
 };
 
-// Method để xóa refresh token
 userSchema.methods.removeRefreshToken = async function (token) {
   try {
     if (!this.refreshTokens || !Array.isArray(this.refreshTokens)) {
@@ -217,7 +275,6 @@ userSchema.methods.removeRefreshToken = async function (token) {
     return await this.save();
   } catch (error) {
     if (error.name === "VersionError") {
-      // Nếu có xung đột version, thử lại với document mới nhất
       const freshUser = await this.constructor.findById(this._id);
       if (freshUser) {
         freshUser.refreshTokens = freshUser.refreshTokens.filter(
@@ -230,7 +287,6 @@ userSchema.methods.removeRefreshToken = async function (token) {
   }
 };
 
-// Method để xóa refresh token bằng ID
 userSchema.methods.removeRefreshTokenById = async function (tokenId) {
   try {
     if (!this.refreshTokens || !Array.isArray(this.refreshTokens)) {
@@ -242,7 +298,6 @@ userSchema.methods.removeRefreshTokenById = async function (tokenId) {
     return await this.save();
   } catch (error) {
     if (error.name === "VersionError") {
-      // Nếu có xung đột version, thử lại với document mới nhất
       const freshUser = await this.constructor.findById(this._id);
       if (freshUser) {
         if (
@@ -261,17 +316,16 @@ userSchema.methods.removeRefreshTokenById = async function (tokenId) {
   }
 };
 
-// Static method để tìm user bằng Google ID
+// ================== STATICS ==================
+
 userSchema.statics.findByGoogleId = function (googleId) {
   return this.findOne({ googleId });
 };
 
-// Static method để tìm user bằng email
 userSchema.statics.findByEmail = function (email) {
   return this.findOne({ email: email.toLowerCase() });
 };
 
-// Static method để cleanup unverified users after 15 minutes
 userSchema.statics.cleanupUnverifiedUsers = function () {
   const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
   return this.deleteMany({
@@ -280,7 +334,6 @@ userSchema.statics.cleanupUnverifiedUsers = function () {
   });
 };
 
-// Static method để tạo user từ Google profile
 userSchema.statics.createFromGoogleProfile = function (profile) {
   return this.create({
     googleId: profile.id,
@@ -288,7 +341,7 @@ userSchema.statics.createFromGoogleProfile = function (profile) {
     name: profile.displayName,
     avatar: profile.photos[0]?.value,
     isEmailVerified: true,
-    isActive: true, // Google users should be active immediately
+    isActive: true,
   });
 };
 

@@ -4,7 +4,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useSocket } from '../../contexts/SocketContext'
 import { notificationApi } from '../../api/notificationApi'
 import { toast } from 'react-toastify'
-import { CheckCircle, DollarSign, XCircle, Star, Wrench, Tag, Clock, Info } from 'lucide-react'
+import { CheckCircle, DollarSign, XCircle, Star, Wrench, Tag, Clock, Info, AlertTriangle } from 'lucide-react'
+import Dialog from '../../components/ui/Dialog'
 import SidebarMenu from './Notifications/components/SidebarMenu'
 import NotificationHeader from './Notifications/components/NotificationHeader'
 import ActionBar from './Notifications/components/ActionBar'
@@ -27,6 +28,7 @@ const NotificationsPage = () => {
   const [categoryFilter, setCategoryFilter] = useState('all') // 'all', 'booking', 'promotion', 'system'
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false) // Dialog xóa tất cả
   const limit = 20
 
   // Fetch notifications
@@ -212,11 +214,14 @@ const NotificationsPage = () => {
     }
   }
 
-  const handleDeleteAll = async () => {
-    const categoryName = getCategoryName(categoryFilter)
-    if (!window.confirm(`Bạn có chắc muốn xóa tất cả thông báo ${categoryName} đã đọc?`)) {
-      return
-    }
+  // Mở dialog xác nhận xóa tất cả
+  const handleDeleteAll = () => {
+    setShowDeleteAllDialog(true)
+  }
+
+  // Xác nhận xóa tất cả thông báo đã đọc
+  const confirmDeleteAll = async () => {
+    setShowDeleteAllDialog(false)
     
     try {
       const type = categoryFilter !== 'all' ? categoryFilter : null
@@ -313,6 +318,85 @@ const NotificationsPage = () => {
           )}
         </div>
       </div>
+
+      {/* Dialog xác nhận xóa tất cả thông báo */}
+      <Dialog
+        open={showDeleteAllDialog}
+        onClose={() => setShowDeleteAllDialog(false)}
+        title="Xác nhận xóa tất cả thông báo"
+        description={`Bạn có chắc chắn muốn xóa tất cả thông báo ${getCategoryName(categoryFilter)} đã đọc?`}
+        maxWidth="480px"
+      >
+        <div style={{ padding: '20px 0' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            padding: '16px',
+            background: '#fef3c7',
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            <AlertTriangle size={20} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <p style={{ margin: 0, fontSize: '14px', color: '#92400e', lineHeight: '1.6' }}>
+              Hành động này sẽ xóa vĩnh viễn tất cả thông báo đã đọc{categoryFilter !== 'all' ? ` thuộc danh mục ${getCategoryName(categoryFilter)}` : ''}. Bạn không thể khôi phục lại sau khi xóa.
+            </p>
+          </div>
+          
+          <div style={{
+            display: 'flex',
+            gap: '12px',
+            justifyContent: 'flex-end'
+          }}>
+            <button
+              onClick={() => setShowDeleteAllDialog(false)}
+              style={{
+                padding: '10px 20px',
+                background: '#ffffff',
+                border: '2px solid #e5e7eb',
+                borderRadius: '8px',
+                color: '#6b7280',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = '#f9fafb'
+                e.target.style.borderColor = '#d1d5db'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = '#ffffff'
+                e.target.style.borderColor = '#e5e7eb'
+              }}
+            >
+              Hủy
+            </button>
+            <button
+              onClick={confirmDeleteAll}
+              style={{
+                padding: '10px 20px',
+                background: '#ef4444',
+                border: 'none',
+                borderRadius: '8px',
+                color: '#ffffff',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = '#dc2626'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = '#ef4444'
+              }}
+            >
+              Xóa tất cả
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   )
 }

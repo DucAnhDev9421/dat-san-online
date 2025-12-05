@@ -20,6 +20,16 @@ export const paymentMethods = [
     gradient: 'linear-gradient(135deg, #0071BA, #0090E3)'
   },
   {
+    id: 'wallet',
+    name: 'Ví tiền',
+    description: 'Thanh toán bằng số dư trong ví',
+    iconType: 'image',
+    iconSrc: '/pngtree-vector-wallet-icon-png-image_4869029.jpg',
+    iconAlt: 'Ví tiền',
+    color: '#8b5cf6',
+    gradient: 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
+  },
+  {
     id: 'cash',
     name: 'Tiền mặt',
     description: 'Thanh toán trực tiếp tại sân',

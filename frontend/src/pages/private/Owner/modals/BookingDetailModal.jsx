@@ -429,6 +429,59 @@ const BookingDetailModal = ({ isOpen, onClose, booking = {}, courtInfo = null })
             </div>
           </div>
 
+          {/* Cancellation Info - Hiển thị khi booking đã bị hủy */}
+          {(booking.status === "cancelled" || booking.status === "expired") && (booking.cancellationReason || booking.cancelledAt || booking._original?.cancellationReason || booking._original?.cancelledAt) && (
+            <div
+              style={{
+                background: "#fef2f2",
+                borderRadius: 12,
+                padding: 20,
+                marginBottom: 16,
+                border: "2px solid #fee2e2",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 12,
+                }}
+              >
+                <X size={20} color="#ef4444" />
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "#dc2626" }}>
+                  Thông tin hủy đơn
+                </h3>
+              </div>
+              {(booking.cancelledAt || booking._original?.cancelledAt) && (
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ display: "block", fontSize: 13, color: "#991b1b", fontWeight: 600, marginBottom: 6 }}>
+                    Thời gian hủy
+                  </label>
+                  <div style={{ fontSize: 14, color: "#7f1d1d", fontWeight: 500 }}>
+                    {new Date(booking.cancelledAt || booking._original?.cancelledAt).toLocaleString('vi-VN', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                </div>
+              )}
+              {(booking.cancellationReason || booking._original?.cancellationReason) && (
+                <div>
+                  <label style={{ display: "block", fontSize: 13, color: "#991b1b", fontWeight: 600, marginBottom: 6 }}>
+                    Lý do hủy
+                  </label>
+                  <div style={{ fontSize: 14, color: "#7f1d1d", whiteSpace: "pre-wrap", lineHeight: 1.6, padding: "12px", background: "#fff", borderRadius: 8, border: "1px solid #fecaca" }}>
+                    {booking.cancellationReason || booking._original?.cancellationReason}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Notes */}
           {booking.notes && (
             <div

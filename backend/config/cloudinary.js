@@ -110,6 +110,106 @@ export const uploadCourtImage = multer({
   }
 });
 
+// Configure Cloudinary Storage for League images
+const leagueStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'booking-sport/leagues',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [
+      { width: 1200, height: 600, crop: 'fill' },
+      { quality: 'auto' }
+    ],
+    public_id: (req, file) => {
+      const leagueId = req.params.id || 'league';
+      const timestamp = Date.now();
+      return `league_${leagueId}_${timestamp}`;
+    }
+  }
+});
+
+// Configure multer for League images
+export const uploadLeagueImage = multer({
+  storage: leagueStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
+// Configure Cloudinary Storage for Team logos
+const teamLogoStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'booking-sport/teams',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [
+      { width: 400, height: 400, crop: 'fill' },
+      { quality: 'auto' }
+    ],
+    public_id: (req, file) => {
+      const leagueId = req.params.id || 'league';
+      const teamId = req.params.teamId || 'team';
+      const timestamp = Date.now();
+      return `team_${leagueId}_${teamId}_${timestamp}`;
+    }
+  }
+});
+
+// Configure multer for Team logos
+export const uploadTeamLogo = multer({
+  storage: teamLogoStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
+// Configure Cloudinary Storage for Reward images
+const rewardStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'booking-sport/rewards',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [
+      { width: 800, height: 600, crop: 'fill' },
+      { quality: 'auto' }
+    ],
+    public_id: (req, file) => {
+      const rewardId = req.params.id || req.body.rewardId || 'reward';
+      const timestamp = Date.now();
+      return `reward_${rewardId}_${timestamp}`;
+    }
+  }
+});
+
+// Configure multer for Reward images
+export const uploadRewardImage = multer({
+  storage: rewardStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
 // Cloudinary utility functions
 export const cloudinaryUtils = {
   // Upload image and return URL
