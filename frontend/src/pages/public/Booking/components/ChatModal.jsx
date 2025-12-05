@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { X, Send, MessageCircle } from 'lucide-react'
 import { facilityApi } from '../../../../api/facilityApi'
+import customerChatApi from '../../../../api/customerChatApi'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { useSocket } from '../../../../contexts/SocketContext'
 import { toast } from 'react-toastify'
@@ -8,11 +9,12 @@ import useDeviceType from '../../../../hook/use-device-type'
 import useClickOutside from '../../../../hook/use-click-outside'
 import useBodyScrollLock from '../../../../hook/use-body-scroll-lock'
 import useEscapeKey from '../../../../hook/use-escape-key'
+import EmojiPickerButton from '../../../../components/chat/EmojiPicker'
 
 function ChatModal({ isOpen, onClose, venueId }) {
   const { user, isAuthenticated } = useAuth()
   const { isMobile } = useDeviceType()
-  const { defaultSocket } = useSocket()
+  const { defaultSocket, isConnected } = useSocket()
   const modalRef = useClickOutside(onClose, isOpen)
   useBodyScrollLock(isOpen)
   useEscapeKey(onClose, isOpen)
@@ -24,7 +26,10 @@ function ChatModal({ isOpen, onClose, venueId }) {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [isOwnerOnline, setIsOwnerOnline] = useState(false)
+  const [isOwnerTyping, setIsOwnerTyping] = useState(false)
+  const typingTimeoutRef = useRef(null)
   const messagesEndRef = useRef(null)
+  const errorToastShownRef = useRef(new Set())
 
   useEffect(() => {
     if (!isOpen) return
@@ -36,7 +41,14 @@ function ChatModal({ isOpen, onClose, venueId }) {
     }
 
     if (!venueId) {
-      toast.error('Không tìm thấy thông tin cơ sở')
+      const errorKey = 'no_venue_id';
+      if (!errorToastShownRef.current.has(errorKey)) {
+        errorToastShownRef.current.add(errorKey);
+        toast.error('Không tìm thấy thông tin cơ sở');
+        setTimeout(() => {
+          errorToastShownRef.current.delete(errorKey);
+        }, 3000);
+      }
       onClose()
       return
     }
@@ -52,16 +64,8 @@ function ChatModal({ isOpen, onClose, venueId }) {
         defaultSocket.emit('check_user_online', { userId: owner._id || owner.id }, (response) => {
           if (response && response.online !== undefined) {
             setIsOwnerOnline(response.online)
-          } else {
             const ownerId = owner._id || owner.id
-            const savedStatus = localStorage.getItem(`owner_online_${ownerId}`)
-            if (savedStatus) {
-              setIsOwnerOnline(savedStatus === 'true')
-            } else {
-              const randomStatus = Math.random() > 0.4
-              setIsOwnerOnline(randomStatus)
-              localStorage.setItem(`owner_online_${ownerId}`, String(randomStatus))
-            }
+            localStorage.setItem(`owner_online_${ownerId}`, String(response.online))
           }
         })
       } else {
@@ -69,21 +73,96 @@ function ChatModal({ isOpen, onClose, venueId }) {
       }
     }
 
+    // Check ngay khi mở
     checkOwnerStatus()
+    
+    // Check định kỳ mỗi 30 giây
     const interval = setInterval(checkOwnerStatus, 30000)
 
-    defaultSocket.on('user_online_status', (data) => {
+    // Lắng nghe thay đổi online status realtime
+    const handleOnlineStatus = (data) => {
       if (data.userId === (owner._id || owner.id)) {
         setIsOwnerOnline(data.online)
         localStorage.setItem(`owner_online_${owner._id || owner.id}`, String(data.online))
       }
-    })
+    }
+
+    defaultSocket.on('user:online_status', handleOnlineStatus)
 
     return () => {
       clearInterval(interval)
-      defaultSocket.off('user_online_status')
+      defaultSocket.off('user:online_status', handleOnlineStatus)
     }
   }, [owner, defaultSocket, isOpen])
+
+  // Lắng nghe typing indicator từ owner
+  useEffect(() => {
+    if (!defaultSocket || !isConnected || !owner?._id || !isOpen) return
+
+    const handleTyping = (data) => {
+      if (data.userId === (owner._id || owner.id)) {
+        setIsOwnerTyping(data.isTyping)
+        
+        // Tự động ẩn sau 3 giây nếu không có tin nhắn mới
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current)
+        }
+        
+        if (data.isTyping) {
+          typingTimeoutRef.current = setTimeout(() => {
+            setIsOwnerTyping(false)
+          }, 3000)
+        }
+      }
+    }
+
+    defaultSocket.on('chat:typing', handleTyping)
+
+    return () => {
+      defaultSocket.off('chat:typing', handleTyping)
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+    }
+  }, [defaultSocket, isConnected, owner?._id, isOpen])
+
+  // Emit typing status khi customer đang gõ
+  useEffect(() => {
+    if (!defaultSocket || !isConnected || !owner?._id || !isOpen) return
+
+    let typingTimeout
+    
+    if (newMessage.trim().length > 0) {
+      // Emit typing khi có text
+      defaultSocket.emit('chat:typing', {
+        ownerId: owner._id,
+        isTyping: true,
+      })
+
+      // Clear timeout cũ
+      if (typingTimeout) clearTimeout(typingTimeout)
+
+      // Emit stop typing sau 1 giây không gõ
+      typingTimeout = setTimeout(() => {
+        if (defaultSocket && defaultSocket.connected) {
+          defaultSocket.emit('chat:typing', {
+            ownerId: owner._id,
+            isTyping: false,
+          })
+        }
+      }, 1000)
+    } else {
+      // Emit stop typing khi input rỗng
+      defaultSocket.emit('chat:typing', {
+        ownerId: owner._id,
+        isTyping: false,
+      })
+    }
+
+    return () => {
+      if (typingTimeout) clearTimeout(typingTimeout)
+    }
+  }, [newMessage, defaultSocket, isConnected, owner?._id, isOpen])
 
   const fetchFacilityData = async () => {
     try {
@@ -94,36 +173,183 @@ function ChatModal({ isOpen, onClose, venueId }) {
         setFacility(result.data)
         if (result.data.owner) {
           setOwner(result.data.owner)
+          // loadMessages sẽ được gọi tự động qua useEffect khi owner được set
         }
-        
-        loadMessages()
       } else {
-        toast.error('Không tìm thấy thông tin cơ sở')
+        const errorKey = 'facility_not_found';
+        if (!errorToastShownRef.current.has(errorKey)) {
+          errorToastShownRef.current.add(errorKey);
+          toast.error('Không tìm thấy thông tin cơ sở');
+          setTimeout(() => {
+            errorToastShownRef.current.delete(errorKey);
+          }, 3000);
+        }
         onClose()
       }
     } catch (error) {
-      console.error('Error fetching facility:', error)
-      toast.error('Không thể tải thông tin cơ sở')
+      console.error('Error fetching facility:', error);
+      const errorKey = 'fetch_facility_error';
+      if (!errorToastShownRef.current.has(errorKey)) {
+        errorToastShownRef.current.add(errorKey);
+        toast.error('Không thể tải thông tin cơ sở');
+        setTimeout(() => {
+          errorToastShownRef.current.delete(errorKey);
+        }, 3000);
+      }
       onClose()
     } finally {
       setLoading(false)
     }
   }
 
-  const loadMessages = () => {
-    const savedMessages = localStorage.getItem(`chat_${venueId}`)
-    if (savedMessages) {
+  // Helper functions để lưu/load từ localStorage
+  const getStorageKey = (ownerId, facilityId) => {
+    const owner = ownerId || owner?._id;
+    const venue = facilityId || venueId;
+    if (!owner || !venue) return null;
+    // Đảm bảo ownerId là string
+    const ownerIdStr = typeof owner === 'string' ? owner : (owner._id || owner.id || owner);
+    return `chat_customer_${ownerIdStr}_${venue}`;
+  };
+
+  const loadMessagesFromStorage = (ownerId, facilityId) => {
+    const key = getStorageKey(ownerId, facilityId);
+    if (!key) return [];
+    
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : [];
+      }
+    } catch (error) {
+      console.error('Error loading messages from storage:', error);
+    }
+    return [];
+  };
+
+  const saveMessagesToStorage = (msgs, ownerId, facilityId) => {
+    const key = getStorageKey(ownerId, facilityId);
+    if (!key || !msgs || !Array.isArray(msgs)) return;
+    
+    try {
+      // Chỉ lưu 100 tin nhắn gần nhất để tránh localStorage quá lớn
+      const messagesToSave = msgs.slice(-100);
+      localStorage.setItem(key, JSON.stringify(messagesToSave));
+    } catch (error) {
+      console.error('Error saving messages to storage:', error);
+      // Nếu localStorage đầy, xóa tin nhắn cũ nhất
       try {
-        setMessages(JSON.parse(savedMessages))
+        const messagesToSave = msgs.slice(-50);
+        localStorage.setItem(key, JSON.stringify(messagesToSave));
+      } catch (e) {
+        console.error('Error saving reduced messages:', e);
+      }
+    }
+  };
+
+  // Load messages từ API
+  const loadMessages = async () => {
+    if (!owner?._id || !venueId) return;
+    
+    const ownerId = owner._id || owner.id;
+    
+    // Load từ localStorage trước để hiển thị nhanh
+    const cachedMessages = loadMessagesFromStorage(ownerId, venueId);
+    if (cachedMessages.length > 0) {
+      setMessages(cachedMessages);
+    }
+    
+    try {
+      const response = await customerChatApi.getMessages(ownerId);
+      if (response.success && response.messages) {
+        // Merge messages: ưu tiên messages từ API, nhưng giữ lại temp messages
+        setMessages((prev) => {
+          const tempMessages = prev.filter((msg) => msg.id && msg.id.startsWith("temp_"));
+          const apiMessages = response.messages || [];
+          
+          // Tạo map để loại bỏ duplicate dựa trên id
+          const messageMap = new Map();
+          
+          // Thêm messages từ API trước
+          apiMessages.forEach((msg) => {
+            if (msg.id) {
+              messageMap.set(msg.id, msg);
+            }
+          });
+          
+          // Thêm temp messages nếu chưa có trong map
+          tempMessages.forEach((tempMsg) => {
+            if (tempMsg.id && !messageMap.has(tempMsg.id)) {
+              messageMap.set(tempMsg.id, tempMsg);
+            }
+          });
+          
+          // Chuyển map thành array và sort theo timestamp
+          const merged = Array.from(messageMap.values()).sort((a, b) => {
+            const timeA = a.timestamp || 0;
+            const timeB = b.timestamp || 0;
+            return timeA - timeB;
+          });
+          
+          // Lưu vào localStorage
+          saveMessagesToStorage(merged, ownerId, venueId);
+          
+          return merged;
+        });
+      }
       } catch (error) {
-        console.error('Error loading messages:', error)
+      console.error('Error loading messages:', error);
+      // Nếu API fail, vẫn dùng messages từ localStorage
+      if (cachedMessages.length === 0) {
+        const errorKey = 'load_messages_error';
+        if (!errorToastShownRef.current.has(errorKey)) {
+          errorToastShownRef.current.add(errorKey);
+          toast.error('Không thể tải tin nhắn');
+          // Reset sau 3 giây để có thể hiển thị lại nếu cần
+          setTimeout(() => {
+            errorToastShownRef.current.delete(errorKey);
+          }, 3000);
+        }
       }
     }
   }
+  
+  // Load messages khi owner và venueId có sẵn
+  useEffect(() => {
+    if (isOpen && owner?._id && venueId) {
+      loadMessages();
+    }
+  }, [isOpen, owner?._id, venueId]);
 
-  const saveMessages = (msgs) => {
-    localStorage.setItem(`chat_${venueId}`, JSON.stringify(msgs))
-  }
+  // Lắng nghe tin nhắn mới từ owner qua socket
+  useEffect(() => {
+    if (!defaultSocket || !isConnected || !owner?._id || !isOpen) return;
+
+    const handleNewMessage = (data) => {
+      const { message } = data;
+      
+      setMessages((prev) => {
+        // Kiểm tra xem tin nhắn đã tồn tại chưa
+        const exists = prev.some((msg) => msg.id === message.id);
+        if (exists) return prev;
+        
+        const updated = [...prev, message];
+        // Lưu vào localStorage
+        if (owner?._id && venueId) {
+          const ownerId = owner._id || owner.id;
+          saveMessagesToStorage(updated, ownerId, venueId);
+        }
+        return updated;
+      });
+    };
+
+    defaultSocket.on('chat:new_message', handleNewMessage);
+
+    return () => {
+      defaultSocket.off('chat:new_message', handleNewMessage);
+    };
+  }, [defaultSocket, isConnected, owner?._id, isOpen]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -135,47 +361,135 @@ function ChatModal({ isOpen, onClose, venueId }) {
     }
   }, [messages, isOpen])
 
-  const handleSendMessage = async () => {
-    if (!newMessage.trim() || sending) return
-
-    const message = {
-      id: Date.now(),
-      text: newMessage.trim(),
-      sender: user._id || user.id,
-      senderName: user.name,
-      timestamp: new Date().toISOString(),
-      isOwner: false
+  // Tự động lưu messages vào localStorage mỗi khi có thay đổi
+  useEffect(() => {
+    if (messages.length > 0 && owner?._id && venueId) {
+      const ownerId = owner._id || owner.id;
+      saveMessagesToStorage(messages, ownerId, venueId);
     }
+  }, [messages, owner?._id, venueId])
 
-    setSending(true)
-    setNewMessage('')
-    
-    const updatedMessages = [...messages, message]
-    setMessages(updatedMessages)
-    saveMessages(updatedMessages)
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || sending || !owner?._id) return
+
+    const messageText = newMessage.trim();
+    setSending(true);
+    setNewMessage('');
+
+    // Optimistic update
+    const tempId = `temp_${Date.now()}`;
+    const tempMessage = {
+      id: tempId,
+      text: messageText,
+      sender: 'customer',
+      timestamp: Date.now(),
+      showTime: true,
+      isRead: false,
+    };
+
+    setMessages((prev) => [...prev, tempMessage]);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      const ownerReply = {
-        id: Date.now() + 1,
-        text: `Cảm ơn bạn đã liên hệ với ${facility?.name || 'chúng tôi'}. Chúng tôi sẽ phản hồi sớm nhất có thể!`,
-        sender: owner?._id || owner?.id,
-        senderName: owner?.name || 'Chủ sân',
-        timestamp: new Date().toISOString(),
-        isOwner: true
-      }
+      // Gửi qua socket
+      if (defaultSocket && isConnected) {
+        defaultSocket.emit('chat:send_to_owner', {
+          ownerId: owner._id,
+          message: messageText,
+          facilityId: venueId || null,
+        });
 
+        // Lắng nghe confirmation
+        const handleMessageSent = (data) => {
+          if (data.message) {
+            setMessages((prev) => {
+              const updated = prev.map((msg) =>
+                msg.id === tempId ? data.message : msg
+              );
+              if (owner?._id && venueId) {
+                const ownerId = owner._id || owner.id;
+                saveMessagesToStorage(updated, ownerId, venueId);
+              }
+              return updated;
+            });
+            defaultSocket.off('chat:message_sent', handleMessageSent);
+          }
+        };
+
+        defaultSocket.on('chat:message_sent', handleMessageSent);
+
+        // Fallback: gửi qua API nếu socket không hoạt động
+        setTimeout(async () => {
+          try {
+            const response = await customerChatApi.sendMessage(
+              owner._id,
+              messageText,
+              venueId || null
+            );
+            if (response.success && response.message) {
+              setMessages((prev) => {
+                const updated = prev.map((msg) =>
+                  msg.id === tempId ? response.message : msg
+                );
+                if (owner?._id && venueId) {
+                  const ownerId = owner._id || owner.id;
+                  saveMessagesToStorage(updated, ownerId, venueId);
+                }
+                return updated;
+              });
+            }
+          } catch (error) {
+            console.error('Error sending message via API:', error);
+            setMessages((prev) => {
+              const updated = prev.filter((msg) => msg.id !== tempId);
+              if (owner?._id && venueId) {
+                const ownerId = owner._id || owner.id;
+                saveMessagesToStorage(updated, ownerId, venueId);
+              }
+              return updated;
+            });
+            const errorKey = 'send_message_error';
+            if (!errorToastShownRef.current.has(errorKey)) {
+              errorToastShownRef.current.add(errorKey);
+              toast.error('Không thể gửi tin nhắn');
       setTimeout(() => {
-        const finalMessages = [...updatedMessages, ownerReply]
-        setMessages(finalMessages)
-        saveMessages(finalMessages)
-      }, 1000)
+                errorToastShownRef.current.delete(errorKey);
+              }, 3000);
+            }
+          }
+        }, 2000);
+      } else {
+        // Gửi qua API nếu socket không kết nối
+        const response = await customerChatApi.sendMessage(
+          owner._id,
+          messageText,
+          venueId || null
+        );
+        if (response.success && response.message) {
+          setMessages((prev) => {
+            const updated = prev.map((msg) =>
+              msg.id === tempId ? response.message : msg
+            );
+            if (owner?._id && venueId) {
+              const ownerId = owner._id || owner.id;
+              saveMessagesToStorage(updated, ownerId, venueId);
+            }
+            return updated;
+          });
+        }
+      }
     } catch (error) {
-      console.error('Error sending message:', error)
-      toast.error('Không thể gửi tin nhắn')
+      console.error('Error sending message:', error);
+      setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
+      const errorKey = 'send_message_error';
+      if (!errorToastShownRef.current.has(errorKey)) {
+        errorToastShownRef.current.add(errorKey);
+        toast.error('Không thể gửi tin nhắn');
+        setTimeout(() => {
+          errorToastShownRef.current.delete(errorKey);
+        }, 3000);
+      }
     } finally {
-      setSending(false)
+      setSending(false);
     }
   }
 
@@ -186,21 +500,26 @@ function ChatModal({ isOpen, onClose, venueId }) {
     }
   }
 
+  const handleEmojiClick = (emoji) => {
+    setNewMessage((prev) => prev + emoji)
+  }
+
   const formatTime = (timestamp) => {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diff = now - date
+    if (!timestamp) return '';
+    const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
     
     if (diff < 60000) {
-      return 'Vừa xong'
+      return 'Vừa xong';
     }
     
     if (diff < 3600000) {
-      return `${Math.floor(diff / 60000)} phút trước`
+      return `${Math.floor(diff / 60000)} phút trước`;
     }
     
     if (date.toDateString() === now.toDateString()) {
-      return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+      return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     }
     
     return date.toLocaleDateString('vi-VN', { 
@@ -208,7 +527,7 @@ function ChatModal({ isOpen, onClose, venueId }) {
       month: '2-digit',
       hour: '2-digit', 
       minute: '2-digit' 
-    })
+    });
   }
 
   if (!isOpen) return null
@@ -279,12 +598,44 @@ function ChatModal({ isOpen, onClose, venueId }) {
               gap: '12px',
               flexShrink: 0
             }}>
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                {owner?.avatar ? (
+                  <>
+                    <img
+                      src={owner.avatar}
+                      alt={owner.name}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                        flexShrink: 0
+                      }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '0',
+                      right: '0',
+                      width: '12px',
+                      height: '12px',
+                      borderRadius: '50%',
+                      background: isOwnerOnline ? '#10b981' : '#9ca3af',
+                      border: '2px solid #fff',
+                      boxShadow: isOwnerOnline ? '0 0 0 2px rgba(16, 185, 129, 0.2)' : 'none',
+                      transition: 'all 0.3s'
+                    }}></div>
+                  </>
+                ) : null}
               <div style={{
                 width: '40px',
                 height: '40px',
                 borderRadius: '50%',
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                display: 'flex',
+                  display: owner?.avatar ? 'none' : 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#fff',
@@ -306,6 +657,7 @@ function ChatModal({ isOpen, onClose, venueId }) {
                   boxShadow: isOwnerOnline ? '0 0 0 2px rgba(16, 185, 129, 0.2)' : 'none',
                   transition: 'all 0.3s'
                 }}></div>
+                </div>
               </div>
               
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -382,8 +734,10 @@ function ChatModal({ isOpen, onClose, venueId }) {
                   </p>
                 </div>
               ) : (
-                messages.map((message) => {
-                  const isMyMessage = message.sender === (user._id || user.id)
+                messages.map((message, index) => {
+                  const isMyMessage = message.sender === 'customer'
+                  const prevMessage = index > 0 ? messages[index - 1] : null
+                  const showAvatar = !prevMessage || prevMessage.sender !== message.sender
                   
                   return (
                     <div
@@ -395,12 +749,32 @@ function ChatModal({ isOpen, onClose, venueId }) {
                       }}
                     >
                       {!isMyMessage && (
+                        <>
+                          {showAvatar ? (
+                            <>
+                              {message.senderAvatar || owner?.avatar ? (
+                                <img
+                                  src={message.senderAvatar || owner.avatar}
+                                  alt={owner?.name}
+                                  style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '50%',
+                                    objectFit: 'cover',
+                                    flexShrink: 0
+                                  }}
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
                         <div style={{
                           width: '32px',
                           height: '32px',
                           borderRadius: '50%',
                           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                          display: 'flex',
+                                display: (message.senderAvatar || owner?.avatar) ? 'none' : 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           color: '#fff',
@@ -408,8 +782,13 @@ function ChatModal({ isOpen, onClose, venueId }) {
                           fontSize: '14px',
                           flexShrink: 0
                         }}>
-                          {message.senderName?.charAt(0)?.toUpperCase() || 'O'}
+                                {owner?.name?.charAt(0)?.toUpperCase() || 'O'}
                         </div>
+                            </>
+                          ) : (
+                            <div style={{ width: '32px', flexShrink: 0 }} />
+                          )}
+                        </>
                       )}
                       
                       <div style={{
@@ -444,12 +823,32 @@ function ChatModal({ isOpen, onClose, venueId }) {
                       </div>
 
                       {isMyMessage && (
+                        <>
+                          {showAvatar ? (
+                            <>
+                              {message.senderAvatar || user?.avatar ? (
+                                <img
+                                  src={message.senderAvatar || user.avatar}
+                                  alt={user?.name}
+                                  style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '50%',
+                                    objectFit: 'cover',
+                                    flexShrink: 0
+                                  }}
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
                         <div style={{
                           width: '32px',
                           height: '32px',
                           borderRadius: '50%',
                           background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                          display: 'flex',
+                                display: (message.senderAvatar || user?.avatar) ? 'none' : 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           color: '#fff',
@@ -457,15 +856,110 @@ function ChatModal({ isOpen, onClose, venueId }) {
                           fontSize: '14px',
                           flexShrink: 0
                         }}>
-                          {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
+                            </>
+                          ) : (
+                            <div style={{ width: '32px', flexShrink: 0 }} />
+                          )}
+                        </>
                       )}
                     </div>
                   )
                 })
               )}
+              
+              {/* Typing indicator */}
+              {isOwnerTyping && (
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-start',
+                    gap: '8px'
+                  }}
+                >
+                  {owner?.avatar ? (
+                    <img
+                      src={owner.avatar}
+                      alt={owner.name}
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                        flexShrink: 0
+                      }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                  ) : null}
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    display: owner?.avatar ? 'none' : 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    flexShrink: 0
+                  }}>
+                    {owner?.name?.charAt(0)?.toUpperCase() || 'O'}
+            </div>
+                  
+                  <div style={{
+                    background: '#fff',
+                    padding: '12px 16px',
+                    borderRadius: '16px 16px 16px 4px',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
+                    display: 'flex',
+                    gap: '4px',
+                    alignItems: 'center'
+                  }}>
+                    <span style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: '#9ca3af',
+                      animation: 'typing 1.4s infinite'
+                    }}></span>
+                    <span style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: '#9ca3af',
+                      animation: 'typing 1.4s infinite 0.2s'
+                    }}></span>
+                    <span style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: '#9ca3af',
+                      animation: 'typing 1.4s infinite 0.4s'
+                    }}></span>
+                  </div>
+                </div>
+              )}
+              
               <div ref={messagesEndRef} />
             </div>
+            
+            <style>{`
+              @keyframes typing {
+                0%, 60%, 100% {
+                  transform: translateY(0);
+                  opacity: 0.7;
+                }
+                30% {
+                  transform: translateY(-10px);
+                  opacity: 1;
+                }
+              }
+            `}</style>
 
             <div style={{
               background: '#fff',
@@ -476,6 +970,7 @@ function ChatModal({ isOpen, onClose, venueId }) {
               alignItems: 'flex-end',
               flexShrink: 0
             }}>
+              <EmojiPickerButton onEmojiClick={handleEmojiClick} />
               <textarea
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}

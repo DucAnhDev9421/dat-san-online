@@ -10,6 +10,11 @@ export default function ProfileHeader({ userData, favoriteVenuesCount = 0 }) {
   const { refreshUserData } = useAuth()
   const [showEditModal, setShowEditModal] = useState(false)
   const [currentUserData, setCurrentUserData] = useState(userData)
+  
+  // Cập nhật currentUserData khi userData thay đổi
+  React.useEffect(() => {
+    setCurrentUserData(userData)
+  }, [userData])
 
   const handleEditClick = () => {
     setShowEditModal(true)

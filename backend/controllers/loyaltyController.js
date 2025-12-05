@@ -142,3 +142,107 @@ export const redeemReward = asyncHandler(async (req, res) => {
     },
   });
 });
+
+// Owner/Admin: Tạo quà tặng mới
+export const createReward = asyncHandler(async (req, res) => {
+  const { name, description, pointCost, type, voucherValue, voucherType, stock, image } = req.body;
+
+  if (!name || !pointCost || !type) {
+    return res.status(400).json({
+      success: false,
+      message: "Vui lòng điền đầy đủ thông tin bắt buộc (tên, điểm, loại)",
+    });
+  }
+
+  if (type === "VOUCHER" && (!voucherValue || !voucherType)) {
+    return res.status(400).json({
+      success: false,
+      message: "Voucher cần có giá trị và loại giảm giá",
+    });
+  }
+
+  const reward = await Reward.create({
+    name,
+    description,
+    pointCost: parseInt(pointCost),
+    type,
+    voucherValue: voucherValue ? parseFloat(voucherValue) : 0,
+    voucherType: voucherType || "fixed",
+    stock: stock ? parseInt(stock) : null,
+    image,
+    isActive: true,
+  });
+
+  res.status(201).json({
+    success: true,
+    message: "Tạo quà tặng thành công",
+    data: reward,
+  });
+});
+
+// Owner/Admin: Lấy tất cả rewards (bao gồm inactive)
+export const getAllRewards = asyncHandler(async (req, res) => {
+  const rewards = await Reward.find({}).sort({ createdAt: -1 });
+  res.json({ success: true, data: rewards });
+});
+
+// Owner/Admin: Cập nhật reward
+export const updateReward = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const updateData = { ...req.body };
+
+  // Handle image upload from multer
+  if (req.file) {
+    updateData.image = req.file.path;
+    updateData.imagePublicId = req.file.filename;
+  }
+
+  if (updateData.pointCost) updateData.pointCost = parseInt(updateData.pointCost);
+  if (updateData.voucherValue) updateData.voucherValue = parseFloat(updateData.voucherValue);
+  if (updateData.stock !== undefined) {
+    updateData.stock = updateData.stock ? parseInt(updateData.stock) : null;
+  }
+
+  const reward = await Reward.findByIdAndUpdate(
+    id,
+    updateData,
+    { new: true, runValidators: true }
+  );
+
+  if (!reward) {
+    return res.status(404).json({
+      success: false,
+      message: "Quà tặng không tồn tại",
+    });
+  }
+
+  res.json({
+    success: true,
+    message: "Cập nhật quà tặng thành công",
+    data: reward,
+  });
+});
+
+// Owner/Admin: Xóa reward (soft delete)
+export const deleteReward = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const reward = await Reward.findByIdAndUpdate(
+    id,
+    { isActive: false },
+    { new: true }
+  );
+
+  if (!reward) {
+    return res.status(404).json({
+      success: false,
+      message: "Quà tặng không tồn tại",
+    });
+  }
+
+  res.json({
+    success: true,
+    message: "Xóa quà tặng thành công",
+    data: reward,
+  });
+});

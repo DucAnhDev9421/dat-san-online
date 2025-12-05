@@ -48,6 +48,7 @@ import loyaltyRoutes from "./routes/loyalty.js";
 import referralRoutes from "./routes/referral.js";
 import partnerRoutes from "./routes/partner.js";
 import feedbackRoutes from "./routes/feedback.js";
+import chatRoutes from "./routes/chat.js";
 import { startReservationExpiryJob } from "./jobs/reservationExpiry.js";
 import { startBookingAutoCancelJob } from "./jobs/bookingAutoCancel.js";
 
@@ -153,6 +154,7 @@ app.use("/api/referrals", referralRoutes);
 app.use("/api/leagues", leagueRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/feedbacks", feedbackRoutes);
+app.use("/api/chat", chatRoutes);
 // 404 handler
 app.use(notFound);
 

@@ -177,6 +177,39 @@ export const uploadTeamLogo = multer({
   }
 });
 
+// Configure Cloudinary Storage for Reward images
+const rewardStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'booking-sport/rewards',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [
+      { width: 800, height: 600, crop: 'fill' },
+      { quality: 'auto' }
+    ],
+    public_id: (req, file) => {
+      const rewardId = req.params.id || req.body.rewardId || 'reward';
+      const timestamp = Date.now();
+      return `reward_${rewardId}_${timestamp}`;
+    }
+  }
+});
+
+// Configure multer for Reward images
+export const uploadRewardImage = multer({
+  storage: rewardStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
+
 // Cloudinary utility functions
 export const cloudinaryUtils = {
   // Upload image and return URL

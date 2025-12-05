@@ -13,7 +13,10 @@ import apiClient from './axiosClient';
 export const getProvinces = async () => {
   try {
     // Gọi API qua backend (không còn CORS issue)
-    const response = await apiClient.get('/provinces');
+    // Tăng timeout lên 20 giây vì API province có thể mất thời gian
+    const response = await apiClient.get('/provinces', {
+      timeout: 20000, // 20 seconds
+    });
 
     if (response.data && response.data.success) {
       return {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Home, Settings, Handshake, Search, Gift, Trophy, Plus, List } from 'lucide-react'
+import { Home, Settings, Handshake, Search, Gift, Trophy, Plus, List, Ticket } from 'lucide-react'
 import { facilityApi } from '../../api/facilityApi'
 import { toast } from 'react-toastify'
 
@@ -70,7 +70,7 @@ function NavigationBar({ user, mobile, onLinkClick, className }) {
         <span>Tìm sân</span>
       </Link>
       <Link to="/promotion" className="nav-item" onClick={handleClick}>
-        <Gift size={20} />
+        <Ticket size={20} />
         <span>Khuyến mãi</span>
       </Link>
       <div className="nav-item-dropdown">

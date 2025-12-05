@@ -45,6 +45,7 @@ import CreateTournament from "./pages/public/Tournament/CreateTournament.jsx";
 import CreateInternalTournament from "./pages/public/Tournament/CreateInternalTournament.jsx";
 import InternalTournamentPayment from "./pages/public/Tournament/InternalTournamentPayment.jsx";
 import NotificationsPage from "./pages/public/Notifications.jsx";
+import RedeemPoints from "./pages/public/Loyalty/RedeemPoints.jsx";
 import Login from "./pages/auth/Login.jsx";
 import Register from "./pages/auth/Register.jsx";
 import VerifyOtp from "./pages/auth/VerifyOtp.jsx";
@@ -180,6 +181,11 @@ function App() {
                 <Route path="/notifications" element={
                   <ProtectedRoute>
                     <NotificationsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/loyalty/redeem" element={
+                  <ProtectedRoute>
+                    <RedeemPoints />
                   </ProtectedRoute>
                 } />
                 <Route path="/partner" element={<Partner />} />

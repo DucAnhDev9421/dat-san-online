@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react'
 import { Outlet, useLocation, Link } from 'react-router-dom'
-import { LayoutDashboard, Calendar, Heart, Settings, Trophy } from 'lucide-react'
+import { Calendar, Heart, Settings, Trophy } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
 import { userApi } from '../../../api/userApi'
+import { bookingApi } from '../../../api/bookingApi'
 import ProfileHeader from './ProfileHeader'
 
 function ProfilePage() {
@@ -11,6 +12,7 @@ function ProfilePage() {
   
   // Lấy số lượng sân yêu thích từ API
   const [favoriteVenuesCount, setFavoriteVenuesCount] = React.useState(0)
+  const [totalBookingsCount, setTotalBookingsCount] = React.useState(0)
   const { isAuthenticated } = useAuth()
 
   // Fetch favorites count
@@ -46,6 +48,64 @@ function ProfilePage() {
     }
   }, [isAuthenticated])
 
+  // Fetch total bookings count
+  React.useEffect(() => {
+    const fetchBookingsCount = async () => {
+      if (!isAuthenticated) {
+        setTotalBookingsCount(0)
+        return
+      }
+
+      try {
+        // Fetch với limit=1 để chỉ lấy pagination info
+        const result = await bookingApi.getMyBookings({ page: 1, limit: 1 })
+        
+        // Kiểm tra nhiều cấu trúc response có thể có
+        let total = 0
+        
+        // Kiểm tra result có tồn tại không
+        if (!result) {
+          setTotalBookingsCount(0)
+          return
+        }
+        
+        // Kiểm tra result.data
+        if (result.data) {
+          // Cấu trúc 1: result.data.pagination.total (chuẩn từ backend)
+          if (result.data.pagination && typeof result.data.pagination.total === 'number') {
+            total = result.data.pagination.total
+          }
+          // Cấu trúc 2: result.data.bookings là array và có pagination
+          else if (result.data.bookings && result.data.pagination) {
+            total = result.data.pagination.total || 0
+          }
+          // Cấu trúc 3: result.data.total (nếu API trả về trực tiếp)
+          else if (typeof result.data.total === 'number') {
+            total = result.data.total
+          }
+          // Cấu trúc 4: result.data là array (fallback)
+          else if (Array.isArray(result.data)) {
+            total = result.data.length
+          }
+          // Thử tìm pagination ở các level khác
+          else if (result.pagination && typeof result.pagination.total === 'number') {
+            total = result.pagination.total
+          }
+        } else if (result.pagination && typeof result.pagination.total === 'number') {
+          // Thử kiểm tra result trực tiếp
+          total = result.pagination.total
+        }
+        
+        setTotalBookingsCount(total)
+      } catch (error) {
+        console.error('Error fetching bookings count:', error)
+        setTotalBookingsCount(0)
+      }
+    }
+
+    fetchBookingsCount()
+  }, [isAuthenticated])
+
   // Merge real user data with mock data for missing fields
   const userData = useMemo(() => user ? {
     name: user.name || 'Người dùng',
@@ -54,8 +114,8 @@ function ProfilePage() {
     location: user.location || 'Chưa cập nhật',
     avatar: user.avatar || null,
     joinDate: user.createdAt || new Date().toISOString(),
-    totalBookings: user.totalBookings || 0,
-    points: user.points || 0,
+    totalBookings: totalBookingsCount, // Sử dụng số lượng thực tế từ API
+    points: user.loyaltyPoints || user.points || 0, // Ưu tiên loyaltyPoints, fallback về points
     isVIP: user.isVIP || false
   } : {
     name: 'Người dùng',
@@ -64,10 +124,10 @@ function ProfilePage() {
     location: 'Chưa cập nhật',
     avatar: null,
     joinDate: new Date().toISOString(),
-    totalBookings: 0,
+    totalBookings: totalBookingsCount,
     points: 0,
     isVIP: false
-  }, [user])
+  }, [user, totalBookingsCount])
 
   // Get active tab from URL pathname
   const activeTab = useMemo(() => {
@@ -76,7 +136,7 @@ function ProfilePage() {
     if (path.includes('/favorites')) return 'favorites'
     if (path.includes('/tournaments')) return 'tournaments'
     if (path.includes('/settings')) return 'settings'
-    return 'overview'
+    return 'bookings' // Default to bookings instead of overview
   }, [location.pathname])
 
   return (
@@ -98,14 +158,6 @@ function ProfilePage() {
           border: '1px solid #e5e7eb'
         }}>
           <div className="tabs">
-            <Link 
-              to="/profile/overview"
-              className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}
-            >
-              <LayoutDashboard size={18} />
-              Tổng quan
-            </Link>
             <Link 
               to="/profile/bookings"
               className={`tab ${activeTab === 'bookings' ? 'active' : ''}`}

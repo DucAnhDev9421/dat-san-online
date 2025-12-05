@@ -19,6 +19,20 @@ const UserMenu = ({
   const [balance, setBalance] = useState(user?.walletBalance || user?.balance || 0)
   const [loadingBalance, setLoadingBalance] = useState(false)
 
+  // Tính hạng thành viên dựa trên điểm tích lũy
+  const calculateMemberTier = (points) => {
+    const lifetimePoints = points || 0
+    if (lifetimePoints >= 10000) {
+      return { id: 'gold', name: 'Vàng', color: '#f59e0b', bgColor: '#fef3c7' }
+    }
+    if (lifetimePoints >= 5000) {
+      return { id: 'silver', name: 'Bạc', color: '#6b7280', bgColor: '#f3f4f6' }
+    }
+    return { id: 'bronze', name: 'Đồng', color: '#d97706', bgColor: '#fef3c7' }
+  }
+
+  const memberTier = calculateMemberTier(user?.lifetimePoints || user?.loyaltyPoints || 0)
+
   // Fetch balance when component mounts or user changes
   useEffect(() => {
     const fetchBalance = async () => {
@@ -139,6 +153,26 @@ const UserMenu = ({
             </div>
             <div style={{ fontSize: '12px', color: '#6b7280' }}>
               {user?.email}
+            </div>
+            {/* Hạng thành viên */}
+            <div style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginTop: '6px',
+              padding: '4px 8px',
+              background: memberTier.bgColor,
+              borderRadius: '6px',
+              width: 'fit-content'
+            }}>
+              <Trophy size={12} color={memberTier.color} />
+              <span style={{ 
+                fontSize: '11px', 
+                color: memberTier.color,
+                fontWeight: '600'
+              }}>
+                Hạng {memberTier.name}
+              </span>
             </div>
             {(user?.role || user?.userType) && (
               <div style={{ 

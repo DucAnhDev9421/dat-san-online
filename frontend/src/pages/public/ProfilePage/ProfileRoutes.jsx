@@ -2,7 +2,6 @@ import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 // Lazy load các component pages
-const OverviewPage = lazy(() => import("./pages/Overview"));
 const BookingsPage = lazy(() => import("./pages/Bookings"));
 const FavoritesPage = lazy(() => import("./pages/Favorites"));
 const MyTournamentsPage = lazy(() => import("./pages/MyTournaments"));
@@ -47,13 +46,12 @@ const ProfileRoutes = () => {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        <Route index element={<Navigate to="overview" replace />} />
-        <Route path="overview" element={<OverviewPage />} />
+        <Route index element={<Navigate to="bookings" replace />} />
         <Route path="bookings" element={<BookingsPage />} />
         <Route path="favorites" element={<FavoritesPage />} />
         <Route path="tournaments" element={<MyTournamentsPage />} />
         <Route path="settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="overview" replace />} />
+        <Route path="*" element={<Navigate to="bookings" replace />} />
       </Routes>
     </Suspense>
   );
