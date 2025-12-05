@@ -1,134 +1,87 @@
 import React, { useState, useMemo } from "react";
-import { Send } from "lucide-react";
 import { notificationData } from "../data/mockData";
-import NotificationDetailModal from "../modals/NotificationDetailModal";
-import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
-import NotificationFilters from "../components/Notifications/NotificationFilters";
-import NotificationTable from "../components/Notifications/NotificationTable";
+import ChatSidebar from "./../components/Notifications/ChatSidebar";
+import ChatWindow from "./../components/Notifications/ChatWindow";
 
 const Notifications = () => {
   const [notifications, setNotifications] = useState(notificationData);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [selectedNotification, setSelectedNotification] = useState(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [selectedNotificationId, setSelectedNotificationId] = useState(null);
 
+  // Lọc tin nhắn theo tìm kiếm
   const filteredNotifications = useMemo(
     () =>
       notifications.filter((r) =>
-        [r.title, r.message, r.type, r.status].join(" ").toLowerCase().includes(searchQuery.toLowerCase())
+        [r.title, r.message]
+          .join(" ")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase())
       ),
     [searchQuery, notifications]
   );
 
-  const notificationSlice = filteredNotifications.slice((page - 1) * pageSize, page * pageSize);
+  // Lấy nội dung tin nhắn đang chọn để hiển thị bên phải
+  const selectedNotification = useMemo(
+    () => notifications.find((n) => n.id === selectedNotificationId),
+    [notifications, selectedNotificationId]
+  );
 
-  const handlers = {
-    onView: (notification) => {
-      setSelectedNotification(notification);
-      setIsDetailOpen(true);
-    },
-    onDelete: (notification) => {
-      setSelectedNotification(notification);
-      setIsDeleteOpen(true);
-    },
+  // --- HÀM QUAN TRỌNG: XỬ LÝ KHI CLICK VÀO TIN NHẮN ---
+  const handleSelect = (notification) => {
+    // 1. Đặt ID tin nhắn này là tin nhắn đang xem
+    setSelectedNotificationId(notification.id);
+
+    // 2. CẬP NHẬT TRẠNG THÁI "ĐÃ ĐỌC":
+    // Duyệt qua danh sách, tìm đúng tin nhắn vừa bấm và set unreadCount = 0
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === notification.id
+          ? { ...n, unreadCount: 0, status: "read" } // Xóa số badge và đổi trạng thái
+          : n
+      )
+    );
+  };
+
+  const handleDelete = (id) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    if (selectedNotificationId === id) setSelectedNotificationId(null);
   };
 
   return (
-    <div>
+    <div
+      style={{
+        // Các style để căn chỉnh full màn hình (như đã làm ở các bước trước)
+        height: "calc(100vh - 60px)",
+        margin: "-24px",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        position: "relative",
+        zIndex: 10,
+      }}
+    >
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 12,
-        }}
-      >
-        <h1 style={{ fontSize: 22, fontWeight: 800 }}>Quản lý thông báo</h1>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => alert("TODO: Gửi thông báo mới")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              background: "#10b981",
-              color: "#fff",
-              border: 0,
-              borderRadius: 10,
-              padding: "10px 14px",
-              cursor: "pointer",
-              fontWeight: 700,
-            }}
-          >
-            <Send size={16} /> Gửi thông báo
-          </button>
-        </div>
-      </div>
-
-      <div
-        style={{
+          flex: 1,
           background: "#fff",
-          borderRadius: 12,
-          boxShadow: "0 6px 20px rgba(0,0,0,.06)",
-          marginBottom: 16,
+          borderTop: "1px solid #e5e7eb",
+          overflow: "hidden",
         }}
       >
-        <NotificationFilters
+        <ChatSidebar
+          notifications={filteredNotifications}
+          selectedId={selectedNotificationId}
+          onSelect={handleSelect} // Truyền hàm xử lý đã sửa vào đây
           searchQuery={searchQuery}
-          onSearchChange={(value) => {
-            setSearchQuery(value);
-            setPage(1);
-          }}
-          pageSize={pageSize}
-          onPageSizeChange={(size) => {
-            setPageSize(size);
-            setPage(1);
-          }}
-          totalCount={filteredNotifications.length}
+          onSearchChange={setSearchQuery}
+        />
+
+        <ChatWindow
+          notification={selectedNotification}
+          onDelete={handleDelete}
         />
       </div>
-
-      <NotificationTable
-        notifications={notificationSlice}
-        page={page}
-        pageSize={pageSize}
-        total={filteredNotifications.length}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setPage(1);
-        }}
-        handlers={handlers}
-      />
-
-      <NotificationDetailModal
-        isOpen={isDetailOpen}
-        onClose={() => {
-          setIsDetailOpen(false);
-          setSelectedNotification(null);
-        }}
-        notification={selectedNotification}
-      />
-
-      <DeleteConfirmationModal
-        isOpen={isDeleteOpen}
-        onClose={() => {
-          setIsDeleteOpen(false);
-          setSelectedNotification(null);
-        }}
-        onConfirm={() => {
-          if (selectedNotification) {
-            setNotifications((prev) => prev.filter((n) => n.id !== selectedNotification.id));
-            setIsDeleteOpen(false);
-            setSelectedNotification(null);
-          }
-        }}
-        title="Xóa thông báo"
-        message="Bạn có chắc muốn xóa thông báo"
-        itemName={selectedNotification?.title}
-      />
     </div>
   );
 };
