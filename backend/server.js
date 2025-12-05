@@ -48,6 +48,8 @@ import loyaltyRoutes from "./routes/loyalty.js";
 import referralRoutes from "./routes/referral.js";
 import partnerRoutes from "./routes/partner.js";
 import feedbackRoutes from "./routes/feedback.js";
+import { startReservationExpiryJob } from "./jobs/reservationExpiry.js";
+import { startBookingAutoCancelJob } from "./jobs/bookingAutoCancel.js";
 
 const app = express();
 
@@ -171,6 +173,12 @@ httpServer.listen(PORT, () => {
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Google OAuth: http://localhost:${PORT}/api/auth/google`);
   console.log(`🔌 Socket.IO server initialized with namespaces`);
+  
+  // Start reservation expiry job
+  startReservationExpiryJob();
+  
+  // Start booking auto-cancel job (hủy đơn không xác nhận trước 15 phút vào sân)
+  startBookingAutoCancelJob();
 });
 
 // Schedule cleanup job for unverified users every hour

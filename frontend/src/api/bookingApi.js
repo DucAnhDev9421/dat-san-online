@@ -109,10 +109,11 @@ export const bookingApi = {
   /**
    * Hủy booking
    * @param {string} bookingId - ID của booking
+   * @param {string} reason - Lý do hủy (optional)
    */
-  cancelBooking: async (bookingId) => {
+  cancelBooking: async (bookingId, reason) => {
     try {
-      const response = await api.patch(`/bookings/${bookingId}/cancel`);
+      const response = await api.patch(`/bookings/${bookingId}/cancel`, { reason });
       return handleApiSuccess(response);
     } catch (error) {
       throw handleApiError(error);

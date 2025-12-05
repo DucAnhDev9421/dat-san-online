@@ -25,18 +25,26 @@ const CreateTournament = () => {
     location: '',
     type: 'individual', // team or individual
     sport: '', // selected sport category
+    courtType: '', // selected court type
     format: 'single-elimination', // tournament format
     numParticipants: 2,
     membersPerTeam: 2, // số lượng người mỗi đội
     startDate: '',
     endDate: '',
     allowRegistration: false,
-    registrationDeadline: ''
+    registrationDeadline: '',
+    // Cấu hình cho vòng tròn
+    winPoints: 3,
+    drawPoints: 1,
+    lossPoints: 0,
+    numRounds: 1
   })
 
   const [imagePreview, setImagePreview] = useState(null)
   const [sportCategories, setSportCategories] = useState([])
   const [loadingSports, setLoadingSports] = useState(false)
+  const [courtTypes, setCourtTypes] = useState([])
+  const [loadingCourtTypes, setLoadingCourtTypes] = useState(false)
   const [facilitySearchQuery, setFacilitySearchQuery] = useState('')
   const [facilitySearchResults, setFacilitySearchResults] = useState([])
   const [loadingFacilities, setLoadingFacilities] = useState(false)
@@ -169,12 +177,63 @@ const CreateTournament = () => {
     { id: 'round-robin', icon: '🔁', label: 'Vòng tròn' }
   ]
 
+  // Fetch court types based on sport and facility
+  useEffect(() => {
+    const fetchCourtTypes = async () => {
+      if (!formData.sport || !selectedFacility) {
+        setCourtTypes([])
+        setFormData(prev => ({ ...prev, courtType: '' }))
+        return
+      }
+      
+      try {
+        setLoadingCourtTypes(true)
+        // Tìm sport category để lấy ID
+        const sportCategory = sportCategories.find(cat => cat.name === formData.sport)
+        if (!sportCategory) {
+          setCourtTypes([])
+          return
+        }
+        
+        const sportCategoryId = sportCategory._id || sportCategory.id
+        const result = await categoryApi.getCourtTypes({ 
+          sportCategory: sportCategoryId,
+          status: 'active' 
+        })
+        
+        if (result.success) {
+          const types = Array.isArray(result.data) 
+            ? result.data 
+            : result.data?.courtTypes || []
+          setCourtTypes(types)
+          
+          // Reset courtType nếu loại sân hiện tại không còn trong danh sách
+          if (formData.courtType) {
+            const currentTypeExists = types.some(
+              type => (type._id || type.id) === formData.courtType
+            )
+            if (!currentTypeExists) {
+              setFormData(prev => ({ ...prev, courtType: '' }))
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching court types:', error)
+        setCourtTypes([])
+      } finally {
+        setLoadingCourtTypes(false)
+      }
+    }
+
+    fetchCourtTypes()
+  }, [formData.sport, selectedFacility, sportCategories])
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
     setFormData(prev => {
       const newData = {
         ...prev,
-        [name]: type === 'checkbox' ? checked : (type === 'number' ? parseInt(value) : value)
+        [name]: type === 'checkbox' ? checked : (type === 'number' ? parseInt(value) || 0 : value)
       }
       // Khi chọn "Công khai", tự động bật cho phép đăng ký
       if (name === 'mode' && value === 'public') {
@@ -184,6 +243,10 @@ const CreateTournament = () => {
       if (name === 'mode' && value === 'private') {
         newData.allowRegistration = false
         newData.registrationDeadline = ''
+      }
+      // Khi thay đổi sport, reset courtType
+      if (name === 'sport') {
+        newData.courtType = ''
       }
       return newData
     })
@@ -266,6 +329,10 @@ const CreateTournament = () => {
       toast.error('Vui lòng chọn môn thể thao')
       return
     }
+    if (!formData.courtType) {
+      toast.error('Vui lòng chọn loại sân')
+      return
+    }
 
     setIsSubmitting(true)
 
@@ -306,6 +373,19 @@ const CreateTournament = () => {
         type: formData.mode === 'public' ? 'PUBLIC' : 'PRIVATE', // Map mode to type
         teams: [],
         matches: []
+      }
+
+      // Thêm courtType nếu có
+      if (formData.courtType) {
+        requestBody.courtType = formData.courtType
+      }
+
+      // Thêm cấu hình vòng tròn nếu format là round-robin
+      if (formData.format === 'round-robin') {
+        requestBody.winPoints = formData.winPoints
+        requestBody.drawPoints = formData.drawPoints
+        requestBody.lossPoints = formData.lossPoints
+        requestBody.numRounds = formData.numRounds
       }
 
       // Nếu có facility ID, thêm vào request body
@@ -460,6 +540,232 @@ const CreateTournament = () => {
                     ))}
                   </select>
                 </div>
+
+                {/* Court Type Selection */}
+                {formData.sport && selectedFacility && (
+                  <div className="form-field">
+                    <label htmlFor="courtType">
+                      Loại sân {formData.sport ? <span className="required">*</span> : ''}
+                    </label>
+                    <select
+                      id="courtType"
+                      name="courtType"
+                      value={formData.courtType}
+                      onChange={handleInputChange}
+                      required={!!formData.sport}
+                      disabled={loadingCourtTypes}
+                    >
+                      <option value="">
+                        {loadingCourtTypes ? 'Đang tải...' : '-- Chọn loại sân --'}
+                      </option>
+                      {courtTypes.map((courtType) => (
+                        <option key={courtType._id || courtType.id} value={courtType._id || courtType.id}>
+                          {courtType.name}
+                          {courtType.description ? ` - ${courtType.description}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {formData.sport && courtTypes.length === 0 && !loadingCourtTypes && (
+                      <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                        Không có loại sân nào cho môn thể thao này
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Cấu hình cho vòng tròn */}
+                {formData.format === 'round-robin' && (
+                  <div style={{ 
+                    gridColumn: '1 / -1',
+                    background: '#f9fafb',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: '20px',
+                    marginTop: '16px'
+                  }}>
+                    {/* Điểm số */}
+                    <div style={{ marginBottom: '20px' }}>
+                      <h3 style={{ 
+                        fontSize: '16px', 
+                        fontWeight: '600', 
+                        color: '#111827',
+                        marginBottom: '12px'
+                      }}>
+                        Cấu hình điểm số
+                      </h3>
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(3, 1fr)', 
+                        gap: '12px' 
+                      }}>
+                        <div>
+                          <label htmlFor="winPoints" style={{ 
+                            display: 'block',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            color: '#374151',
+                            marginBottom: '6px'
+                          }}>
+                            Điểm thắng <span className="required">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            id="winPoints"
+                            name="winPoints"
+                            min="0"
+                            value={formData.winPoints}
+                            onChange={handleInputChange}
+                            required
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              border: '1px solid #d1d5db',
+                              borderRadius: '6px',
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="drawPoints" style={{ 
+                            display: 'block',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            color: '#374151',
+                            marginBottom: '6px'
+                          }}>
+                            Điểm hòa <span className="required">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            id="drawPoints"
+                            name="drawPoints"
+                            min="0"
+                            value={formData.drawPoints}
+                            onChange={handleInputChange}
+                            required
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              border: '1px solid #d1d5db',
+                              borderRadius: '6px',
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="lossPoints" style={{ 
+                            display: 'block',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            color: '#374151',
+                            marginBottom: '6px'
+                          }}>
+                            Điểm thua <span className="required">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            id="lossPoints"
+                            name="lossPoints"
+                            min="0"
+                            value={formData.lossPoints}
+                            onChange={handleInputChange}
+                            required
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              border: '1px solid #d1d5db',
+                              borderRadius: '6px',
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Số lượt đá */}
+                    <div>
+                      <label style={{ 
+                        display: 'block',
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        color: '#374151',
+                        marginBottom: '12px'
+                      }}>
+                        Số lượt đá vòng tròn <span className="required">*</span>
+                      </label>
+                      <div style={{ 
+                        display: 'flex', 
+                        gap: '8px',
+                        flexWrap: 'wrap'
+                      }}>
+                        {[1, 2, 3, 4].map((round) => (
+                          <button
+                            key={round}
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, numRounds: round }))}
+                            style={{
+                              padding: '10px 20px',
+                              border: formData.numRounds === round 
+                                ? '2px solid #3b82f6' 
+                                : '1px solid #d1d5db',
+                              borderRadius: '6px',
+                              background: formData.numRounds === round 
+                                ? '#eff6ff' 
+                                : '#fff',
+                              color: formData.numRounds === round 
+                                ? '#3b82f6' 
+                                : '#374151',
+                              fontWeight: formData.numRounds === round ? '600' : '500',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (formData.numRounds !== round) {
+                                e.target.style.background = '#f9fafb'
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (formData.numRounds !== round) {
+                                e.target.style.background = '#fff'
+                              }
+                            }}
+                          >
+                            {round} lượt
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Hiển thị số trận đấu */}
+                    <div style={{ 
+                      marginTop: '16px',
+                      padding: '12px',
+                      background: '#eff6ff',
+                      border: '1px solid #bfdbfe',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      color: '#1e40af',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <span>ⓘ</span>
+                      <span>
+                        Đối với cấu hình này thì số lượng trận đấu của giải là:{' '}
+                        <strong style={{ fontSize: '16px', fontWeight: '700' }}>
+                          {(() => {
+                            const n = formData.numParticipants || 2
+                            // Công thức: n*(n-1)/2 * số lượt (vòng tròn)
+                            const matchesPerRound = (n * (n - 1)) / 2
+                            const totalMatches = matchesPerRound * formData.numRounds
+                            return Math.round(totalMatches)
+                          })()}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Number of Participants */}
                 <div className="form-field">

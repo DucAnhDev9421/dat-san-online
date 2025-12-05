@@ -265,6 +265,21 @@ export const facilityApi = {
       throw handleApiError(error);
     }
   },
+
+  /**
+   * Get tournament fee configuration from facility owner
+   * GET /api/facilities/:id/tournament-fee-config
+   * @param {string} facilityId - Facility ID
+   * @returns {Promise<{success: boolean, data: Object}>}
+   */
+  getTournamentFeeConfig: async (facilityId) => {
+    try {
+      const response = await api.get(`/facilities/${facilityId}/tournament-fee-config`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 
 export default facilityApi;

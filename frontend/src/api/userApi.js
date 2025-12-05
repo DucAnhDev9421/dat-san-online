@@ -268,6 +268,40 @@ export const userApi = {
     } catch (error) {
       throw handleApiError(error);
     }
+  },
+
+  /**
+   * Get tournament fee configuration (Owner only)
+   * GET /api/users/tournament-fee-config
+   * @returns {Promise<{success: boolean, data: Object}>}
+   */
+  getTournamentFeeConfig: async () => {
+    try {
+      const response = await api.get('/users/tournament-fee-config');
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Update tournament fee configuration (Owner only)
+   * PUT /api/users/tournament-fee-config
+   * @param {Object} config - Tournament fee configuration
+   * @param {number} [config.registrationFee] - Registration fee
+   * @param {Object} [config.internalTournamentFees] - Internal tournament fees
+   * @param {number} [config.internalTournamentFees.serviceFee] - Service fee
+   * @param {Object} [config.internalTournamentFees.courtTypeFees] - Court type fees (courtTypeId -> fee)
+   * @param {number} [config.internalTournamentFees.refereeFee] - Referee fee
+   * @returns {Promise<{success: boolean, data: Object}>}
+   */
+  updateTournamentFeeConfig: async (config) => {
+    try {
+      const response = await api.put('/users/tournament-fee-config', config);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
   }
 };
 

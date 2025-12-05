@@ -200,7 +200,17 @@ const leagueSchema = new mongoose.Schema(
       {
         stage: {
           type: String,
-          enum: ["round1", "round2", "round3", "round4", "round-robin", "semi", "final"],
+          enum: [
+            "round1", "round2", "round3", "round4", 
+            "round-robin", 
+            "round-robin-round1", "round-robin-round2", "round-robin-round3", "round-robin-round4",
+            "round-robin-v1", "round-robin-v2", "round-robin-v3", "round-robin-v4", "round-robin-v5", "round-robin-v6",
+            "round-robin-round1-v1", "round-robin-round1-v2", "round-robin-round1-v3", "round-robin-round1-v4", "round-robin-round1-v5", "round-robin-round1-v6",
+            "round-robin-round2-v1", "round-robin-round2-v2", "round-robin-round2-v3", "round-robin-round2-v4", "round-robin-round2-v5", "round-robin-round2-v6",
+            "round-robin-round3-v1", "round-robin-round3-v2", "round-robin-round3-v3", "round-robin-round3-v4", "round-robin-round3-v5", "round-robin-round3-v6",
+            "round-robin-round4-v1", "round-robin-round4-v2", "round-robin-round4-v3", "round-robin-round4-v4", "round-robin-round4-v5", "round-robin-round4-v6",
+            "semi", "final"
+          ],
         },
         matchNumber: {
           type: Number,
@@ -215,6 +225,9 @@ const leagueSchema = new mongoose.Schema(
           type: Date,
         },
         time: {
+          type: String,
+        },
+        endTime: {
           type: String,
         },
         score1: {
@@ -282,6 +295,45 @@ const leagueSchema = new mongoose.Schema(
     champion: {
       type: Schema.Types.Mixed, // Cho phép Number (team ID) hoặc null
       default: null,
+    },
+    // Trạng thái thanh toán phí giải đấu
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid", "failed"],
+      default: "pending",
+    },
+    // Phương thức thanh toán
+    paymentMethod: {
+      type: String,
+      enum: ["wallet", "momo", "vnpay", "cash"],
+      default: null,
+    },
+    // Thời gian thanh toán
+    paidAt: {
+      type: Date,
+      default: null,
+    },
+    // Cấu hình cho vòng tròn
+    numRounds: {
+      type: Number,
+      default: 1,
+      min: 1,
+      max: 4,
+    },
+    winPoints: {
+      type: Number,
+      default: 3,
+      min: 0,
+    },
+    drawPoints: {
+      type: Number,
+      default: 1,
+      min: 0,
+    },
+    lossPoints: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   {

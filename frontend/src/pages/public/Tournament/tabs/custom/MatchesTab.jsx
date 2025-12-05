@@ -27,6 +27,13 @@ const MatchesTab = ({ tournament }) => {
       'round1': 'Vòng 1',
       'round-robin': 'Vòng tròn'
     }
+    // Xử lý round-robin-round1, round-robin-round2, ...
+    if (stage && stage.startsWith('round-robin-round')) {
+      const roundMatch = stage.match(/round-robin-round(\d+)/)
+      if (roundMatch) {
+        return `Lượt ${roundMatch[1]}`
+      }
+    }
     return stageMap[stage] || stage
   }
 
@@ -52,8 +59,8 @@ const MatchesTab = ({ tournament }) => {
 
     const stages = [...new Set(tournament.matches.map(m => m.stage).filter(Boolean))]
     
-    // Sắp xếp theo thứ tự: round1, round2, round3, round4, semi, final, round-robin
-    const stageOrder = ['round1', 'round2', 'round3', 'round4', 'semi', 'final', 'round-robin']
+    // Sắp xếp theo thứ tự: round1, round2, round3, round4, semi, final, round-robin, round-robin-round1, ...
+    const stageOrder = ['round1', 'round2', 'round3', 'round4', 'semi', 'final', 'round-robin', 'round-robin-round1', 'round-robin-round2', 'round-robin-round3', 'round-robin-round4']
     return stages.sort((a, b) => {
       const indexA = stageOrder.indexOf(a)
       const indexB = stageOrder.indexOf(b)

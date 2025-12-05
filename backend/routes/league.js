@@ -4,6 +4,8 @@ import mongoose from "mongoose";
 import League from "../models/League.js";
 import Facility from "../models/Facility.js";
 import Court from "../models/Court.js";
+import User from "../models/User.js";
+import Payment from "../models/Payment.js";
 import {
   authenticateToken,
   requireAdmin,
@@ -13,6 +15,17 @@ import { logAudit } from "../utils/auditLogger.js";
 import { uploadLeagueImage, uploadTeamLogo, cloudinaryUtils } from "../config/cloudinary.js";
 import ExcelJS from "exceljs";
 import multer from "multer";
+import { 
+  extractSheetId, 
+  getSheetData, 
+  getSheetNames,
+  parseTeamsFromRows,
+  parseMembersFromRows 
+} from "../utils/googleSheetsService.js";
+import { debit } from "../utils/walletService.js";
+import { createNotification } from "../utils/notificationService.js";
+import { emitToUser } from "../socket/index.js";
+import asyncHandler from "express-async-handler";
 
 const router = express.Router();
 
@@ -595,6 +608,11 @@ router.post("/", async (req, res, next) => {
       teams,
       matches,
       type, // PUBLIC or PRIVATE
+      // Cấu hình cho vòng tròn
+      numRounds,
+      winPoints,
+      drawPoints,
+      lossPoints,
     } = req.body;
 
     // Validation
@@ -641,6 +659,11 @@ router.post("/", async (req, res, next) => {
       matches: matches || [],
       type: type || "PRIVATE", // Nhận type từ request body, mặc định là PRIVATE
       approvalStatus: req.body.facility ? "pending" : undefined, // Nếu có facility thì chờ duyệt
+      // Cấu hình cho vòng tròn
+      numRounds: numRounds || 1,
+      winPoints: winPoints !== undefined ? winPoints : 3,
+      drawPoints: drawPoints !== undefined ? drawPoints : 1,
+      lossPoints: lossPoints !== undefined ? lossPoints : 0,
     });
 
     await newLeague.save();
@@ -1193,6 +1216,146 @@ router.post(
 );
 
 /**
+ * POST /api/leagues/:id/teams/import-from-sheets
+ * Import danh sách đội từ Google Sheets
+ * User (người tạo)
+ */
+router.post(
+  "/:id/teams/import-from-sheets",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const { sheetUrl, sheetName, range } = req.body;
+
+      if (!sheetUrl) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng cung cấp Google Sheets URL",
+        });
+      }
+
+      const sheetId = extractSheetId(sheetUrl);
+      if (!sheetId) {
+        return res.status(400).json({
+          success: false,
+          message: "Google Sheets URL không hợp lệ",
+        });
+      }
+
+      const league = await League.findById(req.params.id);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      // Determine range: use sheetName if provided, otherwise use default
+      const sheetRange = sheetName 
+        ? `${sheetName}!A:Z` 
+        : range || 'A:Z';
+
+      // Get data from Google Sheets
+      const rows = await getSheetData(sheetId, sheetRange);
+
+      if (!rows || rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Google Sheets không chứa dữ liệu",
+        });
+      }
+
+      // Parse teams from rows
+      const teams = parseTeamsFromRows(rows);
+
+      if (teams.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Không tìm thấy dữ liệu đội hợp lệ trong Google Sheets",
+        });
+      }
+
+      const minTeams = 4;
+      if (teams.length < minTeams) {
+        return res.status(400).json({
+          success: false,
+          message: `Phải có ít nhất ${minTeams} đội`,
+        });
+      }
+
+      league.teams = teams;
+      league.maxParticipants = Math.max(league.maxParticipants, teams.length);
+      await league.save();
+
+      await logAudit("IMPORT_TEAMS_FROM_SHEETS", req.user._id, req, {
+        leagueId: req.params.id,
+        leagueName: league.name,
+        teamsCount: teams.length,
+        sheetUrl: sheetUrl,
+      });
+
+      res.json({
+        success: true,
+        message: `Đã import ${teams.length} đội từ Google Sheets thành công`,
+        data: league,
+      });
+    } catch (error) {
+      console.error('Error importing teams from Google Sheets:', error);
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/leagues/:id/sheets/preview
+ * Preview Google Sheets data (get sheet names and sample data)
+ * User (người tạo)
+ */
+router.get(
+  "/:id/sheets/preview",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const { sheetUrl } = req.query;
+
+      if (!sheetUrl) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng cung cấp Google Sheets URL",
+        });
+      }
+
+      const sheetId = extractSheetId(sheetUrl);
+      if (!sheetId) {
+        return res.status(400).json({
+          success: false,
+          message: "Google Sheets URL không hợp lệ",
+        });
+      }
+
+      // Get sheet names
+      const sheetNames = await getSheetNames(sheetId);
+
+      // Get sample data from first sheet
+      const firstSheetName = sheetNames[0]?.title || 'Sheet1';
+      const sampleData = await getSheetData(sheetId, `${firstSheetName}!A1:Z10`);
+
+      res.json({
+        success: true,
+        data: {
+          sheetNames: sheetNames,
+          sampleData: sampleData,
+          firstSheetName: firstSheetName,
+        },
+      });
+    } catch (error) {
+      console.error('Error previewing Google Sheets:', error);
+      next(error);
+    }
+  }
+);
+
+/**
  * PUT /api/leagues/:id/teams/:teamId/members/:memberIndex
  * Cập nhật thông tin thành viên
  * User (người tạo)
@@ -1599,6 +1762,122 @@ router.post(
 );
 
 /**
+ * POST /api/leagues/:id/teams/:teamId/members/import-from-sheets
+ * Import danh sách thành viên từ Google Sheets
+ * User (người tạo)
+ */
+router.post(
+  "/:id/teams/:teamId/members/import-from-sheets",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const { sheetUrl, sheetName, range } = req.body;
+
+      if (!sheetUrl) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng cung cấp Google Sheets URL",
+        });
+      }
+
+      const sheetId = extractSheetId(sheetUrl);
+      if (!sheetId) {
+        return res.status(400).json({
+          success: false,
+          message: "Google Sheets URL không hợp lệ",
+        });
+      }
+
+      const league = await League.findById(req.params.id);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      const teamIdParam = req.params.teamId;
+      const teamId = parseInt(teamIdParam);
+      const isTeamIdNumber = !isNaN(teamId);
+
+      const teamIndex = league.teams.findIndex((team) => {
+        if (isTeamIdNumber) {
+          const teamIdNum = typeof team.id === 'number' ? team.id : (team.id ? parseInt(team.id) : null);
+          if (teamIdNum !== null && !isNaN(teamIdNum) && teamIdNum === teamId) {
+            return true;
+          }
+        }
+        const teamIdStr = team._id?.toString();
+        if (teamIdStr && teamIdStr === teamIdParam) {
+          return true;
+        }
+        return false;
+      });
+
+      if (teamIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy đội",
+        });
+      }
+
+      // Determine range
+      const sheetRange = sheetName 
+        ? `${sheetName}!A:Z` 
+        : range || 'A:Z';
+
+      // Get data from Google Sheets
+      const rows = await getSheetData(sheetId, sheetRange);
+
+      if (!rows || rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Google Sheets không chứa dữ liệu",
+        });
+      }
+
+      const isFootball = league.sport === 'Bóng đá';
+      const members = parseMembersFromRows(rows, isFootball);
+
+      if (members.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Không tìm thấy dữ liệu thành viên hợp lệ trong Google Sheets",
+        });
+      }
+
+      // Add members to team
+      const team = league.teams[teamIndex];
+      if (!team.members || !Array.isArray(team.members)) {
+        team.members = [];
+      }
+
+      team.members = [...team.members, ...members];
+      league.teams[teamIndex] = team;
+
+      await league.save();
+
+      await logAudit("IMPORT_MEMBERS_FROM_SHEETS", req.user._id, req, {
+        leagueId: req.params.id,
+        leagueName: league.name,
+        teamId: teamIdParam,
+        membersCount: members.length,
+        sheetUrl: sheetUrl,
+      });
+
+      res.json({
+        success: true,
+        message: `Đã import ${members.length} thành viên từ Google Sheets thành công`,
+        data: league,
+      });
+    } catch (error) {
+      console.error('Error importing members from Google Sheets:', error);
+      next(error);
+    }
+  }
+);
+
+/**
  * POST /api/leagues/:id/teams/:teamId/logo
  * Upload logo cho đội
  * User (người tạo)
@@ -1820,19 +2099,53 @@ router.post(
       let byeTeam = null;
 
       if (isRoundRobin) {
-        // Round-robin: tạo tất cả các cặp đấu (mỗi đội đấu với tất cả đội khác)
+        // Round-robin: tạo tất cả các cặp đấu (mỗi đội đấu với tất cả đội khác) × số lượt
+        const numRounds = league.numRounds || 1;
         let matchNumber = 1;
+        const matchesPerRound = 2; // Mỗi vòng 2 trận
+        
+        // Tạo tất cả các cặp đấu cho 1 lượt
+        const allPairs = [];
         for (let i = 0; i < shuffledTeams.length; i++) {
           for (let j = i + 1; j < shuffledTeams.length; j++) {
-            matches.push({
-              stage: stage,
-              matchNumber: matchNumber++,
+            allPairs.push({
               team1Id: shuffledTeams[i].id !== null && shuffledTeams[i].id !== undefined ? shuffledTeams[i].id : shuffledTeams[i]._id,
               team2Id: shuffledTeams[j].id !== null && shuffledTeams[j].id !== undefined ? shuffledTeams[j].id : shuffledTeams[j]._id,
-              date: null,
-              time: null,
-              score1: null,
-              score2: null,
+            });
+          }
+        }
+        
+        // Tạo matches cho từng lượt, chia thành các vòng nhỏ (mỗi vòng 2 trận)
+        for (let round = 1; round <= numRounds; round++) {
+          // Chia allPairs thành các vòng nhỏ
+          const totalRoundsPerLeg = Math.ceil(allPairs.length / matchesPerRound);
+          
+          for (let subRound = 1; subRound <= totalRoundsPerLeg; subRound++) {
+            const startIndex = (subRound - 1) * matchesPerRound;
+            const endIndex = Math.min(startIndex + matchesPerRound, allPairs.length);
+            const roundPairs = allPairs.slice(startIndex, endIndex);
+            
+            // Tạo stage name: round-robin-round1-v1, round-robin-round1-v2, ... (nếu numRounds > 1)
+            // hoặc round-robin-v1, round-robin-v2, ... (nếu numRounds = 1)
+            // Luôn bắt đầu từ 'round-robin' base, không phụ thuộc vào giá trị của stage variable
+            let roundStage;
+            if (numRounds > 1) {
+              roundStage = `round-robin-round${round}-v${subRound}`;
+            } else {
+              roundStage = `round-robin-v${subRound}`;
+            }
+            
+            roundPairs.forEach(pair => {
+              matches.push({
+                stage: roundStage,
+                matchNumber: matchNumber++,
+                team1Id: pair.team1Id,
+                team2Id: pair.team2Id,
+                date: null,
+                time: null,
+                score1: null,
+                score2: null,
+              });
             });
           }
         }
@@ -2164,8 +2477,10 @@ router.post(
       let updatedMatches;
       if (clearExisting) {
         if (isRoundRobin) {
-          // Round-robin: chỉ xóa matches của stage hiện tại
-          updatedMatches = (league.matches || []).filter(m => m.stage !== stage);
+          // Round-robin: xóa tất cả matches có stage bắt đầu bằng "round-robin"
+          updatedMatches = (league.matches || []).filter(m => {
+            return !m.stage || !m.stage.startsWith('round-robin');
+          });
           updatedMatches = [...updatedMatches, ...matches];
         } else {
           // Single-elimination: xóa TẤT CẢ các matches của single-elimination
@@ -2270,7 +2585,7 @@ router.put(
       let updatedCount = 0;
       const notFoundMatches = [];
       
-      schedules.forEach(({ stage, matchNumber, date, time }) => {
+      schedules.forEach(({ stage, matchNumber, date, time, endTime }) => {
         // Tìm match với nhiều cách so sánh
         const matchIndex = league.matches.findIndex((m) => {
           const stageMatch = m.stage === stage;
@@ -2286,6 +2601,9 @@ router.put(
           }
           if (time !== undefined) {
             league.matches[matchIndex].time = time || null;
+          }
+          if (endTime !== undefined) {
+            league.matches[matchIndex].endTime = endTime || null;
           }
           updatedCount++;
         } else {
@@ -2637,7 +2955,8 @@ router.get(
         { header: 'Đội 1', key: 'team1', width: 30 },
         { header: 'Đội 2', key: 'team2', width: 30 },
         { header: 'Ngày thi đấu', key: 'date', width: 20 },
-        { header: 'Giờ thi đấu', key: 'time', width: 20 }
+        { header: 'Giờ bắt đầu', key: 'time', width: 20 },
+        { header: 'Giờ kết thúc', key: 'endTime', width: 20 }
       ];
 
       worksheet.getRow(1).font = { bold: true };
@@ -2788,34 +3107,35 @@ router.get(
 
           const dateStr = formatDate(match.date);
           const timeStr = formatTime(match.time);
+          const endTimeStr = formatTime(match.endTime);
 
-          worksheet.addRow([stageName, team1Name, team2Name, dateStr, timeStr]);
+          worksheet.addRow([stageName, team1Name, team2Name, dateStr, timeStr, endTimeStr]);
         });
       } else {
         const isRoundRobin = league.format === 'Vòng tròn' || league.format === 'round-robin';
         
         if (isRoundRobin) {
-          worksheet.addRow(['vòng tròn', 'Đội 1', 'Đội 2', '', '']);
-          worksheet.addRow(['vòng tròn', 'Đội 3', 'Đội 4', '', '']);
+          worksheet.addRow(['vòng tròn', 'Đội 1', 'Đội 2', '', '', '']);
+          worksheet.addRow(['vòng tròn', 'Đội 3', 'Đội 4', '', '', '']);
         } else {
           const numTeams = league.maxParticipants || 4;
           if (numTeams === 2) {
-            worksheet.addRow(['chung kết', 'Đội 1', 'Đội 2', '', '']);
+            worksheet.addRow(['chung kết', 'Đội 1', 'Đội 2', '', '', '']);
           } else if (numTeams === 4) {
-            worksheet.addRow(['bán kết', 'Đội 1', 'Đội 2', '', '']);
-            worksheet.addRow(['bán kết', 'Đội 3', 'Đội 4', '', '']);
-            worksheet.addRow(['chung kết', 'W#1 bán kết', 'W#2 bán kết', '', '']);
+            worksheet.addRow(['bán kết', 'Đội 1', 'Đội 2', '', '', '']);
+            worksheet.addRow(['bán kết', 'Đội 3', 'Đội 4', '', '', '']);
+            worksheet.addRow(['chung kết', 'W#1 bán kết', 'W#2 bán kết', '', '', '']);
           } else if (numTeams === 8) {
-            worksheet.addRow(['tứ kết', 'Đội 1', 'Đội 2', '', '']);
-            worksheet.addRow(['tứ kết', 'Đội 3', 'Đội 4', '', '']);
-            worksheet.addRow(['tứ kết', 'Đội 5', 'Đội 6', '', '']);
-            worksheet.addRow(['tứ kết', 'Đội 7', 'Đội 8', '', '']);
-            worksheet.addRow(['bán kết', 'W#1 tứ kết', 'W#2 tứ kết', '', '']);
-            worksheet.addRow(['bán kết', 'W#3 tứ kết', 'W#4 tứ kết', '', '']);
-            worksheet.addRow(['chung kết', 'W#1 bán kết', 'W#2 bán kết', '', '']);
+            worksheet.addRow(['tứ kết', 'Đội 1', 'Đội 2', '', '', '']);
+            worksheet.addRow(['tứ kết', 'Đội 3', 'Đội 4', '', '', '']);
+            worksheet.addRow(['tứ kết', 'Đội 5', 'Đội 6', '', '', '']);
+            worksheet.addRow(['tứ kết', 'Đội 7', 'Đội 8', '', '', '']);
+            worksheet.addRow(['bán kết', 'W#1 tứ kết', 'W#2 tứ kết', '', '', '']);
+            worksheet.addRow(['bán kết', 'W#3 tứ kết', 'W#4 tứ kết', '', '', '']);
+            worksheet.addRow(['chung kết', 'W#1 bán kết', 'W#2 bán kết', '', '', '']);
           } else {
-            worksheet.addRow(['vòng 1', 'Đội 1', 'Đội 2', '', '']);
-            worksheet.addRow(['vòng 1', 'Đội 3', 'Đội 4', '', '']);
+            worksheet.addRow(['vòng 1', 'Đội 1', 'Đội 2', '', '', '']);
+            worksheet.addRow(['vòng 1', 'Đội 3', 'Đội 4', '', '', '']);
           }
         }
       }
@@ -2825,6 +3145,9 @@ router.get(
       
       const timeColumn = worksheet.getColumn('time');
       timeColumn.numFmt = '@';
+      
+      const endTimeColumn = worksheet.getColumn('endTime');
+      endTimeColumn.numFmt = '@';
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', 'attachment; filename="mau-lich-dau.xlsx"');
@@ -2956,6 +3279,7 @@ router.post(
         const team2Name = row.getCell(3).value?.toString()?.trim() || '';
         const dateStr = row.getCell(4).value?.toString()?.trim() || '';
         const timeStr = row.getCell(5).value?.toString()?.trim() || '';
+        const endTimeStr = row.getCell(6).value?.toString()?.trim() || '';
 
         if (!stageName) {
           errors.push(`Dòng ${rowNum}: Thiếu vòng đấu`);
@@ -2986,13 +3310,18 @@ router.post(
 
         const date = parseDate(dateStr);
         const time = parseTime(timeStr);
+        const endTime = parseTime(endTimeStr);
 
         if (dateStr && !date) {
           errors.push(`Dòng ${rowNum}: Định dạng ngày không hợp lệ "${dateStr}". Yêu cầu: Ngày-tháng-năm (VD: 23-12-2000)`);
         }
 
         if (timeStr && !time) {
-          errors.push(`Dòng ${rowNum}: Định dạng giờ không hợp lệ "${timeStr}". Yêu cầu: Giờ:phút (VD: 23:18)`);
+          errors.push(`Dòng ${rowNum}: Định dạng giờ bắt đầu không hợp lệ "${timeStr}". Yêu cầu: Giờ:phút (VD: 23:18)`);
+        }
+
+        if (endTimeStr && !endTime) {
+          errors.push(`Dòng ${rowNum}: Định dạng giờ kết thúc không hợp lệ "${endTimeStr}". Yêu cầu: Giờ:phút (VD: 23:18)`);
         }
 
         const stageMatches = league.matches.filter(m => m.stage === stage);
@@ -3053,7 +3382,8 @@ router.post(
           stage,
           matchNumber,
           date,
-          time
+          time,
+          endTime
         });
       });
 
@@ -3075,7 +3405,7 @@ router.post(
       let updatedCount = 0;
       const notFoundMatches = [];
 
-      schedules.forEach(({ stage, matchNumber, date, time }) => {
+      schedules.forEach(({ stage, matchNumber, date, time, endTime }) => {
         const matchIndex = league.matches.findIndex((m) => {
           const stageMatch = m.stage === stage;
           const numberMatch = m.matchNumber === matchNumber || 
@@ -3090,6 +3420,9 @@ router.post(
           }
           if (time !== null && time !== undefined) {
             league.matches[matchIndex].time = time;
+          }
+          if (endTime !== null && endTime !== undefined) {
+            league.matches[matchIndex].endTime = endTime;
           }
           updatedCount++;
         } else {
@@ -3656,6 +3989,146 @@ router.put(
       next(error);
     }
   }
+);
+
+/**
+ * POST /api/leagues/:id/pay-fee
+ * Thanh toán phí giải đấu bằng ví
+ */
+router.post(
+  "/:id/pay-fee",
+  authenticateToken,
+  asyncHandler(async (req, res, next) => {
+    const leagueId = req.params.id;
+    const { amount, method } = req.body;
+
+    // Validation
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Số tiền không hợp lệ",
+      });
+    }
+
+    if (method !== "wallet") {
+      return res.status(400).json({
+        success: false,
+        message: "Chỉ hỗ trợ thanh toán bằng ví",
+      });
+    }
+
+    // 1. Tìm giải đấu
+    const league = await League.findById(leagueId);
+    if (!league) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy giải đấu",
+      });
+    }
+
+    // 2. Kiểm tra quyền sở hữu (chỉ creator mới có thể thanh toán)
+    if (league.creator.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền thanh toán phí cho giải đấu này",
+      });
+    }
+
+    // 3. Kiểm tra giải đấu đã được thanh toán chưa
+    if (league.paymentStatus === "paid") {
+      return res.status(400).json({
+        success: false,
+        message: "Giải đấu này đã được thanh toán",
+      });
+    }
+
+    // 4. Kiểm tra số dư ví
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    if (user.walletBalance < amount) {
+      return res.status(400).json({
+        success: false,
+        message: "Số dư ví không đủ",
+      });
+    }
+
+    // 5. Trừ tiền từ ví
+    await debit(user._id, amount, "payment", {
+      leagueId: league._id,
+      description: `Thanh toán phí tạo giải đấu: ${league.name}`,
+      type: "tournament_fee",
+    });
+
+    // 6. Tạo bản ghi Payment
+    const paymentId = `WALLET_LEAGUE_${league._id}_${new Date().getTime()}`;
+    const payment = await Payment.create({
+      user: user._id,
+      league: league._id,
+      amount: amount,
+      method: "wallet",
+      status: "success",
+      paymentId: paymentId,
+      transactionId: paymentId,
+      orderInfo: `Thanh toán phí tạo giải đấu: ${league.name}`,
+      paidAt: new Date(),
+    });
+
+    // 7. Cập nhật trạng thái giải đấu
+    league.paymentStatus = "paid";
+    league.paymentMethod = "wallet";
+    league.paidAt = new Date();
+    await league.save();
+
+    // 8. Gửi thông báo
+    await createNotification({
+      userId: user._id.toString(),
+      type: "payment",
+      title: "Thanh toán phí giải đấu thành công",
+      message: `Thanh toán phí tạo giải đấu "${league.name}" đã thành công. Số tiền: ${amount.toLocaleString("vi-VN")} VNĐ`,
+      metadata: {
+        leagueId: league._id.toString(),
+        paymentId: payment._id.toString(),
+        paymentMethod: "wallet",
+      },
+    });
+
+    // 9. Emit socket event
+    emitToUser(user._id.toString(), "league:payment:success", {
+      league: league.toObject(),
+      payment: payment.toObject(),
+      message: "Thanh toán phí giải đấu thành công!",
+    });
+
+    // 10. Log audit
+    await logAudit(
+      "LEAGUE_FEE_PAYMENT",
+      user._id,
+      req,
+      {
+        leagueId: league._id.toString(),
+        leagueName: league.name,
+        amount: amount,
+        paymentMethod: "wallet",
+        paymentId: payment._id.toString(),
+      }
+    );
+
+    res.json({
+      success: true,
+      message: "Thanh toán phí giải đấu thành công",
+      data: {
+        league: league.toObject(),
+        payment: payment.toObject(),
+        newBalance: user.walletBalance - amount,
+      },
+    });
+  })
 );
 
 export default router;

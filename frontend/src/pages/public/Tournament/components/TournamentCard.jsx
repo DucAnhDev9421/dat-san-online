@@ -17,6 +17,10 @@ const TournamentCard = ({ tournament, onRegister, onViewDetails, listView = fals
         text: 'Đang đăng ký', 
         className: 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 inset-ring inset-ring-blue-700/10' 
       },
+      starting: { 
+        text: 'Sắp diễn ra', 
+        className: 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-700 inset-ring inset-ring-yellow-600/20' 
+      },
       ongoing: { 
         text: 'Đang diễn ra', 
         className: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 inset-ring inset-ring-green-600/20' 
@@ -24,6 +28,10 @@ const TournamentCard = ({ tournament, onRegister, onViewDetails, listView = fals
       completed: { 
         text: 'Đã kết thúc', 
         className: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 inset-ring inset-ring-gray-500/10' 
+      },
+      cancelled: { 
+        text: 'Đã hủy', 
+        className: 'inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 inset-ring inset-ring-red-600/20' 
       }
     }
     return badges[status] || badges.upcoming
@@ -39,11 +47,54 @@ const TournamentCard = ({ tournament, onRegister, onViewDetails, listView = fals
     return formats[format] || format
   }
 
-  // Tính toán status dựa trên endDate nếu cần
+  // Helper: Tìm trận đấu đầu tiên (có date và time sớm nhất)
+  const getFirstMatchDateTime = () => {
+    if (!tournament?.matches || tournament.matches.length === 0) {
+      return null;
+    }
+
+    // Lọc các matches có date và time
+    const matchesWithSchedule = tournament.matches.filter(
+      m => m.date && m.time && m.time.trim() !== ''
+    );
+
+    if (matchesWithSchedule.length === 0) {
+      return null;
+    }
+
+    // Tìm match có date và time sớm nhất
+    let earliestMatch = null;
+    let earliestDateTime = null;
+
+    matchesWithSchedule.forEach(match => {
+      try {
+        const matchDate = new Date(match.date);
+        const [hours, minutes] = match.time.split(':').map(Number);
+        
+        if (!isNaN(hours) && !isNaN(minutes)) {
+          const matchDateTime = new Date(matchDate);
+          matchDateTime.setHours(hours, minutes, 0, 0);
+
+          if (!earliestDateTime || matchDateTime < earliestDateTime) {
+            earliestDateTime = matchDateTime;
+            earliestMatch = match;
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing match date/time:', error);
+      }
+    });
+
+    return earliestDateTime;
+  };
+
+  // Tính toán status dựa trên thời gian trận đấu đầu tiên
   const getComputedStatus = () => {
+    if (!tournament?.endDate) return tournament?.status || 'upcoming'
+    
     const now = new Date();
     const endDate = new Date(tournament.endDate);
-    const startDate = new Date(tournament.startDate);
+    const startDate = tournament.startDate ? new Date(tournament.startDate) : null;
     
     // Nếu đã bị hủy, giữ nguyên
     if (tournament.status === 'cancelled') {
@@ -55,12 +106,20 @@ const TournamentCard = ({ tournament, onRegister, onViewDetails, listView = fals
       return 'completed';
     }
     
-    // Nếu startDate đã qua nhưng endDate chưa qua, là ongoing
-    if (startDate <= now && endDate >= now) {
+    // Tìm thời gian trận đấu đầu tiên
+    const firstMatchDateTime = getFirstMatchDateTime();
+    
+    // Nếu có trận đấu đầu tiên và đã tới thời gian thi đấu, là ongoing
+    if (firstMatchDateTime && firstMatchDateTime <= now && endDate >= now) {
       return 'ongoing';
     }
     
-    // Còn lại là upcoming (hoặc giữ nguyên status từ DB nếu hợp lệ)
+    // Nếu đã tới startDate nhưng chưa tới thời gian trận đầu tiên, là starting (sắp diễn ra)
+    if (startDate && startDate <= now && (!firstMatchDateTime || firstMatchDateTime > now)) {
+      return 'starting';
+    }
+    
+    // Còn lại là upcoming (chưa tới startDate)
     return tournament.status || 'upcoming';
   };
 
@@ -100,6 +159,12 @@ const TournamentCard = ({ tournament, onRegister, onViewDetails, listView = fals
                 <span className="relative flex h-2 w-2 mr-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-600 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600"></span>
+                </span>
+              )}
+              {computedStatus === 'starting' && (
+                <span className="relative flex h-2 w-2 mr-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-500 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
                 </span>
               )}
               {statusBadge.text}

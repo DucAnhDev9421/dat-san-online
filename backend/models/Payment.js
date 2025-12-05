@@ -8,12 +8,17 @@ const paymentSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    // Booking liên quan
+    // Booking liên quan (không bắt buộc nếu có league)
     booking: {
       type: Schema.Types.ObjectId,
       ref: "Booking",
-      required: true,
-      unique: true, // Mỗi booking chỉ có 1 payment
+      required: false,
+    },
+    // League liên quan (cho thanh toán phí giải đấu)
+    league: {
+      type: Schema.Types.ObjectId,
+      ref: "League",
+      required: false,
     },
     // Số tiền
     amount: {
@@ -23,7 +28,7 @@ const paymentSchema = new mongoose.Schema(
     // Phương thức (sẽ dùng ở Giai đoạn 2)
     method: {
       type: String,
-      enum: ["cash", "vnpay", "momo", "payos"],
+      enum: ["cash", "vnpay", "momo", "payos", "wallet"],
       required: true,
     },
     // Trạng thái thanh toán
@@ -65,7 +70,17 @@ const paymentSchema = new mongoose.Schema(
   }
 );
 
+// Validation: Phải có booking hoặc league
+paymentSchema.pre("validate", function (next) {
+  if (!this.booking && !this.league) {
+    return next(new Error("Payment phải có booking hoặc league"));
+  }
+  next();
+});
+
 // Indexes
 paymentSchema.index({ user: 1, createdAt: -1 });
+paymentSchema.index({ booking: 1 }, { unique: true, sparse: true });
+paymentSchema.index({ league: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model("Payment", paymentSchema);

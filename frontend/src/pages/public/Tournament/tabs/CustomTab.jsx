@@ -1,6 +1,8 @@
-import React, { Suspense, lazy } from 'react'
+import React, { Suspense, lazy, useMemo } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useParams } from 'react-router-dom'
+import { useAuth } from '../../../../contexts/AuthContext'
+import ProtectedScheduleRoute from '../components/ProtectedScheduleRoute'
 
 // Lazy load sub-components
 const ConfigTab = lazy(() => import('./custom/ConfigTab'))
@@ -12,9 +14,30 @@ const CustomTab = ({ tournament }) => {
   const location = useLocation()
   const navigate = useNavigate()
   const { id } = useParams()
+  const { user } = useAuth()
   
   // Get current sub-route
   const currentPath = location.pathname.split('/').pop() || 'config'
+  
+  // Kiểm tra quyền: CHỈ owner của sân mới có quyền quản lý lịch đấu
+  const canManageSchedule = useMemo(() => {
+    if (!user || !tournament) return false
+    
+    const userId = user._id || user.id
+    const facilityOwnerId = tournament.facility?.owner?._id || tournament.facility?.owner?.id || tournament.facility?.owner
+    
+    // CHỈ kiểm tra nếu là owner của facility (không cho phép creator)
+    if (facilityOwnerId && String(facilityOwnerId) === String(userId)) {
+      return true
+    }
+    
+    // Nếu user là admin, cũng cho phép
+    if (user.role === 'admin') {
+      return true
+    }
+    
+    return false
+  }, [user, tournament])
   
   const handleSubTabClick = (tab) => {
     navigate(`/tournament/${id}/custom/${tab}`)
@@ -46,12 +69,14 @@ const CustomTab = ({ tournament }) => {
             >
               Sắp xếp cặp đấu
             </button>
-            <button
-              className={`sidebar-menu-item ${currentPath === 'schedule' ? 'active' : ''}`}
-              onClick={() => handleSubTabClick('schedule')}
-            >
-              Quản lý lịch đấu
-            </button>
+            {canManageSchedule && (
+              <button
+                className={`sidebar-menu-item ${currentPath === 'schedule' ? 'active' : ''}`}
+                onClick={() => handleSubTabClick('schedule')}
+              >
+                Quản lý lịch đấu
+              </button>
+            )}
           </div>
         </div>
 
@@ -63,7 +88,11 @@ const CustomTab = ({ tournament }) => {
               <Route path="config" element={<ConfigTab tournament={tournament} />} />
               <Route path="teams" element={<TeamsManagementTab tournament={tournament} />} />
               <Route path="matches" element={<MatchesTab tournament={tournament} />} />
-              <Route path="schedule" element={<ScheduleManagementTab tournament={tournament} />} />
+              <Route path="schedule" element={
+                <ProtectedScheduleRoute>
+                  <ScheduleManagementTab tournament={tournament} />
+                </ProtectedScheduleRoute>
+              } />
               <Route path="*" element={<Navigate to="config" replace />} />
             </Routes>
           </Suspense>

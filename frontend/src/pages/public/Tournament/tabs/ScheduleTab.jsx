@@ -19,6 +19,24 @@ const ScheduleTab = ({ tournament }) => {
       'round1': 'Vòng 1',
       'round-robin': 'Vòng tròn'
     }
+    // Xử lý round-robin-round1, round-robin-round2, ...
+    if (stage && stage.startsWith('round-robin-round')) {
+      const roundMatch = stage.match(/round-robin-round(\d+)/)
+      if (roundMatch) {
+        return `Lượt ${roundMatch[1]}`
+      }
+    }
+    // Xử lý round-robin-v1, round-robin-v2, ... hoặc round-robin-round1-v1, ...
+    if (stage && stage.includes('-v')) {
+      const vMatch = stage.match(/-v(\d+)$/)
+      if (vMatch) {
+        const roundMatch = stage.match(/round-robin(?:-round(\d+))?-v/)
+        if (roundMatch && roundMatch[1]) {
+          return `Lượt ${roundMatch[1]} - Vòng ${vMatch[1]}`
+        }
+        return `Vòng ${vMatch[1]}`
+      }
+    }
     return stageMap[stage] || stage
   }
 
@@ -38,7 +56,7 @@ const ScheduleTab = ({ tournament }) => {
     // Lấy tất cả các stage có matches (single-elimination)
     const allStages = [...new Set(
       tournament.matches
-        .filter(m => m.stage && m.stage !== 'round-robin')
+        .filter(m => m.stage && !m.stage.startsWith('round-robin'))
         .map(m => m.stage)
     )]
     
@@ -128,7 +146,7 @@ const ScheduleTab = ({ tournament }) => {
 
     // Lọc chỉ matches single-elimination (không phải round-robin)
     const singleEliminationMatches = tournament.matches.filter(
-      m => m.stage && m.stage !== 'round-robin'
+      m => m.stage && !m.stage.startsWith('round-robin')
     )
 
     if (singleEliminationMatches.length === 0) {
@@ -215,46 +233,91 @@ const ScheduleTab = ({ tournament }) => {
       return []
     }
 
-    // Lọc chỉ matches round-robin
-      const roundRobinMatches = tournament.matches.filter(m => m.stage === 'round-robin')
+    // Lọc tất cả matches round-robin (bao gồm round-robin, round-robin-round1, round-robin-round2, ...)
+    const roundRobinMatches = tournament.matches.filter(m => 
+      m.stage === 'round-robin' || (m.stage && m.stage.startsWith('round-robin'))
+    )
       
     if (roundRobinMatches.length === 0) {
       return []
     }
 
-    // Nhóm matches theo vòng (dựa trên matchNumber hoặc logic khác từ backend)
-    // Giả sử backend đã sắp xếp matchNumber theo vòng
-    const sortedMatches = roundRobinMatches.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
+    // Nhóm matches theo stage và lượt
+    // Format stage: round-robin-v1, round-robin-v2, ... (1 lượt)
+    // hoặc: round-robin-round1-v1, round-robin-round1-v2, ... (nhiều lượt)
+    const matchesByStage = {}
+    roundRobinMatches.forEach(match => {
+      const stage = match.stage || 'round-robin'
+      if (!matchesByStage[stage]) {
+        matchesByStage[stage] = []
+      }
+      matchesByStage[stage].push(match)
+    })
+
+    // Sắp xếp các stage theo thứ tự: lượt -> vòng
+    const sortedStages = Object.keys(matchesByStage).sort((a, b) => {
+      // Extract lượt và vòng từ stage name
+      const parseStage = (stageName) => {
+        // round-robin-round1-v2 -> round=1, v=2
+        // round-robin-v2 -> round=1, v=2
+        const roundMatch = stageName.match(/round-robin(?:-round(\d+))?-v(\d+)/)
+        if (roundMatch) {
+          return {
+            round: roundMatch[1] ? parseInt(roundMatch[1]) : 1,
+            v: parseInt(roundMatch[2])
+          }
+        }
+        // round-robin-round1 -> round=1, v=0
+        const roundOnlyMatch = stageName.match(/round-robin(?:-round(\d+))?$/)
+        if (roundOnlyMatch) {
+          return {
+            round: roundOnlyMatch[1] ? parseInt(roundOnlyMatch[1]) : 1,
+            v: 0
+          }
+        }
+        return { round: 1, v: 0 }
+      }
+      
+      const aParsed = parseStage(a)
+      const bParsed = parseStage(b)
+      
+      if (aParsed.round !== bParsed.round) {
+        return aParsed.round - bParsed.round
+      }
+      return aParsed.v - bParsed.v
+    })
+
+    // Tạo danh sách rounds đơn giản, đánh số liên tục từ 1
+    const rounds = []
+    let roundCounter = 1
     
-    // Tạm thời nhóm theo matchNumber (có thể cần điều chỉnh dựa trên logic backend)
-    const matchesPerRound = Math.ceil(sortedMatches.length / (tournament.maxParticipants || 4))
-        const rounds = []
-        
-    for (let round = 0; round < Math.ceil(sortedMatches.length / matchesPerRound); round++) {
-          const startIndex = round * matchesPerRound
-          const endIndex = startIndex + matchesPerRound
-      const roundMatches = sortedMatches.slice(startIndex, endIndex).map(match => {
-        const team1 = findTeamById(match.team1Id)
-        const team2 = findTeamById(match.team2Id)
+    sortedStages.forEach(stage => {
+      const stageMatches = matchesByStage[stage]
+        .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
+        .map(match => {
+          const team1 = findTeamById(match.team1Id)
+          const team2 = findTeamById(match.team2Id)
               
-              return {
-                id: match.matchNumber || match.id,
-          team1: team1 || { id: match.team1Id, teamNumber: getTeamDisplayName(match.team1Id, match, true) },
-          team2: team2 || { id: match.team2Id, teamNumber: getTeamDisplayName(match.team2Id, match, false) },
-                score1: match.score1 ?? 0,
-                score2: match.score2 ?? 0,
-                matchNumber: match.matchNumber || match.id,
-                date: match.date,
-                time: match.time
-              }
-            })
-          
-          rounds.push({
-            id: round + 1,
-            title: `VÒNG ${round + 1}`,
-            matches: roundMatches
-          })
-    }
+          return {
+            id: match.matchNumber || match.id,
+            team1: team1 || { id: match.team1Id, teamNumber: getTeamDisplayName(match.team1Id, match, true) },
+            team2: team2 || { id: match.team2Id, teamNumber: getTeamDisplayName(match.team2Id, match, false) },
+            score1: match.score1 ?? 0,
+            score2: match.score2 ?? 0,
+            matchNumber: match.matchNumber || match.id,
+            date: match.date,
+            time: match.time
+          }
+        })
+      
+      rounds.push({
+        id: roundCounter,
+        title: `VÒNG ${roundCounter}`,
+        matches: stageMatches
+      })
+      
+      roundCounter++
+    })
     
     return rounds
   }, [tournament, isRoundRobin])

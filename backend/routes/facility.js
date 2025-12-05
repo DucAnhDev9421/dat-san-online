@@ -3,6 +3,7 @@ import express from "express";
 import mongoose from "mongoose";
 import Facility from "../models/Facility.js";
 import Review from "../models/Review.js";
+import User from "../models/User.js";
 import {
   authenticateToken,
   authorize,
@@ -87,28 +88,61 @@ const checkOwnershipOrAdmin = async (req, res, next) => {
 // Middleware để tự động lấy tọa độ từ địa chỉ
 const autoGeocode = async (req, res, next) => {
   try {
-    // Nếu có address và chưa có location, hoặc address thay đổi
-    if (req.body.address && (!req.body.location?.coordinates || req.body.addressChanged)) {
-      try {
-        const geocodeResult = await geocodeAddress(req.body.address);
-        
-        // Format theo GeoJSON: [longitude, latitude]
-        if (geocodeResult.lng && geocodeResult.lat) {
-          req.body.location = {
-            type: 'Point',
-            coordinates: [geocodeResult.lng, geocodeResult.lat]
-          };
+    // Chỉ geocode nếu có address và một trong các điều kiện sau:
+    // 1. Chưa có location coordinates
+    // 2. Có flag addressChanged từ client
+    // 3. Address thực sự thay đổi so với database
+    if (req.body.address) {
+      let shouldGeocode = false;
+      
+      // Kiểm tra nếu có flag addressChanged từ client
+      if (req.body.addressChanged) {
+        shouldGeocode = true;
+      }
+      // Kiểm tra nếu chưa có location coordinates
+      else if (!req.body.location?.coordinates) {
+        // So sánh với address hiện tại trong database (nếu có facility)
+        if (req.facility) {
+          const currentAddress = req.facility.address?.trim() || '';
+          const newAddress = req.body.address.trim();
+          if (currentAddress !== newAddress) {
+            shouldGeocode = true;
+          }
         } else {
-          // Xóa location nếu không có tọa độ hợp lệ
-          delete req.body.location;
+          // Nếu chưa có facility (create), luôn geocode
+          shouldGeocode = true;
         }
+      }
+      
+      if (shouldGeocode) {
+        try {
+          // Thêm timeout wrapper để tránh request bị treo quá lâu
+          const geocodePromise = geocodeAddress(req.body.address);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Geocode timeout after 8 seconds')), 8000)
+          );
+          
+          const geocodeResult = await Promise.race([geocodePromise, timeoutPromise]);
+          
+          // Format theo GeoJSON: [longitude, latitude]
+          if (geocodeResult.lng && geocodeResult.lat) {
+            req.body.location = {
+              type: 'Point',
+              coordinates: [geocodeResult.lng, geocodeResult.lat]
+            };
+          } else {
+            // Xóa location nếu không có tọa độ hợp lệ
+            delete req.body.location;
+          }
 
-        // Có thể cập nhật lại address với formatted_address từ Goong (tùy chọn)
-        // req.body.address = geocodeResult.formatted_address;
-      } catch (error) {
-        // Nếu không lấy được tọa độ, xóa location để tránh lỗi
-        console.warn('Không thể lấy tọa độ từ Goong API:', error.message);
-        delete req.body.location;
+          // Có thể cập nhật lại address với formatted_address từ Goong (tùy chọn)
+          // req.body.address = geocodeResult.formatted_address;
+        } catch (error) {
+          // Nếu không lấy được tọa độ, xóa location để tránh lỗi và tiếp tục request
+          console.warn('Không thể lấy tọa độ từ Goong API:', error.message);
+          delete req.body.location;
+          // Không throw error, tiếp tục xử lý request mà không có location
+        }
       }
     }
     
@@ -831,5 +865,92 @@ router.put(
     }
   }
 );
+
+/**
+ * GET /api/facilities/:id/tournament-fee-config
+ * Lấy cấu hình phí giải đấu từ owner của facility (Public)
+ */
+router.get("/:id/tournament-fee-config", async (req, res, next) => {
+  try {
+    const facilityId = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(facilityId)) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy cơ sở",
+      });
+    }
+
+    // Tìm facility và populate owner
+    const facility = await Facility.findById(facilityId).populate("owner", "_id");
+    
+    if (!facility) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy cơ sở",
+      });
+    }
+
+    if (!facility.owner) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy chủ sở hữu cơ sở",
+      });
+    }
+
+    // Lấy cấu hình phí từ owner
+    const owner = await User.findById(facility.owner._id || facility.owner).select("tournamentFeeConfig");
+    
+    if (!owner) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy chủ sở hữu",
+      });
+    }
+
+    // Trả về cấu hình hoặc giá trị mặc định
+    const rawConfig = owner.tournamentFeeConfig || {
+      registrationFee: 0,
+      internalTournamentFees: {
+        serviceFee: 0,
+        courtTypeFees: new Map(),
+        refereeFee: 0,
+      },
+    };
+
+    // Build config object manually để đảm bảo Map được convert đúng
+    const config = {
+      registrationFee: rawConfig.registrationFee || 0,
+      internalTournamentFees: {
+        serviceFee: rawConfig.internalTournamentFees?.serviceFee || 0,
+        refereeFee: rawConfig.internalTournamentFees?.refereeFee || 0,
+        courtTypeFees: {}
+      }
+    };
+
+    // Convert Map to Object - xử lý cả Map instance và plain object từ MongoDB
+    const rawCourtTypeFees = rawConfig.internalTournamentFees?.courtTypeFees;
+    if (rawCourtTypeFees) {
+      if (rawCourtTypeFees instanceof Map) {
+        // Nếu là Map instance, convert sang Object
+        config.internalTournamentFees.courtTypeFees = Object.fromEntries(
+          rawCourtTypeFees
+        );
+      } else if (typeof rawCourtTypeFees === 'object' && 
+                 rawCourtTypeFees !== null &&
+                 !Array.isArray(rawCourtTypeFees)) {
+        // Nếu đã là plain object (sau khi load từ MongoDB), giữ nguyên
+        config.internalTournamentFees.courtTypeFees = rawCourtTypeFees;
+      }
+    }
+
+    res.json({
+      success: true,
+      data: config,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 export default router;

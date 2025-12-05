@@ -197,6 +197,8 @@ export const handleApiError = (error) => {
       status,
       message: data?.message || 'An error occurred',
       errors: data?.errors || [],
+      debug: data?.debug, // Include debug info if available
+      responseData: data, // Include full response data
     };
   } else if (error.request) {
     // Request was made but no response received

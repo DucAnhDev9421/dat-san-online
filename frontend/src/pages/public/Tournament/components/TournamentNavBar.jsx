@@ -80,7 +80,8 @@ const TournamentNavBar = ({
             className="tournament-filter-select"
           >
             <option value="all">Trạng Thái</option>
-            <option value="upcoming">Sắp diễn ra</option>
+            <option value="upcoming">Đang đăng ký</option>
+            <option value="starting">Sắp diễn ra</option>
             <option value="ongoing">Đang diễn ra</option>
             <option value="completed">Đã kết thúc</option>
           </select>

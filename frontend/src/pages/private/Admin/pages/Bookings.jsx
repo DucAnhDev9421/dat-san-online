@@ -78,6 +78,8 @@ const Bookings = () => {
               bookingDate: new Date(booking.createdAt).toISOString().split("T")[0],
               bookingTime: new Date(booking.createdAt).toTimeString().split(" ")[0].substring(0, 5),
               notes: booking.notes || booking.ownerNotes || "",
+              cancellationReason: booking.cancellationReason || null,
+              cancelledAt: booking.cancelledAt || null,
               user: booking.user,
               courtData: booking.court,
               facilityData: booking.facility,

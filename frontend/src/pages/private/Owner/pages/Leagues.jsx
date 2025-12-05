@@ -4,6 +4,8 @@ import { CheckCircle2, XCircle, MapPin, Calendar, Users, Trophy, Building2, Awar
 import { toast } from 'react-toastify'
 import { leagueApi } from '../../../../api/leagueApi'
 import { facilityApi } from '../../../../api/facilityApi'
+import { categoryApi } from '../../../../api/categoryApi'
+import { userApi } from '../../../../api/userApi'
 import { useAuth } from '../../../../contexts/AuthContext'
 import LeagueDetailModal from '../modals/LeagueDetailModal'
 import RejectLeagueModal from '../modals/RejectLeagueModal'
@@ -14,6 +16,7 @@ const Leagues = () => {
   const { user } = useAuth()
   const [leagues, setLeagues] = useState([])
   const [loading, setLoading] = useState(true)
+  const [mainTab, setMainTab] = useState('list') // 'list' or 'config'
   const [activeTab, setActiveTab] = useState('pending')
   const [selectedLeague, setSelectedLeague] = useState(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
@@ -22,13 +25,35 @@ const Leagues = () => {
   const [resolvedFacilityId, setResolvedFacilityId] = useState(null)
   const [ownerFacilities, setOwnerFacilities] = useState([])
   const [loadingFacilities, setLoadingFacilities] = useState(false)
+  const [courtTypes, setCourtTypes] = useState([])
+  const [loadingCourtTypes, setLoadingCourtTypes] = useState(false)
+  const [courtTypeFees, setCourtTypeFees] = useState({}) // { courtTypeId: fee }
+  const [serviceFee, setServiceFee] = useState('') // Phí tạo giải
+  const [refereeFee, setRefereeFee] = useState('') // Phí trọng tài
+  const [registrationFee, setRegistrationFee] = useState('') // Phí đăng ký
+  const [loadingConfig, setLoadingConfig] = useState(false)
+  const [savingConfig, setSavingConfig] = useState(false)
 
   useEffect(() => {
     fetchLeagues()
     if (user) {
       fetchOwnerFacilities()
     }
-  }, [activeTab, user])
+  }, [activeTab, mainTab, user])
+
+  useEffect(() => {
+    if (mainTab === 'config' && ownerFacilities.length > 0) {
+      fetchCourtTypes()
+    }
+  }, [mainTab, ownerFacilities])
+
+  useEffect(() => {
+    // Chỉ fetch config khi user đã load và là owner, và đang ở tab config
+    // Đợi courtTypes được fetch xong (loadingCourtTypes = false) trước khi load config
+    if (mainTab === 'config' && user && user.role === 'owner' && ownerFacilities.length > 0 && !loadingCourtTypes) {
+      fetchTournamentFeeConfig()
+    }
+  }, [mainTab, user, ownerFacilities, loadingCourtTypes])
 
   const fetchOwnerFacilities = async () => {
     try {
@@ -44,6 +69,241 @@ const Leagues = () => {
       console.error('Error fetching owner facilities:', error)
     } finally {
       setLoadingFacilities(false)
+    }
+  }
+
+  const fetchCourtTypes = async () => {
+    try {
+      setLoadingCourtTypes(true)
+      
+      // Lấy danh sách các môn thể thao từ các cơ sở của owner
+      const facilitySportTypes = new Set()
+      ownerFacilities.forEach(facility => {
+        if (facility.types && Array.isArray(facility.types)) {
+          facility.types.forEach(type => {
+            if (type && typeof type === 'string') {
+              facilitySportTypes.add(type.trim())
+            }
+          })
+        }
+      })
+
+      if (facilitySportTypes.size === 0) {
+        setCourtTypes([])
+        return
+      }
+
+      // Fetch tất cả sport categories để tạo map ID -> name
+      const categoriesResult = await categoryApi.getSportCategories({ status: 'active' })
+      const sportCategoryMap = new Map() // Map: categoryName -> categoryIds
+      
+      if (categoriesResult.success) {
+        const categories = Array.isArray(categoriesResult.data) 
+          ? categoriesResult.data 
+          : []
+        
+        categories.forEach(cat => {
+          const catName = cat.name
+          const catId = cat._id || cat.id
+          if (facilitySportTypes.has(catName)) {
+            // Lưu cả ID và name để so sánh
+            sportCategoryMap.set(catName, catId)
+            sportCategoryMap.set(catId.toString(), catName)
+          }
+        })
+      }
+
+      if (sportCategoryMap.size === 0) {
+        setCourtTypes([])
+        return
+      }
+
+      // Fetch tất cả court types
+      const result = await categoryApi.getCourtTypes({ status: 'active' })
+      if (result.success) {
+        const allTypes = Array.isArray(result.data) 
+          ? result.data 
+          : result.data?.courtTypes || []
+        
+        // Lọc các court types có sportCategory thuộc các môn thể thao trong cơ sở
+        const filteredTypes = allTypes.filter(courtType => {
+          if (!courtType.sportCategory) return false
+          
+          // Nếu sportCategory đã được populate (là object với name)
+          if (typeof courtType.sportCategory === 'object' && courtType.sportCategory.name) {
+            return facilitySportTypes.has(courtType.sportCategory.name)
+          }
+          
+          // Nếu sportCategory là ID hoặc object có _id
+          const categoryId = typeof courtType.sportCategory === 'object'
+            ? (courtType.sportCategory._id || courtType.sportCategory.id)
+            : courtType.sportCategory
+          
+          if (categoryId) {
+            const categoryName = sportCategoryMap.get(categoryId.toString())
+            return categoryName && facilitySportTypes.has(categoryName)
+          }
+          
+          return false
+        })
+        
+        setCourtTypes(filteredTypes)
+        // Initialize fees object, preserve existing values
+        // Chỉ thêm các courtType mới, không reset các giá trị đã có
+        setCourtTypeFees(prevFees => {
+          const newFees = { ...prevFees }
+          filteredTypes.forEach(type => {
+            const typeId = type._id || type.id
+            // Chỉ set rỗng nếu chưa có giá trị (không overwrite giá trị đã có)
+            if (!(typeId in newFees) || !newFees[typeId]) {
+              newFees[typeId] = prevFees[typeId] || ''
+            }
+          })
+          // Xóa các courtType không còn trong danh sách
+          Object.keys(newFees).forEach(typeId => {
+            if (!filteredTypes.some(type => (type._id || type.id) === typeId)) {
+              delete newFees[typeId]
+            }
+          })
+          return newFees
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching court types:', error)
+      toast.error('Không thể tải danh sách loại sân')
+    } finally {
+      setLoadingCourtTypes(false)
+    }
+  }
+
+  const handleCourtTypeFeeChange = (courtTypeId, value) => {
+    const parsed = parseCurrency(value)
+    setCourtTypeFees(prev => ({
+      ...prev,
+      [courtTypeId]: parsed
+    }))
+  }
+
+  // Helper functions để format số tiền
+  const formatCurrency = (value) => {
+    if (!value && value !== 0) return ''
+    const numValue = typeof value === 'string' ? parseFloat(value.replace(/\./g, '')) : value
+    if (isNaN(numValue) || numValue === 0) return ''
+    return new Intl.NumberFormat('vi-VN', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(numValue)
+  }
+
+  const parseCurrency = (value) => {
+    if (!value) return ''
+    // Loại bỏ tất cả dấu chấm và khoảng trắng, chỉ giữ lại số
+    const cleaned = value.toString().replace(/\./g, '').replace(/\s/g, '').replace(/[^\d]/g, '')
+    return cleaned
+  }
+
+  const handleCurrencyInputChange = (value, setter) => {
+    // Cho phép nhập tự do khi đang gõ, chỉ lưu số
+    const parsed = parseCurrency(value)
+    setter(parsed)
+  }
+
+  const handleCurrencyInputBlur = (value, setter) => {
+    // Format khi blur
+    const parsed = parseCurrency(value)
+    setter(parsed)
+  }
+
+  const fetchTournamentFeeConfig = async () => {
+    // Kiểm tra user có phải owner không trước khi gọi API
+    if (!user || user.role !== 'owner') {
+      return
+    }
+
+    try {
+      setLoadingConfig(true)
+      const result = await userApi.getTournamentFeeConfig()
+      
+      if (result.success && result.data) {
+        const config = result.data
+        // Set registration fee
+        if (config.registrationFee) {
+          setRegistrationFee(config.registrationFee.toString())
+        }
+        // Set internal tournament fees
+        if (config.internalTournamentFees) {
+          if (config.internalTournamentFees.serviceFee) {
+            setServiceFee(config.internalTournamentFees.serviceFee.toString())
+          }
+          if (config.internalTournamentFees.refereeFee) {
+            setRefereeFee(config.internalTournamentFees.refereeFee.toString())
+          }
+          // Set court type fees
+          if (config.internalTournamentFees.courtTypeFees) {
+            const fees = {}
+            Object.entries(config.internalTournamentFees.courtTypeFees).forEach(([courtTypeId, fee]) => {
+              // Lưu dưới dạng string để formatCurrency có thể format
+              fees[courtTypeId] = fee ? fee.toString() : ''
+            })
+            setCourtTypeFees(fees)
+          }
+        }
+      }
+    } catch (error) {
+      // Không hiển thị toast vì đây là lần đầu load, có thể chưa có config
+      if (error.status !== 403) {
+        console.error('Error fetching tournament fee config:', error)
+      }
+    } finally {
+      setLoadingConfig(false)
+    }
+  }
+
+  const saveTournamentFeeConfig = async () => {
+    try {
+      setSavingConfig(true)
+      
+      // Kiểm tra user có phải owner không
+      if (!user || user.role !== 'owner') {
+        toast.error('Chỉ owner mới có thể lưu cấu hình phí giải đấu')
+        return
+      }
+      
+      // Prepare config data
+      const config = {
+        registrationFee: registrationFee ? parseInt(registrationFee) : 0,
+        internalTournamentFees: {
+          serviceFee: serviceFee ? parseInt(serviceFee) : 0,
+          refereeFee: refereeFee ? parseInt(refereeFee) : 0,
+          courtTypeFees: {}
+        }
+      }
+
+      // Convert courtTypeFees to numbers
+      Object.entries(courtTypeFees).forEach(([courtTypeId, fee]) => {
+        // fee có thể là string (từ parseCurrency) hoặc number (từ load)
+        const feeValue = typeof fee === 'string' ? parseInt(fee) || 0 : fee || 0
+        if (feeValue > 0) {
+          config.internalTournamentFees.courtTypeFees[courtTypeId] = feeValue
+        }
+      })
+
+      const result = await userApi.updateTournamentFeeConfig(config)
+      
+      if (result.success) {
+        toast.success('Lưu cấu hình phí giải đấu thành công!')
+      } else {
+        throw new Error(result.message || 'Lưu cấu hình thất bại')
+      }
+    } catch (error) {
+      console.error('Error saving tournament fee config:', error)
+      if (error.status === 403) {
+        toast.error('Bạn không có quyền lưu cấu hình phí giải đấu')
+      } else {
+        toast.error(error.message || 'Không thể lưu cấu hình phí giải đấu')
+      }
+    } finally {
+      setSavingConfig(false)
     }
   }
 
@@ -66,7 +326,10 @@ const Leagues = () => {
     try {
       setLoading(true)
       let result
-      if (activeTab === 'pending') {
+      // Nếu đang ở tab config, fetch tất cả leagues để hiển thị thống kê
+      if (mainTab === 'config') {
+        result = await leagueApi.getOwnerLeagues()
+      } else if (activeTab === 'pending') {
         result = await leagueApi.getPendingLeagues()
       } else {
         result = await leagueApi.getOwnerLeagues({ approvalStatus: activeTab === 'all' ? undefined : activeTab })
@@ -218,130 +481,201 @@ const Leagues = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>Quản lý giải đấu</h1>
-        <button
-          onClick={handleCreateTournament}
-          disabled={loadingFacilities}
-          style={{
-            padding: '10px 20px',
-            fontSize: 14,
-            fontWeight: 600,
-            color: '#fff',
-            background: '#3b82f6',
-            border: 'none',
-            cursor: loadingFacilities ? 'not-allowed' : 'pointer',
-            borderRadius: 8,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            transition: 'all 0.2s',
-            opacity: loadingFacilities ? 0.6 : 1,
-          }}
-          onMouseEnter={(e) => {
-            if (!loadingFacilities) {
-              e.target.style.background = '#2563eb'
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!loadingFacilities) {
-              e.target.style.background = '#3b82f6'
-            }
-          }}
-        >
-          <Plus size={18} />
-          Tạo giải đấu
-        </button>
+        {mainTab === 'list' && (
+          <button
+            onClick={handleCreateTournament}
+            disabled={loadingFacilities}
+            style={{
+              padding: '10px 20px',
+              fontSize: 14,
+              fontWeight: 600,
+              color: '#fff',
+              background: '#3b82f6',
+              border: 'none',
+              cursor: loadingFacilities ? 'not-allowed' : 'pointer',
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transition: 'all 0.2s',
+              opacity: loadingFacilities ? 0.6 : 1,
+            }}
+            onMouseEnter={(e) => {
+              if (!loadingFacilities) {
+                e.target.style.background = '#2563eb'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loadingFacilities) {
+                e.target.style.background = '#3b82f6'
+              }
+            }}
+          >
+            <Plus size={18} />
+            Tạo giải đấu
+          </button>
+        )}
       </div>
 
+      {/* Main Tabs */}
       <div
         style={{
           background: '#fff',
           borderRadius: 12,
           boxShadow: '0 6px 20px rgba(0,0,0,.06)',
+          marginBottom: 16,
         }}
       >
-        {/* Tabs */}
         <div style={{ borderBottom: '1px solid #e5e7eb' }}>
           <nav style={{ display: 'flex', marginBottom: -1 }}>
             <button
-              onClick={() => setActiveTab('pending')}
+              onClick={() => setMainTab('list')}
               style={{
                 padding: '16px 24px',
                 fontSize: 14,
                 fontWeight: 600,
                 border: 'none',
-                borderBottom: activeTab === 'pending' ? '2px solid #3b82f6' : '2px solid transparent',
-                color: activeTab === 'pending' ? '#3b82f6' : '#6b7280',
+                borderBottom: mainTab === 'list' ? '2px solid #3b82f6' : '2px solid transparent',
+                color: mainTab === 'list' ? '#3b82f6' : '#6b7280',
                 background: 'transparent',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
-                if (activeTab !== 'pending') {
+                if (mainTab !== 'list') {
                   e.target.style.color = '#374151'
                 }
               }}
               onMouseLeave={(e) => {
-                if (activeTab !== 'pending') {
+                if (mainTab !== 'list') {
                   e.target.style.color = '#6b7280'
                 }
               }}
             >
-              Chờ duyệt {activeTab === 'pending' && `(${leagues.length})`}
+              Danh sách giải
             </button>
             <button
-              onClick={() => setActiveTab('approved')}
+              onClick={() => setMainTab('config')}
               style={{
                 padding: '16px 24px',
                 fontSize: 14,
                 fontWeight: 600,
                 border: 'none',
-                borderBottom: activeTab === 'approved' ? '2px solid #3b82f6' : '2px solid transparent',
-                color: activeTab === 'approved' ? '#3b82f6' : '#6b7280',
+                borderBottom: mainTab === 'config' ? '2px solid #3b82f6' : '2px solid transparent',
+                color: mainTab === 'config' ? '#3b82f6' : '#6b7280',
                 background: 'transparent',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
-                if (activeTab !== 'approved') {
+                if (mainTab !== 'config') {
                   e.target.style.color = '#374151'
                 }
               }}
               onMouseLeave={(e) => {
-                if (activeTab !== 'approved') {
+                if (mainTab !== 'config') {
                   e.target.style.color = '#6b7280'
                 }
               }}
             >
-              Đã duyệt {activeTab === 'approved' && `(${leagues.length})`}
-            </button>
-            <button
-              onClick={() => setActiveTab('rejected')}
-              style={{
-                padding: '16px 24px',
-                fontSize: 14,
-                fontWeight: 600,
-                border: 'none',
-                borderBottom: activeTab === 'rejected' ? '2px solid #3b82f6' : '2px solid transparent',
-                color: activeTab === 'rejected' ? '#3b82f6' : '#6b7280',
-                background: 'transparent',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                if (activeTab !== 'rejected') {
-                  e.target.style.color = '#374151'
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activeTab !== 'rejected') {
-                  e.target.style.color = '#6b7280'
-                }
-              }}
-            >
-              Đã từ chối {activeTab === 'rejected' && `(${leagues.length})`}
+              Cấu hình giải đấu
             </button>
           </nav>
         </div>
+      </div>
+
+      {/* Tab Content */}
+      {mainTab === 'list' ? (
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 12,
+            boxShadow: '0 6px 20px rgba(0,0,0,.06)',
+          }}
+        >
+          {/* Sub Tabs */}
+          <div style={{ borderBottom: '1px solid #e5e7eb' }}>
+            <nav style={{ display: 'flex', marginBottom: -1 }}>
+              <button
+                onClick={() => setActiveTab('pending')}
+                style={{
+                  padding: '16px 24px',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  border: 'none',
+                  borderBottom: activeTab === 'pending' ? '2px solid #3b82f6' : '2px solid transparent',
+                  color: activeTab === 'pending' ? '#3b82f6' : '#6b7280',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== 'pending') {
+                    e.target.style.color = '#374151'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== 'pending') {
+                    e.target.style.color = '#6b7280'
+                  }
+                }}
+              >
+                Chờ duyệt {activeTab === 'pending' && `(${leagues.length})`}
+              </button>
+              <button
+                onClick={() => setActiveTab('approved')}
+                style={{
+                  padding: '16px 24px',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  border: 'none',
+                  borderBottom: activeTab === 'approved' ? '2px solid #3b82f6' : '2px solid transparent',
+                  color: activeTab === 'approved' ? '#3b82f6' : '#6b7280',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== 'approved') {
+                    e.target.style.color = '#374151'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== 'approved') {
+                    e.target.style.color = '#6b7280'
+                  }
+                }}
+              >
+                Đã duyệt {activeTab === 'approved' && `(${leagues.length})`}
+              </button>
+              <button
+                onClick={() => setActiveTab('rejected')}
+                style={{
+                  padding: '16px 24px',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  border: 'none',
+                  borderBottom: activeTab === 'rejected' ? '2px solid #3b82f6' : '2px solid transparent',
+                  color: activeTab === 'rejected' ? '#3b82f6' : '#6b7280',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== 'rejected') {
+                    e.target.style.color = '#374151'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== 'rejected') {
+                    e.target.style.color = '#6b7280'
+                  }
+                }}
+              >
+                Đã từ chối {activeTab === 'rejected' && `(${leagues.length})`}
+              </button>
+            </nav>
+          </div>
 
         {/* Content */}
         <div style={{ overflowX: 'auto' }}>
@@ -708,6 +1042,248 @@ const Leagues = () => {
           </table>
         </div>
       </div>
+      ) : (
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 12,
+            boxShadow: '0 6px 20px rgba(0,0,0,.06)',
+            padding: 24,
+          }}
+        >
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 8 }}>
+              Cấu hình phí giải đấu
+            </h2>
+            <p style={{ fontSize: 14, color: '#6b7280' }}>
+              Quản lý và cấu hình các loại phí cho giải đấu
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div
+              style={{
+                padding: 20,
+                border: '1px solid #e5e7eb',
+                borderRadius: 8,
+                background: '#f9fafb',
+              }}
+            >
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: '#111827', marginBottom: 12 }}>
+                Phí đăng ký tham gia giải đấu
+              </h3>
+              <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>
+                Cấu hình phí đăng ký tham gia cho các giải đấu mới
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
+                    Phí đăng ký mặc định (VNĐ)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <input
+                      type="text"
+                      placeholder="Nhập số tiền"
+                      value={registrationFee ? formatCurrency(registrationFee) : ''}
+                      onChange={(e) => handleCurrencyInputChange(e.target.value, setRegistrationFee)}
+                      onBlur={(e) => handleCurrencyInputBlur(e.target.value, setRegistrationFee)}
+                      style={{
+                        width: 200,
+                        padding: '10px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 8,
+                        fontSize: 14,
+                      }}
+                    />
+                    <span style={{ fontSize: 14, color: '#6b7280' }}>VNĐ</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
+                    Phí này sẽ được áp dụng mặc định cho các giải đấu mới
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 20,
+                border: '1px solid #e5e7eb',
+                borderRadius: 8,
+                background: '#f9fafb',
+              }}
+            >
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: '#111827', marginBottom: 12 }}>
+                Phí tổ chức giải đấu nội bộ
+              </h3>
+              <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>
+                Cấu hình các loại phí liên quan đến tổ chức giải đấu
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
+                    1. Phí tạo giải (Service Fee)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <input
+                      type="text"
+                      placeholder="Nhập số tiền"
+                      value={serviceFee ? formatCurrency(serviceFee) : ''}
+                      onChange={(e) => handleCurrencyInputChange(e.target.value, setServiceFee)}
+                      onBlur={(e) => handleCurrencyInputBlur(e.target.value, setServiceFee)}
+                      style={{
+                        width: 200,
+                        padding: '10px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 8,
+                        fontSize: 14,
+                      }}
+                    />
+                    <span style={{ fontSize: 14, color: '#6b7280' }}>VNĐ/giải</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
+                    Phí cơ bản để mở giải. Mang tính phí nền tảng hoặc phí chủ sân. Ví dụ: 20.000đ – 50.000đ/giải
+                  </p>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
+                    2. Phí sử dụng sân cho từng trận
+                  </label>
+                  <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
+                    Trận nào cũng cần thuê giờ sân. Tính theo giờ sân + loại sân. Cấu hình phí cho từng loại sân:
+                  </p>
+                  {loadingCourtTypes ? (
+                    <p style={{ fontSize: 13, color: '#6b7280' }}>Đang tải danh sách loại sân...</p>
+                  ) : courtTypes.length === 0 ? (
+                    <p style={{ fontSize: 13, color: '#9ca3af' }}>Chưa có loại sân nào</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {courtTypes.map((courtType) => {
+                        const courtTypeId = courtType._id || courtType.id
+                        return (
+                          <div
+                            key={courtTypeId}
+                            style={{
+                              padding: 12,
+                              border: '1px solid #e5e7eb',
+                              borderRadius: 8,
+                              background: '#fff',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                              <div style={{ flex: 1 }}>
+                                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 4 }}>
+                                  {courtType.name}
+                                </label>
+                                {courtType.description && (
+                                  <p style={{ fontSize: 12, color: '#6b7280' }}>{courtType.description}</p>
+                                )}
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <input
+                                  type="text"
+                                  placeholder="Nhập số tiền"
+                                  value={courtTypeFees[courtTypeId] ? formatCurrency(courtTypeFees[courtTypeId]) : ''}
+                                  onChange={(e) => handleCourtTypeFeeChange(courtTypeId, e.target.value)}
+                                  onBlur={(e) => {
+                                    const parsed = parseCurrency(e.target.value)
+                                    // Luôn update state, kể cả khi parsed là empty string
+                                    handleCourtTypeFeeChange(courtTypeId, parsed)
+                                  }}
+                                  style={{
+                                    width: 180,
+                                    padding: '8px 12px',
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: 8,
+                                    fontSize: 14,
+                                  }}
+                                />
+                                <span style={{ fontSize: 14, color: '#6b7280', whiteSpace: 'nowrap' }}>VNĐ/giờ</span>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
+                    3. Phí trọng tài (VNĐ/trận)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <input
+                      type="text"
+                      placeholder="Nhập số tiền"
+                      value={refereeFee ? formatCurrency(refereeFee) : ''}
+                      onChange={(e) => handleCurrencyInputChange(e.target.value, setRefereeFee)}
+                      onBlur={(e) => handleCurrencyInputBlur(e.target.value, setRefereeFee)}
+                      style={{
+                        width: 200,
+                        padding: '10px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 8,
+                        fontSize: 14,
+                      }}
+                    />
+                    <span style={{ fontSize: 14, color: '#6b7280' }}>VNĐ/trận</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
+              <button
+                style={{
+                  padding: '10px 20px',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#374151',
+                  background: '#f3f4f6',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#e5e7eb'
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#f3f4f6'
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={saveTournamentFeeConfig}
+                disabled={savingConfig || loadingConfig}
+                style={{
+                  padding: '10px 20px',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#fff',
+                  background: savingConfig || loadingConfig ? '#9ca3af' : '#3b82f6',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: savingConfig || loadingConfig ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!savingConfig && !loadingConfig) {
+                    e.target.style.background = '#2563eb'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!savingConfig && !loadingConfig) {
+                    e.target.style.background = '#3b82f6'
+                  }
+                }}
+              >
+                {savingConfig ? 'Đang lưu...' : 'Lưu cấu hình'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       <LeagueDetailModal

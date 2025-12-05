@@ -346,6 +346,11 @@
   background: linear-gradient(to right, #3b82f6, #2563eb);
 }
 
+.badge-starting,
+.badge-yellow {
+  background: linear-gradient(to right, #f59e0b, #d97706);
+}
+
 .badge-ongoing {
   background: linear-gradient(to right, #10b981, #059669);
 }

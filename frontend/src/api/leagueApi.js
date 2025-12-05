@@ -258,6 +258,28 @@ export const leagueApi = {
   },
 
   /**
+   * Import teams from Google Sheets
+   * POST /api/leagues/:id/teams/import-from-sheets
+   * @param {String} leagueId - League ID
+   * @param {String} sheetUrl - Google Sheets URL
+   * @param {String} sheetName - Optional sheet name
+   * @param {String} range - Optional range (default: A:Z)
+   * @returns {Promise} Updated league object
+   */
+  importTeamsFromSheets: async (leagueId, sheetUrl, sheetName = null, range = null) => {
+    try {
+      const response = await api.post(`/leagues/${leagueId}/teams/import-from-sheets`, {
+        sheetUrl,
+        sheetName,
+        range,
+      });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
    * Update team member
    * PUT /api/leagues/:id/teams/:teamId/members/:memberIndex
    * @param {String} leagueId - League ID
@@ -376,6 +398,50 @@ export const leagueApi = {
       } else {
         throw new Error(data?.message || 'Import thất bại');
       }
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Import members from Google Sheets
+   * POST /api/leagues/:id/teams/:teamId/members/import-from-sheets
+   * @param {String} leagueId - League ID
+   * @param {Number|String} teamId - Team ID
+   * @param {String} sheetUrl - Google Sheets URL
+   * @param {String} sheetName - Optional sheet name
+   * @param {String} range - Optional range (default: A:Z)
+   * @returns {Promise} Updated league object
+   */
+  importMembersFromSheets: async (leagueId, teamId, sheetUrl, sheetName = null, range = null) => {
+    try {
+      const response = await api.post(
+        `/leagues/${leagueId}/teams/${teamId}/members/import-from-sheets`,
+        {
+          sheetUrl,
+          sheetName,
+          range,
+        }
+      );
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Preview Google Sheets data
+   * GET /api/leagues/:id/sheets/preview
+   * @param {String} leagueId - League ID
+   * @param {String} sheetUrl - Google Sheets URL
+   * @returns {Promise} Sheet names and sample data
+   */
+  previewSheets: async (leagueId, sheetUrl) => {
+    try {
+      const response = await api.get(`/leagues/${leagueId}/sheets/preview`, {
+        params: { sheetUrl },
+      });
+      return handleApiSuccess(response);
     } catch (error) {
       throw handleApiError(error);
     }

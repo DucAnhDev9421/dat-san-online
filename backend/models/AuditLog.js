@@ -50,9 +50,11 @@ const auditLogSchema = new mongoose.Schema(
         "DELETE_TEAM",
         "UPLOAD_LEAGUE_IMAGE",
         "IMPORT_TEAMS",
+        "IMPORT_TEAMS_FROM_SHEETS",
         "UPDATE_MEMBER",
         "DELETE_MEMBER",
         "IMPORT_MEMBERS",
+        "IMPORT_MEMBERS_FROM_SHEETS",
         "UPLOAD_TEAM_LOGO",
         "DELETE_TEAM_LOGO",
         "DRAW_MATCHES",
@@ -67,7 +69,9 @@ const auditLogSchema = new mongoose.Schema(
         "REJECT_TEAM_REGISTRATION",
         "CREATE_PARTNER_APPLICATION",
         "APPROVE_PARTNER_APPLICATION",
-        "REJECT_PARTNER_APPLICATION"
+        "REJECT_PARTNER_APPLICATION",
+        "UPDATE_TOURNAMENT_FEE_CONFIG",
+        "LEAGUE_FEE_PAYMENT"
       ],
     },
     ipAddress: {

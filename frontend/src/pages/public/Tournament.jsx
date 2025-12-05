@@ -15,11 +15,82 @@ const Tournament = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState('grid') // 'grid' or 'list'
   const [filters, setFilters] = useState({
-    status: 'all', // all, upcoming, ongoing, completed
+    status: 'all', // all, upcoming, starting, ongoing, completed
     sport: 'all', // all, football, basketball, volleyball, etc.
     format: 'all', // all, knockout, round-robin, group-stage
     sort: 'default' // default, updated, views
   })
+
+  // Helper: Tính computedStatus cho tournament (giống logic trong TournamentCard)
+  const getComputedStatus = (tournament) => {
+    if (!tournament?.endDate) return tournament?.status || 'upcoming'
+    
+    const now = new Date();
+    // Normalize dates để chỉ so sánh ngày (set time về 0:00:00)
+    const normalizeDate = (date) => {
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    };
+    
+    const endDate = normalizeDate(tournament.endDate);
+    const startDate = tournament.startDate ? normalizeDate(tournament.startDate) : null;
+    const nowNormalized = normalizeDate(now);
+    
+    // Nếu đã bị hủy, giữ nguyên
+    if (tournament.status === 'cancelled') {
+      return 'cancelled';
+    }
+    
+    // Nếu endDate đã qua, tự động là completed
+    if (endDate < nowNormalized) {
+      return 'completed';
+    }
+    
+    // Tìm thời gian trận đấu đầu tiên (nếu có matches)
+    // Lưu ý: API không trả về matches trong list, nên firstMatchDateTime sẽ luôn null
+    let firstMatchDateTime = null;
+    if (tournament.matches && Array.isArray(tournament.matches) && tournament.matches.length > 0) {
+      const matchesWithSchedule = tournament.matches.filter(
+        m => m && m.date && m.time && m.time.trim() !== ''
+      );
+      
+      if (matchesWithSchedule.length > 0) {
+        matchesWithSchedule.forEach(match => {
+          try {
+            const matchDate = new Date(match.date);
+            const [hours, minutes] = match.time.split(':').map(Number);
+            
+            if (!isNaN(hours) && !isNaN(minutes)) {
+              const matchDateTime = new Date(matchDate);
+              matchDateTime.setHours(hours, minutes, 0, 0);
+              
+              if (!firstMatchDateTime || matchDateTime < firstMatchDateTime) {
+                firstMatchDateTime = matchDateTime;
+              }
+            }
+          } catch (error) {
+            // Ignore parsing errors
+          }
+        });
+      }
+    }
+    
+    // Nếu có trận đấu đầu tiên và đã tới thời gian thi đấu, là ongoing
+    if (firstMatchDateTime && firstMatchDateTime <= now && endDate >= nowNormalized) {
+      return 'ongoing';
+    }
+    
+    // Nếu đã tới startDate nhưng chưa tới thời gian trận đầu tiên, là starting (sắp diễn ra)
+    // Vì API không trả về matches trong list, nên firstMatchDateTime sẽ luôn null
+    // Nên nếu startDate <= nowNormalized, sẽ trả về 'starting'
+    if (startDate && startDate <= nowNormalized && (!firstMatchDateTime || firstMatchDateTime > now)) {
+      return 'starting';
+    }
+    
+    // Còn lại là upcoming (chưa tới startDate)
+    return tournament.status || 'upcoming';
+  }
 
   // Fetch public tournaments from API
   useEffect(() => {
@@ -28,10 +99,11 @@ const Tournament = () => {
         setLoading(true)
         
         // Map frontend filters to API params
+        // KHÔNG gửi status filter lên API vì cần tính computedStatus ở frontend
         const apiParams = {
           page: 1,
           limit: 100, // Lấy nhiều để filter ở frontend
-          ...(filters.status !== 'all' && { status: filters.status }),
+          // Không gửi status filter vì cần tính computedStatus
           ...(filters.sport !== 'all' && { sport: filters.sport }),
           ...(filters.format !== 'all' && { format: filters.format }),
           ...(searchQuery.trim() && { search: searchQuery.trim() }),
@@ -62,7 +134,8 @@ const Tournament = () => {
             views: league.views || 0,
             createdAt: league.createdAt,
             updatedAt: league.updatedAt,
-            creatorName: league.creatorName || league.creator?.name || league.creator?.email || ''
+            creatorName: league.creatorName || league.creator?.name || league.creator?.email || '',
+            matches: league.matches || [] // Include matches for computedStatus calculation
           }))
           
           setTournaments(mappedTournaments)
@@ -79,7 +152,7 @@ const Tournament = () => {
     }
 
     fetchTournaments()
-  }, [filters.status, filters.sport, filters.format, filters.sort])
+  }, [filters.sport, filters.format, filters.sort, searchQuery])
 
   // Filter and sort tournaments
   const filteredTournaments = useMemo(() => {
@@ -92,9 +165,12 @@ const Tournament = () => {
         if (!nameMatch) return false
       }
 
-      // Status filter
-      if (filters.status !== 'all' && tournament.status !== filters.status) {
-        return false
+      // Status filter - sử dụng computedStatus
+      if (filters.status !== 'all') {
+        const computedStatus = getComputedStatus(tournament)
+        if (computedStatus !== filters.status) {
+          return false
+        }
       }
 
       // Sport filter

@@ -10,11 +10,29 @@ const StatusBadge = ({ value, type = "booking" }) => {
       icon: <Clock5 size={14} />,
       label: "Chờ xác nhận",
     },
+    pending_payment: {
+      bg: "#fef3c7",
+      color: "#d97706",
+      icon: <Clock5 size={14} />,
+      label: "Chờ thanh toán",
+    },
+    hold: {
+      bg: "#fef3c7",
+      color: "#d97706",
+      icon: <Clock5 size={14} />,
+      label: "Đang giữ chỗ",
+    },
     confirmed: {
       bg: "#e6f9f0",
       color: "#059669",
       icon: <CheckCircle2 size={14} />,
       label: "Đã xác nhận",
+    },
+    expired: {
+      bg: "#fee2e2",
+      color: "#dc2626",
+      icon: <XCircle size={14} />,
+      label: "Hết hạn",
     },
     cancelled: {
       bg: "#fee2e2",

@@ -43,8 +43,25 @@ const bookingSchema = new mongoose.Schema(
     // Trạng thái booking
     status: {
       type: String,
-      enum: ["pending", "confirmed", "cancelled", "completed"],
-      default: "pending",
+      enum: [
+        "pending",         // Chờ xác nhận (cho thanh toán tiền mặt hoặc chờ owner xác nhận)
+        "pending_payment", // Đang chờ thanh toán (HOLD - cho online payment)
+        "hold",            // Giữ slot tạm thời
+        "confirmed",       // Đã xác nhận (sau khi thanh toán)
+        "expired",         // Hết hạn thanh toán
+        "cancelled",       // Đã hủy
+        "completed"        // Đã hoàn thành
+      ],
+      default: "pending_payment",
+    },
+
+    // Thời gian hết hạn giữ slot (tự động expire sau X phút)
+    holdUntil: {
+      type: Date,
+      default: function() {
+        // Mặc định 5 phút từ thời điểm tạo
+        return new Date(Date.now() + 5 * 60 * 1000);
+      },
     },
 
     // Trạng thái thanh toán
@@ -57,7 +74,7 @@ const bookingSchema = new mongoose.Schema(
     // Phương thức thanh toán
     paymentMethod: {
       type: String,
-      enum: ["momo", "vnpay", "cash", "payos"],
+      enum: ["momo", "vnpay", "cash", "payos", "wallet"],
       default: null,
     },
 
@@ -166,6 +183,7 @@ bookingSchema.index({ facility: 1, date: 1 }); // Compound index cho facility v�
 bookingSchema.index({ court: 1, date: 1 }); // Compound index cho court và date (cũng hỗ trợ query theo date)
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ paymentStatus: 1 });
+bookingSchema.index({ holdUntil: 1 }); // Index for expiry queries
 // Note: bookingCode index được tạo tự động bởi unique: true trong field definition
 // Note: date index không cần thiết vì đã có trong compound indexes ở trên
 
@@ -207,12 +225,25 @@ bookingSchema.virtual("displayCode").get(function () {
 
 // Method để check xem booking có đang pending không
 bookingSchema.methods.isPending = function () {
-  return this.status === "pending";
+  return this.status === "pending_payment" || this.status === "hold";
+};
+
+// Method để check xem booking có đang hold không
+bookingSchema.methods.isHold = function () {
+  return this.status === "pending_payment" || this.status === "hold";
+};
+
+// Method để check xem booking có hết hạn không
+bookingSchema.methods.isExpired = function () {
+  return this.status === "expired" || (this.holdUntil && new Date() > this.holdUntil);
 };
 
 // Method để check xem booking có thể cancel không
 bookingSchema.methods.canCancel = function () {
-  return this.status === "pending" || this.status === "confirmed";
+  return this.status === "pending" ||           // Chờ xác nhận (thanh toán tiền mặt)
+         this.status === "pending_payment" ||   // Chờ thanh toán (online payment)
+         this.status === "hold" ||              // Đang giữ chỗ
+         this.status === "confirmed";           // Đã xác nhận
 };
 
 // Method để check xem booking có thể refund không
@@ -242,11 +273,18 @@ bookingSchema.statics.checkAvailability = async function (
   date,
   timeSlots
 ) {
+  const now = new Date();
   const bookings = await this.find({
     court: courtId,
     date: new Date(date),
-    status: { $in: ["pending", "confirmed"] },
+    status: { $in: ["pending_payment", "hold", "confirmed"] },
     timeSlots: { $in: timeSlots },
+    // Exclude expired bookings (check holdUntil)
+    $or: [
+      { holdUntil: { $exists: false } },
+      { holdUntil: { $gt: now } },
+      { status: "confirmed" } // Confirmed bookings don't expire
+    ]
   });
 
   return bookings.length === 0;

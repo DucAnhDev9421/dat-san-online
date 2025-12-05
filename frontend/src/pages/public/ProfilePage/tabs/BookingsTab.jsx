@@ -7,7 +7,7 @@ import CreateReviewModal from '../modals/CreateReviewModal'
 import ReportBookingModal from '../modals/ReportBookingModal'
 import { QRCodeSVG } from 'qrcode.react'
 import html2canvas from 'html2canvas'
-import { Download, Star, Loader, AlertCircle } from 'lucide-react'
+import { Download, Star, Loader, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function BookingsTab() {
   const [bookings, setBookings] = useState([])
@@ -23,6 +23,12 @@ export default function BookingsTab() {
   const [bookingReviews, setBookingReviews] = useState({}) // Map bookingId -> review
   const [refreshKey, setRefreshKey] = useState(0)
   const ticketRef = useRef(null)
+  
+  // Pagination state
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(10)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
 
   const cancelReasons = [
     { value: 'change_of_plan', label: 'Thay đổi kế hoạch' },
@@ -72,12 +78,26 @@ export default function BookingsTab() {
   }
 
   const handleConfirmCancel = async () => {
-    const finalReason = cancelReason === 'other' ? otherReason.trim() : cancelReason
-    if (!finalReason || !selectedBooking) return
+    if (!cancelReason || !selectedBooking) return
+
+    // Lấy label của lý do hủy (hoặc otherReason nếu là 'other')
+    let finalReason = ''
+    if (cancelReason === 'other') {
+      finalReason = otherReason.trim()
+      if (!finalReason) {
+        toast.error('Vui lòng nhập lý do hủy')
+        return
+      }
+    } else {
+      // Map value sang label
+      const reasonObj = cancelReasons.find(r => r.value === cancelReason)
+      finalReason = reasonObj ? reasonObj.label : cancelReason
+    }
 
     try {
       const bookingId = selectedBooking._original?._id || selectedBooking._original?.id || selectedBooking.id
-      await bookingApi.cancelBooking(bookingId)
+      // Truyền lý do hủy (label) vào API
+      await bookingApi.cancelBooking(bookingId, finalReason)
       toast.success('Hủy đặt sân thành công')
       setRefreshKey(prev => prev + 1) // Refresh bookings
       setShowCancelModal(false)
@@ -133,9 +153,15 @@ export default function BookingsTab() {
     const fetchBookings = async () => {
       try {
         setLoading(true)
-        const result = await bookingApi.getMyBookings({ limit: 100 })
+        const result = await bookingApi.getMyBookings({ page, limit })
         
         if (result.success && result.data?.bookings) {
+          // Update pagination info
+          if (result.data.pagination) {
+            setTotal(result.data.pagination.total)
+            setTotalPages(result.data.pagination.pages || Math.ceil(result.data.pagination.total / limit))
+          }
+          
           // Transform API bookings to component format
           const transformedBookings = result.data.bookings.map(booking => {
             // Format time slots
@@ -243,7 +269,7 @@ export default function BookingsTab() {
     }
     
     fetchBookings()
-  }, [refreshKey])
+  }, [refreshKey, page, limit])
 
   // Fetch reviews to check which bookings have been reviewed
   useEffect(() => {
@@ -276,22 +302,34 @@ export default function BookingsTab() {
   }, [refreshKey])
 
   const getStatusBadge = (status) => {
+    // Map các status mới
+    const statusLabels = {
+      'pending': 'Chờ xác nhận',
+      'pending_payment': 'Chờ thanh toán',
+      'hold': 'Đang giữ chỗ',
+      'confirmed': 'Đã xác nhận',
+      'expired': 'Hết hạn',
+      'cancelled': 'Đã hủy',
+      'completed': 'Đã hoàn thành',
+      'upcoming': 'Sắp tới'
+    }
+    
     const statusClasses = {
-      completed: 'status-completed',
-      upcoming: 'status-upcoming',
-      cancelled: 'status-cancelled',
-      pending: 'status-upcoming',
-      confirmed: 'status-upcoming'
+      'pending': 'status-upcoming',
+      'pending_payment': 'status-upcoming',
+      'hold': 'status-upcoming',
+      'confirmed': 'status-upcoming',
+      'expired': 'status-cancelled',
+      'cancelled': 'status-cancelled',
+      'completed': 'status-completed',
+      'upcoming': 'status-upcoming'
     }
-    const statusText = {
-      completed: 'Hoàn thành',
-      upcoming: 'Sắp tới',
-      cancelled: 'Đã hủy',
-      pending: 'Chờ xác nhận',
-      confirmed: 'Đã xác nhận'
-    }
-    return <span className={`status-badge ${statusClasses[status] || 'status-upcoming'}`}>
-      {statusText[status] || status}
+    
+    const label = statusLabels[status] || status
+    const className = statusClasses[status] || 'status-upcoming'
+    
+    return <span className={`status-badge ${className}`}>
+      {label}
     </span>
   }
 
@@ -299,7 +337,7 @@ export default function BookingsTab() {
     <div className="bookings-section">
       <div className="section-header">
         <h3>Lịch sử đặt sân</h3>
-        <span className="total-bookings">Tổng cộng: {bookings.length} lần đặt</span>
+        <span className="total-bookings">Tổng cộng: {total} lần đặt</span>
       </div>
       
       {loading ? (
@@ -376,28 +414,39 @@ export default function BookingsTab() {
                   {getStatusBadge(booking.status)}
                 </div>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
-                  <button 
-                    className="btn btn-outline small" 
-                    onClick={() => openDetailModal(booking)}
-                    style={{ 
-                      minHeight: '32px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    Chi tiết
-                  </button>
-                  {/* Only show cancel button if booking is upcoming/pending/confirmed AND date hasn't passed */}
-                  {(booking.status === 'upcoming' || booking.status === 'pending' || booking.status === 'confirmed') && !booking.isPastDate && (
+                  {/* Nút Chi tiết - không hiển thị cho đơn đã hủy */}
+                  {booking.status !== 'cancelled' && booking.status !== 'expired' && (
+                    <button 
+                      className="btn btn-outline small" 
+                      onClick={() => openDetailModal(booking)}
+                      style={{ 
+                        height: '32px',
+                        minWidth: '90px',
+                        padding: '0 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        whiteSpace: 'nowrap',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      Chi tiết
+                    </button>
+                  )}
+                  {/* Only show cancel button if booking is upcoming/pending/pending_payment/hold/confirmed AND date hasn't passed */}
+                  {(booking.status === 'upcoming' || booking.status === 'pending' || booking.status === 'pending_payment' || booking.status === 'hold' || booking.status === 'confirmed') && !booking.isPastDate && (
                     <button 
                       className="btn btn-outline small" 
                       onClick={() => openCancelModal(booking)}
                       style={{ 
-                        minHeight: '32px',
+                        height: '32px',
+                        minWidth: '90px',
+                        padding: '0 12px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        whiteSpace: 'nowrap',
+                        boxSizing: 'border-box'
                       }}
                     >
                       Hủy đặt
@@ -423,11 +472,15 @@ export default function BookingsTab() {
                         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                         color: '#fff',
                         border: 'none',
-                        minHeight: '32px',
+                        height: '32px',
+                        minWidth: '90px',
+                        padding: '0 12px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '4px'
+                        gap: '4px',
+                        whiteSpace: 'nowrap',
+                        boxSizing: 'border-box'
                       }}
                     >
                       <Star size={14} fill="#fff" />
@@ -451,13 +504,16 @@ export default function BookingsTab() {
                         alignItems: 'center', 
                         justifyContent: 'center',
                         gap: '4px',
-                        padding: '6px 10px',
-                        minHeight: '32px',
+                        padding: '0 10px',
+                        height: '32px',
+                        minWidth: '90px',
                         background: '#f0f9ff',
                         borderRadius: '8px',
                         fontSize: '14px',
                         color: '#3b82f6',
-                        border: '1px solid #bae6fd'
+                        border: '1px solid #bae6fd',
+                        whiteSpace: 'nowrap',
+                        boxSizing: 'border-box'
                       }}>
                         <Star size={14} fill="#fbbf24" color="#fbbf24" />
                         <span>Đã đánh giá</span>
@@ -466,38 +522,175 @@ export default function BookingsTab() {
                         className="btn btn-outline small" 
                         onClick={() => openEditReviewModal(booking)}
                         style={{ 
-                          minHeight: '32px',
+                          height: '32px',
+                          minWidth: '90px',
+                          padding: '0 12px',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center'
+                          justifyContent: 'center',
+                          whiteSpace: 'nowrap',
+                          boxSizing: 'border-box'
                         }}
                       >
                         Chỉnh sửa
                       </button>
                     </div>
                   )}
-                  {/* Nút Khiếu nại - hiển thị cho tất cả booking */}
-                  <button 
-                    className="btn btn-outline small" 
-                    onClick={() => openReportModal(booking)}
-                    style={{ 
-                      minHeight: '32px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '4px',
-                      color: '#d97706',
-                      borderColor: '#fbbf24'
-                    }}
-                  >
-                    <AlertCircle size={14} />
-                    Khiếu nại
-                  </button>
+                  {/* Nút Khiếu nại - chỉ hiển thị cho booking đã hoàn thành */}
+                  {booking.status === 'completed' && (
+                    <button 
+                      className="btn btn-outline small" 
+                      onClick={() => openReportModal(booking)}
+                      title="Khiếu nại"
+                      style={{ 
+                        height: '32px',
+                        width: '32px',
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#d97706',
+                        borderColor: '#fbbf24',
+                        flexShrink: 0,
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      <AlertCircle size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && bookings.length > 0 && totalPages > 1 && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: "24px",
+            padding: "16px 0",
+            borderTop: "1px solid #e5e7eb",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <label style={{ fontSize: 14, color: "#6b7280" }}>Hiển thị</label>
+            <select
+              value={limit}
+              onChange={(e) => {
+                setLimit(Number(e.target.value))
+                setPage(1) // Reset to first page when changing page size
+              }}
+              style={{
+                padding: "6px 12px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 6,
+                fontSize: 14,
+                background: "#fff",
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              {[5, 10, 20, 50].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+            <span style={{ fontSize: 14, color: "#6b7280" }}>kết quả</span>
+            <span style={{ fontSize: 14, color: "#6b7280" }}>
+              Hiển thị {(page - 1) * limit + 1} đến {Math.min(page * limit, total)} trong tổng số {total} bản ghi
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 6,
+                background: page === 1 ? "#f3f4f6" : "#fff",
+                color: page === 1 ? "#9ca3af" : "#374151",
+                cursor: page === 1 ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 14,
+                fontWeight: 500,
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                if (page !== 1) {
+                  e.currentTarget.style.borderColor = "#3b82f6";
+                  e.currentTarget.style.color = "#3b82f6";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (page !== 1) {
+                  e.currentTarget.style.borderColor = "#e5e7eb";
+                  e.currentTarget.style.color = "#374151";
+                }
+              }}
+            >
+              <ChevronLeft size={16} />
+              Trước
+            </button>
+
+            <div
+              style={{
+                padding: "8px 16px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 6,
+                background: "#fff",
+                fontSize: 14,
+                fontWeight: 600,
+                color: "#374151",
+              }}
+            >
+              {page} / {totalPages}
+            </div>
+
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 6,
+                background: page === totalPages ? "#f3f4f6" : "#fff",
+                color: page === totalPages ? "#9ca3af" : "#374151",
+                cursor: page === totalPages ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 14,
+                fontWeight: 500,
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                if (page !== totalPages) {
+                  e.currentTarget.style.borderColor = "#3b82f6";
+                  e.currentTarget.style.color = "#3b82f6";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (page !== totalPages) {
+                  e.currentTarget.style.borderColor = "#e5e7eb";
+                  e.currentTarget.style.color = "#374151";
+                }
+              }}
+            >
+              Sau
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -548,9 +741,9 @@ export default function BookingsTab() {
               className="btn"
               onClick={handleConfirmCancel}
               disabled={
-                !cancelReason || (cancelReason === 'other' && otherReason.trim().length === 0)
+                !cancelReason || (cancelReason === 'other' && !otherReason.trim())
               }
-              style={{ opacity: !cancelReason || (cancelReason === 'other' && otherReason.trim().length === 0) ? 0.6 : 1 }}
+              style={{ opacity: !cancelReason || (cancelReason === 'other' && !otherReason.trim()) ? 0.6 : 1 }}
             >
               Xác nhận hủy
             </button>

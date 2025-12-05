@@ -88,11 +88,20 @@ const Dashboard = () => {
     fetchTodaySchedule();
   }, [facilityId]);
 
+  // Format currency helper
+  const formatCurrency = (amount) => {
+    if (!amount && amount !== 0) return "0 VNĐ";
+    return new Intl.NumberFormat('vi-VN', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount) + " VNĐ";
+  };
+
   // Transform revenue chart data for TrendChart
   const trendData = dashboardData?.revenueChart
     ? dashboardData.revenueChart.map((item) => ({
         name: new Date(item._id).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
-        revenue: item.dailyRevenue / 1e6, // Convert to millions
+        revenue: item.dailyRevenue, // Use actual revenue amount
         bookings: 0, // Not available in dashboard API
       }))
     : [];
@@ -219,7 +228,7 @@ const Dashboard = () => {
       >
         <KpiCard
           title={`Doanh thu ${period === "day" ? "hôm nay" : period === "week" ? "tuần này" : "tháng này"}`}
-          value={`${dashboardData ? (dashboardData.totalRevenue / 1e6).toFixed(1) : "0"}M VNĐ`}
+          value={formatCurrency(dashboardData?.totalRevenue || 0)}
           icon={<BadgeDollarSign size={20} color="#10b981" />}
         />
         <KpiCard

@@ -86,6 +86,11 @@ export const config = {
     apiKey: process.env.GEMINI_API_KEY || "",
     model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
   },
+
+  // Google Sheets API Configuration
+  googleSheets: {
+    apiKey: process.env.GOOGLE_SHEETS_API_KEY || "",
+  },
 };
 
 // Validation function

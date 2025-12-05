@@ -196,11 +196,18 @@ router.get("/availability", async (req, res, next) => {
       }
     }
 
-    // Get existing bookings for this date
+    // Get existing bookings for this date (exclude expired)
+    const now = new Date();
     const existingBookings = await Booking.find({
       court: courtId,
       date: bookingDate,
-      status: { $in: ["pending", "confirmed"] },
+      status: { $in: ["pending_payment", "hold", "confirmed"] },
+      // Exclude expired bookings
+      $or: [
+        { holdUntil: { $exists: false } },
+        { holdUntil: { $gt: now } },
+        { status: "confirmed" } // Confirmed bookings don't expire
+      ]
     });
 
     // Generate time slots based on operating hours
@@ -381,7 +388,9 @@ router.post("/", authenticateToken, async (req, res, next) => {
     // Apply discount to total amount
     const finalAmount = Math.max(0, calculatedAmount - finalDiscountAmount);
 
-    // Create booking
+    // Create booking với status pending_payment và holdUntil
+    const holdUntil = new Date(Date.now() + 5 * 60 * 1000); // 5 phút từ bây giờ
+    
     const booking = new Booking({
       user: req.user._id,
       court: courtId,
@@ -392,8 +401,9 @@ router.post("/", authenticateToken, async (req, res, next) => {
       totalAmount: finalAmount,
       promotionCode: promotionCode ? promotionCode.toUpperCase() : null,
       discountAmount: finalDiscountAmount,
-      status: "pending",
+      status: "pending_payment", // Trạng thái mới: đang chờ thanh toán
       paymentStatus: "pending",
+      holdUntil: holdUntil, // Thời gian hết hạn giữ slot
     });
 
     await booking.save();
@@ -513,10 +523,11 @@ router.get("/my-bookings", authenticateToken, async (req, res, next) => {
       const bookingDate = new Date(booking.date);
       bookingDate.setHours(0, 0, 0, 0);
 
-      // If booking date has passed and status is still pending/confirmed, update to completed
+      // If booking date has passed and status is confirmed, update to completed
+      // (pending_payment/hold bookings will be expired before this)
       if (
         bookingDate < today &&
-        (booking.status === "pending" || booking.status === "confirmed")
+        booking.status === "confirmed"
       ) {
         booking.status = "completed";
         booking.completedAt = new Date();
@@ -770,8 +781,13 @@ router.get(
         filter.status = req.query.status;
       }
 
+      // Date filter - lọc theo ngày đặt sân
       if (req.query.date) {
-        filter.date = new Date(req.query.date);
+        const date = new Date(req.query.date);
+        date.setHours(0, 0, 0, 0);
+        const nextDay = new Date(date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        filter.date = { $gte: date, $lt: nextDay };
       }
 
       // Search functionality
@@ -966,7 +982,7 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
   try {
     const { status, notes } = req.body;
 
-    if (!["pending", "confirmed", "cancelled", "completed"].includes(status)) {
+    if (!["pending", "pending_payment", "hold", "confirmed", "expired", "cancelled", "completed"].includes(status)) {
       return res.status(400).json({
         success: false,
         message: "Trạng thái không hợp lệ",
@@ -1044,31 +1060,46 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
       cancelled: "Đã hủy",
       completed: "Đã hoàn thành",
       pending: "Đang chờ xử lý",
+      pending_payment: "Chờ thanh toán",
     };
 
     const statusTitles = {
-      confirmed: "Đặt sân đã được xác nhận",
+      confirmed: booking.paymentMethod === "cash" && booking.paymentStatus === "paid"
+        ? "Đặt sân đã được xác nhận và thanh toán"
+        : "Đặt sân đã được xác nhận",
       cancelled: "Đặt sân đã bị hủy",
       completed: "Đặt sân đã hoàn thành",
-      pending: "Đặt sân đang chờ xử lý",
+      pending: "Đặt sân đang chờ xác nhận",
+      pending_payment: "Đặt sân chờ thanh toán",
     };
+    
+    // Custom message for cash payment confirmation
+    let notificationMessage = `Đặt sân ${
+      booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()
+    } tại ${booking.facility.name} đã được ${
+      statusMessages[status] || status
+    }.`;
+    
+    if (status === "confirmed" && booking.paymentMethod === "cash" && booking.paymentStatus === "paid") {
+      notificationMessage = `Đặt sân ${
+        booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()
+      } tại ${booking.facility.name} đã được xác nhận và thanh toán tiền mặt thành công.`;
+    }
 
     // Create notification for user
     await createNotification({
       userId,
       type: status === "cancelled" ? "cancellation" : "booking",
       title: statusTitles[status] || "Trạng thái đặt sân đã thay đổi",
-      message: `Đặt sân ${
-        booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()
-      } tại ${booking.facility.name} đã được ${
-        statusMessages[status] || status
-      }.`,
+      message: notificationMessage,
       metadata: {
         bookingId: booking._id.toString(),
         bookingCode: booking.bookingCode,
         facilityId:
           booking.facility._id?.toString() || booking.facility.toString(),
         status,
+        paymentStatus: booking.paymentStatus,
+        paymentMethod: booking.paymentMethod,
         notes,
       },
       priority: status === "cancelled" ? "high" : "normal",
@@ -1118,10 +1149,21 @@ router.patch(
         });
       }
 
-      // Update status
-      booking.status = "cancelled";
-      booking.cancelledAt = new Date();
-      booking.cancellationReason = reason || "Người dùng tự hủy";
+      // Nếu booking đang pending_payment hoặc hold, set expired thay vì cancelled
+      // (vì đây là auto-expire do hết thời gian thanh toán)
+      const isPendingPayment = booking.status === "pending_payment" || booking.status === "hold";
+      const isExpired = booking.holdUntil && new Date() > booking.holdUntil;
+      
+      if (isPendingPayment || isExpired) {
+        booking.status = "expired";
+        booking.cancelledAt = new Date();
+        booking.cancellationReason = reason || "Hết hạn thanh toán";
+      } else {
+        // User tự hủy booking đã confirmed
+        booking.status = "cancelled";
+        booking.cancelledAt = new Date();
+        booking.cancellationReason = reason || "Người dùng tự hủy";
+      }
 
       // Check if eligible for refund
       let refundAmount = 0;
@@ -1235,12 +1277,14 @@ router.patch(
       // Update payment method
       booking.paymentMethod = paymentMethod;
 
-      // If cash payment, keep paymentStatus as "pending" and status as "pending"
+      // If cash payment, set status to "pending" (chờ owner xác nhận)
       // User will pay at the venue, owner will confirm later
       if (paymentMethod === "cash") {
+        // Set status = "pending" (chờ owner xác nhận)
+        booking.status = "pending";
         // Keep paymentStatus = "pending" (chưa thanh toán)
-        // Keep status = "pending" (chờ xác nhận)
-        // Just update paymentMethod
+        // Clear holdUntil vì không cần countdown nữa
+        booking.holdUntil = null;
         await booking.save();
 
         // Populate for response
@@ -1255,13 +1299,14 @@ router.patch(
           message: `Bạn đã chọn thanh toán tiền mặt cho đặt sân ${
             booking.bookingCode ||
             booking._id.toString().slice(-8).toUpperCase()
-          }. Vui lòng thanh toán khi đến sân.`,
+          }. Đơn đặt sân đang chờ xác nhận từ chủ sân. Vui lòng thanh toán khi đến sân.`,
           metadata: {
             bookingId: booking._id.toString(),
             bookingCode: booking.bookingCode,
             facilityId:
               booking.facility._id?.toString() || booking.facility.toString(),
             paymentMethod: "cash",
+            status: "pending",
           },
           priority: "normal",
         });
@@ -1271,19 +1316,20 @@ router.patch(
           facilityId:
             booking.facility._id?.toString() || booking.facility.toString(),
           type: "booking",
-          title: "Đặt sân chọn thanh toán tiền mặt",
+          title: "Đặt sân mới - Thanh toán tiền mặt",
           message: `Đặt sân ${
             booking.bookingCode ||
             booking._id.toString().slice(-8).toUpperCase()
           } tại ${
             booking.facility.name
-          } đã chọn thanh toán tiền mặt. Vui lòng xác nhận khi khách đến sân.`,
+          } đã chọn thanh toán tiền mặt. Vui lòng xác nhận đơn đặt sân khi khách đến sân và thanh toán.`,
           metadata: {
             bookingId: booking._id.toString(),
             bookingCode: booking.bookingCode,
             facilityId:
               booking.facility._id?.toString() || booking.facility.toString(),
             paymentMethod: "cash",
+            status: "pending",
           },
         });
 

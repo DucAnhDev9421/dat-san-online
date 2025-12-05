@@ -47,6 +47,38 @@ export const paymentApi = {
     } catch (error) {
       throw handleApiError(error);
     }
+  },
+
+  /**
+   * Thanh toán bằng ví tiền
+   * @param {string} bookingId - ID của booking
+   * @returns {Promise<{success: boolean, data: Object}>}
+   */
+  payWithWallet: async (bookingId) => {
+    try {
+      const response = await api.post(`/bookings/${bookingId}/pay-wallet`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Thanh toán phí giải đấu bằng ví
+   * @param {string} leagueId - ID của league
+   * @param {number} amount - Số tiền cần thanh toán
+   * @returns {Promise<{success: boolean, data: Object}>}
+   */
+  payTournamentFee: async (leagueId, amount) => {
+    try {
+      const response = await api.post(`/leagues/${leagueId}/pay-fee`, {
+        amount,
+        method: 'wallet'
+      });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
   }
 };
 

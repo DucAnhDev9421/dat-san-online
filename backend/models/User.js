@@ -81,6 +81,37 @@ const userSchema = new mongoose.Schema(
       ref: 'Facility'
     }],
 
+    // Cấu hình phí giải đấu (chỉ cho owner)
+    tournamentFeeConfig: {
+      // Phí đăng ký tham gia giải đấu
+      registrationFee: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      // Phí tổ chức giải đấu nội bộ
+      internalTournamentFees: {
+        // Phí tạo giải (Service Fee)
+        serviceFee: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+        // Phí sử dụng sân cho từng loại sân (Map: courtTypeId -> fee per hour)
+        courtTypeFees: {
+          type: Map,
+          of: Number,
+          default: new Map(),
+        },
+        // Phí trọng tài
+        refereeFee: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+      },
+    },
+
     // Trạng thái tài khoản
     isActive: {
       type: Boolean,

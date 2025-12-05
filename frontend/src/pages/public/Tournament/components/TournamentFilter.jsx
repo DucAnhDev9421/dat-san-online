@@ -6,11 +6,66 @@ const TournamentFilter = ({ filters, onFilterChange, tournaments }) => {
   const sports = [...new Set(tournaments.map(t => t.sport))].filter(Boolean)
   const locations = [...new Set(tournaments.map(t => t.location))].filter(Boolean)
   
+  // Helper: Tính computedStatus cho tournament
+  const getComputedStatus = (tournament) => {
+    if (!tournament?.endDate) return tournament?.status || 'upcoming'
+    
+    const now = new Date();
+    const endDate = new Date(tournament.endDate);
+    const startDate = tournament.startDate ? new Date(tournament.startDate) : null;
+    
+    if (tournament.status === 'cancelled') {
+      return 'cancelled';
+    }
+    
+    if (endDate < now) {
+      return 'completed';
+    }
+    
+    let firstMatchDateTime = null;
+    if (tournament.matches && tournament.matches.length > 0) {
+      const matchesWithSchedule = tournament.matches.filter(
+        m => m.date && m.time && m.time.trim() !== ''
+      );
+      
+      if (matchesWithSchedule.length > 0) {
+        matchesWithSchedule.forEach(match => {
+          try {
+            const matchDate = new Date(match.date);
+            const [hours, minutes] = match.time.split(':').map(Number);
+            
+            if (!isNaN(hours) && !isNaN(minutes)) {
+              const matchDateTime = new Date(matchDate);
+              matchDateTime.setHours(hours, minutes, 0, 0);
+              
+              if (!firstMatchDateTime || matchDateTime < firstMatchDateTime) {
+                firstMatchDateTime = matchDateTime;
+              }
+            }
+          } catch (error) {
+            // Ignore parsing errors
+          }
+        });
+      }
+    }
+    
+    if (firstMatchDateTime && firstMatchDateTime <= now && endDate >= now) {
+      return 'ongoing';
+    }
+    
+    if (startDate && startDate <= now && (!firstMatchDateTime || firstMatchDateTime > now)) {
+      return 'starting';
+    }
+    
+    return tournament.status || 'upcoming';
+  }
+
   const statusCounts = {
     all: tournaments.length,
-    upcoming: tournaments.filter(t => t.status === 'upcoming').length,
-    ongoing: tournaments.filter(t => t.status === 'ongoing').length,
-    completed: tournaments.filter(t => t.status === 'completed').length
+    upcoming: tournaments.filter(t => getComputedStatus(t) === 'upcoming').length,
+    starting: tournaments.filter(t => getComputedStatus(t) === 'starting').length,
+    ongoing: tournaments.filter(t => getComputedStatus(t) === 'ongoing').length,
+    completed: tournaments.filter(t => getComputedStatus(t) === 'completed').length
   }
 
   return (
@@ -43,7 +98,17 @@ const TournamentFilter = ({ filters, onFilterChange, tournaments }) => {
                 checked={filters.status === 'upcoming'}
                 onChange={(e) => onFilterChange('status', e.target.value)}
               />
-              <span>Sắp diễn ra ({statusCounts.upcoming})</span>
+              <span>Đang đăng ký ({statusCounts.upcoming})</span>
+            </label>
+            <label className="filter-radio">
+              <input
+                type="radio"
+                name="status"
+                value="starting"
+                checked={filters.status === 'starting'}
+                onChange={(e) => onFilterChange('status', e.target.value)}
+              />
+              <span>Sắp diễn ra ({statusCounts.starting})</span>
             </label>
             <label className="filter-radio">
               <input

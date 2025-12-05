@@ -106,12 +106,14 @@ export const SocketProvider = ({ children }) => {
     const socketUrl = getSocketUrl();
     const socketOptions = {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: maxReconnectAttempts,
       timeout: 20000,
+      forceNew: false, // Reuse existing connection if available
+      upgrade: true, // Allow upgrade from polling to websocket
     };
 
     // Initialize default namespace socket
@@ -138,8 +140,8 @@ export const SocketProvider = ({ children }) => {
       console.error('❌ Default socket connection error:', error.message);
       
       // Check if it's an authentication error
-      if (error.message && error.message.includes('jwt expired') || 
-          error.message && error.message.includes('Authentication error')) {
+      if (error.message && (error.message.includes('jwt expired') || 
+          error.message.includes('Authentication error'))) {
         try {
           await handleAuthError(defaultSock, 'default socket');
           // The useEffect will rerun with new token, triggering reconnect
@@ -149,6 +151,13 @@ export const SocketProvider = ({ children }) => {
           setIsConnected(false);
           return;
         }
+      }
+      
+      // Handle WebSocket closed before connection established
+      if (error.message && error.message.includes('WebSocket is closed')) {
+        console.warn('⚠️ WebSocket closed before connection established, will retry...');
+        // Socket.IO will automatically retry with polling fallback
+        return;
       }
       
       reconnectAttemptsRef.current++;

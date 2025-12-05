@@ -8,6 +8,7 @@ import {
 import { toast } from 'react-toastify'
 import Dialog from '../../../../components/ui/Dialog'
 import { leagueApi } from '../../../../api/leagueApi'
+import { facilityApi } from '../../../../api/facilityApi'
 import { useAuth } from '../../../../contexts/AuthContext'
 
 export default function MyTournamentsTab() {
@@ -19,6 +20,7 @@ export default function MyTournamentsTab() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedTournament, setSelectedTournament] = useState(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [loadingFacilities, setLoadingFacilities] = useState(false)
 
   // Fetch tournaments from API
   useEffect(() => {
@@ -77,9 +79,12 @@ export default function MyTournamentsTab() {
         }
       }
 
-      // Status filter
-      if (statusFilter !== 'all' && tournament.status !== statusFilter) {
-        return false
+      // Status filter - sử dụng computedStatus
+      if (statusFilter !== 'all') {
+        const computedStatus = getComputedStatus(tournament)
+        if (computedStatus !== statusFilter) {
+          return false
+        }
       }
 
       return true
@@ -103,6 +108,10 @@ export default function MyTournamentsTab() {
         text: 'Đang đăng ký', 
         className: 'status-badge status-upcoming'
       },
+      starting: { 
+        text: 'Sắp diễn ra', 
+        className: 'status-badge status-starting'
+      },
       ongoing: { 
         text: 'Đang diễn ra', 
         className: 'status-badge status-ongoing'
@@ -119,7 +128,48 @@ export default function MyTournamentsTab() {
     return badges[status] || badges.upcoming
   }
 
-  // Tính toán status dựa trên endDate nếu cần
+  // Helper: Tìm trận đấu đầu tiên (có date và time sớm nhất)
+  const getFirstMatchDateTime = (tournament) => {
+    if (!tournament?.matches || tournament.matches.length === 0) {
+      return null;
+    }
+
+    // Lọc các matches có date và time
+    const matchesWithSchedule = tournament.matches.filter(
+      m => m.date && m.time && m.time.trim() !== ''
+    );
+
+    if (matchesWithSchedule.length === 0) {
+      return null;
+    }
+
+    // Tìm match có date và time sớm nhất
+    let earliestMatch = null;
+    let earliestDateTime = null;
+
+    matchesWithSchedule.forEach(match => {
+      try {
+        const matchDate = new Date(match.date);
+        const [hours, minutes] = match.time.split(':').map(Number);
+        
+        if (!isNaN(hours) && !isNaN(minutes)) {
+          const matchDateTime = new Date(matchDate);
+          matchDateTime.setHours(hours, minutes, 0, 0);
+
+          if (!earliestDateTime || matchDateTime < earliestDateTime) {
+            earliestDateTime = matchDateTime;
+            earliestMatch = match;
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing match date/time:', error);
+      }
+    });
+
+    return earliestDateTime;
+  };
+
+  // Tính toán status dựa trên thời gian trận đấu đầu tiên
   const getComputedStatus = (tournament) => {
     if (!tournament.endDate) return tournament.status || 'upcoming'
     
@@ -137,12 +187,20 @@ export default function MyTournamentsTab() {
       return 'completed';
     }
     
-    // Nếu startDate đã qua nhưng endDate chưa qua, là ongoing
-    if (startDate && startDate <= now && endDate >= now) {
+    // Tìm thời gian trận đấu đầu tiên
+    const firstMatchDateTime = getFirstMatchDateTime(tournament);
+    
+    // Nếu có trận đấu đầu tiên và đã tới thời gian thi đấu, là ongoing
+    if (firstMatchDateTime && firstMatchDateTime <= now && endDate >= now) {
       return 'ongoing';
     }
     
-    // Còn lại là upcoming (hoặc giữ nguyên status từ DB nếu hợp lệ)
+    // Nếu đã tới startDate nhưng chưa tới thời gian trận đầu tiên, là starting (sắp diễn ra)
+    if (startDate && startDate <= now && (!firstMatchDateTime || firstMatchDateTime > now)) {
+      return 'starting';
+    }
+    
+    // Còn lại là upcoming (chưa tới startDate)
     return tournament.status || 'upcoming';
   };
 
@@ -179,11 +237,43 @@ export default function MyTournamentsTab() {
     }
   }
 
-  const handleCreateTournament = () => {
-    // Điều hướng dựa trên role: owner/admin -> /tournament/create, user -> /tournament/create/internal
-    const isOwnerOrAdmin = user && (user.role === 'owner' || user.role === 'admin')
-    const route = isOwnerOrAdmin ? '/tournament/create' : '/tournament/create/internal'
-    navigate(route)
+  const handleCreateTournament = async () => {
+    // Kiểm tra nếu user có role owner hoặc admin
+    const isOwner = user && user.role === 'owner'
+    const isAdmin = user && user.role === 'admin'
+    
+    // Nếu là owner hoặc admin, fetch facilities và navigate với facility ID
+    if (isOwner || isAdmin) {
+      try {
+        setLoadingFacilities(true)
+        const ownerId = user._id || user.id
+        const result = await facilityApi.getFacilities({ ownerId, status: 'opening' })
+        
+        if (result.success) {
+          const facilities = result.data?.facilities || result.data || []
+          
+          if (facilities.length === 0) {
+            toast.error('Bạn chưa có cơ sở nào. Vui lòng tạo cơ sở trước.')
+            navigate('/tournament/create')
+            return
+          }
+          
+          // Navigate với facility ID đầu tiên
+          const facilityId = facilities[0]._id || facilities[0].id
+          navigate(`/tournament/create?facility=${facilityId}`)
+        } else {
+          navigate('/tournament/create')
+        }
+      } catch (error) {
+        console.error('Error fetching owner facilities:', error)
+        navigate('/tournament/create')
+      } finally {
+        setLoadingFacilities(false)
+      }
+    } else {
+      // User thường, navigate đến form tạo giải nội bộ
+      navigate('/tournament/create/internal')
+    }
   }
 
   return (
@@ -516,9 +606,17 @@ export default function MyTournamentsTab() {
       <div className="section-header">
         <h3>Giải đấu của tôi</h3>
         <div className="section-actions">
-          <button className="btn btn-primary" onClick={handleCreateTournament}>
+          <button 
+            className="btn btn-primary" 
+            onClick={handleCreateTournament}
+            disabled={loadingFacilities}
+            style={{ 
+              cursor: loadingFacilities ? 'wait' : 'pointer',
+              opacity: loadingFacilities ? 0.6 : 1 
+            }}
+          >
             <Plus size={18} />
-            Tạo giải đấu mới
+            {loadingFacilities ? 'Đang tải...' : 'Tạo giải đấu mới'}
           </button>
         </div>
       </div>
@@ -542,6 +640,7 @@ export default function MyTournamentsTab() {
         >
           <option value="all">Tất cả trạng thái</option>
           <option value="upcoming">Đang đăng ký</option>
+          <option value="starting">Sắp diễn ra</option>
           <option value="ongoing">Đang diễn ra</option>
           <option value="completed">Đã kết thúc</option>
         </select>
