@@ -22,7 +22,8 @@ import {
   Settings,
   Check,
   X,
-  History
+  History,
+  Copy
 } from 'lucide-react'
 
 const RedeemPoints = () => {
@@ -42,6 +43,10 @@ const RedeemPoints = () => {
   const [isRedeemDialogOpen, setIsRedeemDialogOpen] = useState(false)
   const [redeemHistory, setRedeemHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [voucherCode, setVoucherCode] = useState(null)
+  const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false)
+  const [myVouchers, setMyVouchers] = useState([])
+  const [loadingVouchers, setLoadingVouchers] = useState(false)
 
   // Get active tab from URL query params, default to 'rewards'
   const activeTab = searchParams.get('tab') || 'rewards'
@@ -56,6 +61,9 @@ const RedeemPoints = () => {
     fetchUserPoints()
     if (activeTab === 'history') {
       fetchRedeemHistory()
+    }
+    if (activeTab === 'vouchers') {
+      fetchMyVouchers()
     }
   }, [activeTab])
 
@@ -107,11 +115,11 @@ const RedeemPoints = () => {
         // Transform transaction data to history format
         const history = (response.data?.transactions || []).map(transaction => ({
           id: transaction._id,
-          rewardName: transaction.description?.replace('Đổi quà: ', '') || 'Quà tặng',
+          rewardName: transaction.reward?.name || transaction.description?.replace('Đổi quà: ', '') || 'Quà tặng',
           points: Math.abs(transaction.amount),
           date: new Date(transaction.createdAt).toLocaleDateString('vi-VN'),
           status: 'completed',
-          image: null // Will need to fetch reward image if available
+          image: transaction.reward?.image || null
         }))
         setRedeemHistory(history)
       }
@@ -141,10 +149,6 @@ const RedeemPoints = () => {
       const response = await loyaltyApi.redeemReward(selectedReward._id)
       
       if (response.success) {
-        toast.success('Đổi quà thành công!', {
-          description: `Bạn đã đổi ${selectedReward.name} với ${selectedReward.pointCost} điểm`
-        })
-        
         // Update points - ưu tiên remaining_points, sau đó fetch lại từ API
         if (response.data?.remaining_points !== undefined) {
           setUserPoints(response.data.remaining_points)
@@ -153,13 +157,27 @@ const RedeemPoints = () => {
           await fetchUserPoints()
         }
         
+        // Nếu là voucher, hiển thị modal với mã voucher
+        if (selectedReward.type === 'VOUCHER' && response.data?.reward_detail?.code) {
+          setVoucherCode(response.data.reward_detail.code)
+          setIsRedeemDialogOpen(false)
+          setIsVoucherModalOpen(true)
+        } else {
+          toast.success('Đổi quà thành công!', {
+            description: `Bạn đã đổi ${selectedReward.name} với ${selectedReward.pointCost} điểm`
+          })
+          setIsRedeemDialogOpen(false)
+        }
+        
         // Refresh data
         await fetchRewards()
         if (activeTab === 'history') {
           await fetchRedeemHistory()
         }
+        if (activeTab === 'vouchers') {
+          await fetchMyVouchers()
+        }
         
-        setIsRedeemDialogOpen(false)
         setSelectedReward(null)
       }
     } catch (error) {
@@ -168,6 +186,25 @@ const RedeemPoints = () => {
     } finally {
       setRedeeming(null)
     }
+  }
+
+  const fetchMyVouchers = async () => {
+    try {
+      setLoadingVouchers(true)
+      const response = await loyaltyApi.getMyVouchers({ limit: 50 })
+      if (response.success) {
+        setMyVouchers(response.data?.vouchers || [])
+      }
+    } catch (error) {
+      console.error('Error fetching vouchers:', error)
+    } finally {
+      setLoadingVouchers(false)
+    }
+  }
+
+  const handleCopyVoucherCode = (code) => {
+    navigator.clipboard.writeText(code)
+    toast.success('Đã sao chép mã voucher!')
   }
 
   const calculateMemberTier = (points) => {
@@ -409,6 +446,22 @@ const RedeemPoints = () => {
             >
               <History size={18} />
               Lịch sử
+            </button>
+            <button
+              onClick={() => {
+                handleTabChange('vouchers')
+                if (myVouchers.length === 0) {
+                  fetchMyVouchers()
+                }
+              }}
+              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
+                activeTab === 'vouchers'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Ticket size={18} />
+              Voucher của tôi
             </button>
           </div>
         </div>
@@ -692,11 +745,137 @@ const RedeemPoints = () => {
             </div>
           </div>
         )}
+
+        {/* Vouchers Tab */}
+        {activeTab === 'vouchers' && (
+          <div className="bg-white rounded-lg border border-gray-200">
+            <div className="p-6">
+              {loadingVouchers ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader className="animate-spin" size={32} color="#3b82f6" />
+                </div>
+              ) : myVouchers.length > 0 ? (
+                <div className="space-y-4">
+                  {myVouchers.map((voucher) => {
+                    const isExpired = new Date(voucher.endDate) < new Date()
+                    const isUsed = voucher.usageCount >= voucher.maxUsage
+                    const isValid = !isExpired && !isUsed
+                    
+                    return (
+                      <div
+                        key={voucher._id}
+                        className={`p-4 border-2 rounded-lg transition-colors ${
+                          isValid
+                            ? 'border-green-200 bg-green-50 hover:bg-green-100'
+                            : 'border-gray-200 bg-gray-50 opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Ticket size={20} className={isValid ? 'text-green-600' : 'text-gray-400'} />
+                              <h4 className="font-semibold text-gray-900">{voucher.name}</h4>
+                            </div>
+                            {voucher.description && (
+                              <p className="text-sm text-gray-600 mb-3">{voucher.description}</p>
+                            )}
+                            <div className="flex items-center gap-4 mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-600">Mã:</span>
+                                <span className="font-mono font-bold text-lg text-blue-600">
+                                  {voucher.code}
+                                </span>
+                                <button
+                                  onClick={() => handleCopyVoucherCode(voucher.code)}
+                                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                  title="Sao chép mã"
+                                >
+                                  <Copy size={16} className="text-gray-500" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-600">Giảm giá: </span>
+                                <span className="font-semibold text-green-600">
+                                  {voucher.discountType === 'percentage'
+                                    ? `${voucher.discountValue}%`
+                                    : `${voucher.discountValue.toLocaleString('vi-VN')} ₫`}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Hết hạn: </span>
+                                <span className="font-semibold">
+                                  {new Date(voucher.endDate).toLocaleDateString('vi-VN')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            {isValid ? (
+                              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                                Có thể sử dụng
+                              </span>
+                            ) : isUsed ? (
+                              <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-semibold">
+                                Đã sử dụng
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
+                                Hết hạn
+                              </span>
+                            )}
+                            <button
+                              onClick={() => {
+                                handleCopyVoucherCode(voucher.code)
+                                // Nếu voucher có applicableFacilities, dẫn đến facility đầu tiên
+                                if (voucher.applicableFacilities && voucher.applicableFacilities.length > 0) {
+                                  const firstFacility = voucher.applicableFacilities[0]
+                                  const facilityId = firstFacility._id || firstFacility
+                                  navigate(`/booking?venue=${facilityId}&promo=${voucher.code}`)
+                                } else if (voucher.isAllFacilities) {
+                                  // Nếu áp dụng cho tất cả facility, dẫn đến trang facilities
+                                  navigate('/facilities')
+                                } else {
+                                  // Fallback: dẫn đến trang facilities
+                                  navigate('/facilities')
+                                }
+                              }}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                            >
+                              Sử dụng ngay
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <Ticket size={64} className="mx-auto mb-4 text-gray-300" />
+                  <h3 className="mb-2 text-xl font-semibold text-gray-900">
+                    Chưa có voucher nào
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    Đổi điểm lấy voucher để nhận ưu đãi khi đặt sân!
+                  </p>
+                  <button
+                    onClick={() => handleTabChange('rewards')}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Xem quà tặng
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Redeem Confirmation Dialog */}
       {isRedeemDialogOpen && selectedReward && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
@@ -807,6 +986,97 @@ const RedeemPoints = () => {
                     Xác nhận
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Voucher Code Modal */}
+      {isVoucherModalOpen && voucherCode && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full shadow-xl">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle size={24} className="text-green-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Đổi quà thành công!</h3>
+                    <p className="text-sm text-gray-600">Mã voucher của bạn</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsVoucherModalOpen(false)
+                    setVoucherCode(null)
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border-2 border-blue-200">
+                <div className="text-center">
+                  <p className="text-sm text-gray-600 mb-2">Mã voucher của bạn</p>
+                  <div className="flex items-center justify-center gap-3 mb-4">
+                    <span className="font-mono font-bold text-2xl text-blue-600">
+                      {voucherCode}
+                    </span>
+                    <button
+                      onClick={() => handleCopyVoucherCode(voucherCode)}
+                      className="p-2 bg-white hover:bg-gray-100 rounded-lg transition-colors shadow-sm"
+                      title="Sao chép mã"
+                    >
+                      <Copy size={20} className="text-gray-600" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Vui lòng lưu lại mã này để sử dụng khi đặt sân
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <Ticket size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-semibold mb-1">Cách sử dụng:</p>
+                    <ol className="list-decimal list-inside space-y-1 text-blue-700">
+                      <li>Vào trang đặt sân</li>
+                      <li>Nhập mã voucher vào ô "Mã khuyến mãi"</li>
+                      <li>Mã sẽ được áp dụng tự động</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex gap-3">
+              <button
+                onClick={() => {
+                  setIsVoucherModalOpen(false)
+                  setVoucherCode(null)
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={() => {
+                  setIsVoucherModalOpen(false)
+                  const code = voucherCode
+                  setVoucherCode(null)
+                  // Dẫn đến trang facilities với mã voucher trong URL
+                  navigate(`/facilities?promo=${code}`)
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Chọn cơ sở
               </button>
             </div>
           </div>

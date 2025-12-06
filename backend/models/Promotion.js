@@ -98,6 +98,22 @@ const promotionSchema = new mongoose.Schema(
       url: { type: String },
       publicId: { type: String },
     },
+    // Đánh dấu voucher từ reward (loyalty points)
+    fromReward: {
+      type: Boolean,
+      default: false,
+    },
+    rewardId: {
+      type: Schema.Types.ObjectId,
+      ref: "Reward",
+      default: null,
+    },
+    // User sở hữu voucher này (nếu từ reward)
+    ownedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,

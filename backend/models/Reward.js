@@ -22,6 +22,12 @@ const rewardSchema = new mongoose.Schema(
     stock: { type: Number, default: null }, // null = vô hạn
     image: { type: String },
     imagePublicId: { type: String }, // Cloudinary public_id để xóa ảnh sau này
+    // Owner tạo reward này
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true }
 );

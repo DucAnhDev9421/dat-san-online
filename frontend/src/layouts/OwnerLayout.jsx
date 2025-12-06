@@ -16,6 +16,7 @@ import {
   Settings,
   Trophy,
   Gift,
+  Coffee,
 } from "lucide-react";
 
 export default function OwnerLayout({ children }) {
@@ -31,7 +32,8 @@ export default function OwnerLayout({ children }) {
     { id: "courts", path: "courts", label: "Quản lý sân", icon: Building2 },
     { id: "bookings", path: "bookings", label: "Đơn đặt sân", icon: BookOpen },
     { id: "leagues", path: "leagues", label: "Quản lý giải đấu", icon: Trophy },
-    { id: "rewards", path: "rewards", label: "Ưu đãi", icon: Gift },
+    { id: "rewards", path: "rewards", label: "Quản lý ưu đãi", icon: Gift },
+    { id: "services", path: "services", label: "Quản lý dịch vụ", icon: Coffee },
     { id: "reports", path: "reports", label: "Doanh thu & Thanh toán", icon: CreditCard },
     { id: "reviews", path: "reviews", label: "Đánh giá & Phản hồi", icon: MessageSquare },
     { id: "analytics", path: "analytics", label: "Báo cáo & Thống kê", icon: BarChart3 },

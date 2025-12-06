@@ -30,6 +30,9 @@ router.get("/", async (req, res, next) => {
 
     const query = {};
 
+    // Loại bỏ voucher đổi điểm (chỉ dành cho thành viên)
+    query.fromReward = { $ne: true };
+
     // Filter theo status
     if (status) {
       query.status = status;

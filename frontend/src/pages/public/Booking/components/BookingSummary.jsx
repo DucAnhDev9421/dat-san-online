@@ -33,6 +33,7 @@ export default function BookingSummary({
   const [discountAmount, setDiscountAmount] = useState(0)
   const [promoApplied, setPromoApplied] = useState(false)
   const [validating, setValidating] = useState(false)
+  const [autoAppliedFromUrl, setAutoAppliedFromUrl] = useState(false) // Track if auto-applied from URL
 
   // Get selected court data
   const selectedCourtData = courts?.find(c => (c.id || c._id) === selectedCourt)
@@ -61,7 +62,7 @@ export default function BookingSummary({
   // Check for promo code in URL params
   useEffect(() => {
     const promoFromUrl = searchParams.get('promo')
-    if (promoFromUrl && !promoApplied && venueId) {
+    if (promoFromUrl && !promoApplied && !autoAppliedFromUrl && venueId) {
       setPromoCode(promoFromUrl.toUpperCase())
       // Auto-apply promo from URL
       const applyPromo = async () => {
@@ -81,6 +82,7 @@ export default function BookingSummary({
             setAppliedPromotion(promotion)
             setDiscountAmount(discount)
             setPromoApplied(true)
+            setAutoAppliedFromUrl(true) // Mark as auto-applied from URL
 
             if (onPromotionChange) {
               onPromotionChange({
@@ -90,7 +92,8 @@ export default function BookingSummary({
               })
             }
 
-            toast.success(`Áp dụng mã khuyến mãi "${promoFromUrl.toUpperCase()}" thành công!`)
+            // Không hiển thị toast khi auto-apply từ URL để tránh duplicate
+            // toast.success(`Áp dụng mã khuyến mãi "${promoFromUrl.toUpperCase()}" thành công!`)
           }
         } catch (error) {
           console.error('Error validating promotion from URL:', error)
@@ -102,7 +105,7 @@ export default function BookingSummary({
       // Delay to ensure component is fully mounted
       setTimeout(applyPromo, 100)
     }
-  }, [searchParams, venueId])
+  }, [searchParams, venueId, promoApplied, autoAppliedFromUrl])
 
   // Calculate discount amount based on promotion
   const calculateDiscount = (promotion, subtotal) => {

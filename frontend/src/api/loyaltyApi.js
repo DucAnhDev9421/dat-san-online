@@ -69,6 +69,20 @@ export const loyaltyApi = {
   },
 
   /**
+   * Lấy danh sách voucher của user (từ reward)
+   * GET /api/loyalty/vouchers
+   * @param {Object} params - Query parameters (page, limit)
+   */
+  getMyVouchers: async (params = {}) => {
+    try {
+      const response = await api.get('/loyalty/vouchers', { params });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
    * Owner/Admin: Lấy tất cả rewards (bao gồm inactive)
    * GET /api/loyalty/admin/rewards
    */

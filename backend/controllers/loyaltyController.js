@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import LoyaltyTransaction from "../models/LoyaltyTransaction.js";
 import Reward from "../models/Reward.js";
 import Promotion from "../models/Promotion.js"; // Tận dụng model Promotion có sẵn để tạo Voucher
+import Facility from "../models/Facility.js";
 
 // Helper tính hạng
 const calculateTier = (points) => {
@@ -52,11 +53,35 @@ export const getHistory = asyncHandler(async (req, res) => {
     .skip((page - 1) * limit)
     .limit(limit);
 
+  // Populate reward information for REDEEM transactions
+  const transactionsWithRewards = await Promise.all(
+    transactions.map(async (transaction) => {
+      const transactionObj = transaction.toObject();
+      if (
+        transaction.type === "REDEEM" &&
+        transaction.source?.sourceType === "Reward" &&
+        transaction.source?.sourceId
+      ) {
+        const reward = await Reward.findById(transaction.source.sourceId).select(
+          "name image"
+        );
+        if (reward) {
+          transactionObj.reward = {
+            _id: reward._id,
+            name: reward.name,
+            image: reward.image,
+          };
+        }
+      }
+      return transactionObj;
+    })
+  );
+
   const total = await LoyaltyTransaction.countDocuments(query);
 
   res.json({
     success: true,
-    data: { transactions, pagination: { page, limit, total } },
+    data: { transactions: transactionsWithRewards, pagination: { page, limit, total } },
   });
 });
 
@@ -117,20 +142,68 @@ export const redeemReward = asyncHandler(async (req, res) => {
     source: { sourceType: "Reward", sourceId: reward._id },
   });
 
-  // 3. Xử lý trao quà (Ví dụ: Tạo Voucher vào ví voucher của user)
-  // Ở đây ta sẽ mock việc tạo voucher bằng cách tạo một Promotion code riêng cho user
+  // 3. Xử lý trao quà (Tạo Voucher vào ví voucher của user)
   let rewardData = {};
+  let voucherPromotion = null;
   if (reward.type === "VOUCHER") {
-    // Tạo mã voucher unique
-    const voucherCode = `VOUCHER-${user._id.toString().slice(-4)}-${Date.now()
-      .toString()
-      .slice(-4)}`;
+    // Tạo mã voucher unique (chỉ chữ cái và số, không có dấu gạch ngang)
+    const userIdSuffix = user._id.toString().slice(-4).toUpperCase();
+    const timestampSuffix = Date.now().toString().slice(-4);
+    const voucherCode = `VOUCHER${userIdSuffix}${timestampSuffix}`;
 
-    // Lưu vào bảng Promotion (hoặc bảng UserVoucher riêng nếu có)
-    // Giả sử hệ thống Promotion của bạn hỗ trợ
-    // const newVoucher = await Promotion.create({...})
+    // Tính toán ngày hết hạn (mặc định 90 ngày)
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 90);
 
-    rewardData = { code: voucherCode, value: reward.voucherValue };
+    // Xác định discountType và discountValue
+    const discountType = reward.voucherType || "fixed";
+    const discountValue = reward.voucherValue || 0;
+
+    // Lấy danh sách facility của owner tạo reward (nếu có)
+    let applicableFacilities = [];
+    let isAllFacilities = false;
+    
+    if (reward.createdBy) {
+      // Lấy tất cả facility của owner tạo reward
+      const ownerFacilities = await Facility.find({ 
+        owner: reward.createdBy,
+        status: "opening" // Chỉ lấy facility đang mở
+      }).select("_id");
+      
+      applicableFacilities = ownerFacilities.map(f => f._id);
+      isAllFacilities = false; // Chỉ áp dụng cho facility của owner
+    } else {
+      // Nếu reward không có createdBy (reward cũ), áp dụng cho tất cả
+      isAllFacilities = true;
+    }
+
+    // Lưu vào bảng Promotion
+    voucherPromotion = await Promotion.create({
+      code: voucherCode,
+      name: reward.name,
+      description: reward.description || `Voucher từ đổi điểm: ${reward.name}`,
+      discountType: discountType,
+      discountValue: discountValue,
+      startDate: startDate,
+      endDate: endDate,
+      isAllFacilities: isAllFacilities,
+      applicableFacilities: applicableFacilities,
+      status: "active",
+      maxUsage: 1, // Mỗi voucher chỉ dùng 1 lần
+      usageCount: 0,
+      createdBy: user._id,
+      fromReward: true,
+      rewardId: reward._id,
+      ownedBy: user._id,
+    });
+
+    rewardData = {
+      code: voucherCode,
+      value: reward.voucherValue,
+      voucherType: discountType,
+      promotionId: voucherPromotion._id,
+    };
   }
 
   res.json({
@@ -139,6 +212,41 @@ export const redeemReward = asyncHandler(async (req, res) => {
     data: {
       remaining_points: user.loyaltyPoints,
       reward_detail: rewardData,
+    },
+  });
+});
+
+// Lấy danh sách voucher của user (từ reward)
+export const getMyVouchers = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const skip = (page - 1) * limit;
+
+  const query = {
+    fromReward: true,
+    ownedBy: req.user._id,
+  };
+
+  // Lấy tất cả voucher của user (bao gồm cả đã hết hạn/đã dùng)
+  const vouchers = await Promotion.find(query)
+    .populate("rewardId", "name image")
+    .populate("applicableFacilities", "_id name")
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  const total = await Promotion.countDocuments(query);
+
+  res.json({
+    success: true,
+    data: {
+      vouchers: vouchers,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
     },
   });
 });
@@ -171,6 +279,7 @@ export const createReward = asyncHandler(async (req, res) => {
     stock: stock ? parseInt(stock) : null,
     image,
     isActive: true,
+    createdBy: req.user._id, // Lưu owner tạo reward
   });
 
   res.status(201).json({
