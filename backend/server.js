@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import { createServer } from "http";
 import cors from "cors";
@@ -7,13 +9,11 @@ import session from "express-session";
 import passport from "passport";
 import { initializeSocket } from "./socket/index.js";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
-dotenv.config();
 
-mongoose.connect(process.env.MONGODB_URI)
+mongoose
+  .connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.error("❌ MongoDB error:", err));
-
+  .catch((err) => console.error("❌ MongoDB error:", err));
 
 // Import configurations
 import { config, validateConfig } from "./config/config.js";
@@ -177,10 +177,10 @@ httpServer.listen(PORT, () => {
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Google OAuth: http://localhost:${PORT}/api/auth/google`);
   console.log(`🔌 Socket.IO server initialized with namespaces`);
-  
+
   // Start reservation expiry job
   startReservationExpiryJob();
-  
+
   // Start booking auto-cancel job (hủy đơn không xác nhận trước 15 phút vào sân)
   startBookingAutoCancelJob();
 });

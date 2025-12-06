@@ -283,29 +283,41 @@ export const getOwnerCourts = asyncHandler(async (req, res) => {
     let totalSlots = 0;
     const currentDate = new Date(startDate);
     const end = new Date(endDate);
-    
-    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-    
+
+    const dayNames = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+
     while (currentDate <= end) {
       const dayOfWeek = currentDate.getDay();
       const dayName = dayNames[dayOfWeek];
       const dayHours = operatingHours?.[dayName];
-      
+
       if (dayHours && dayHours.isOpen) {
-        const [openHour, openMin] = (dayHours.open || "06:00").split(":").map(Number);
-        const [closeHour, closeMin] = (dayHours.close || "22:00").split(":").map(Number);
-        
+        const [openHour, openMin] = (dayHours.open || "06:00")
+          .split(":")
+          .map(Number);
+        const [closeHour, closeMin] = (dayHours.close || "22:00")
+          .split(":")
+          .map(Number);
+
         const openMinutes = openHour * 60 + openMin;
         const closeMinutes = closeHour * 60 + closeMin;
-        
+
         // Mỗi slot là 1 giờ (60 phút)
         const slotsPerDay = Math.floor((closeMinutes - openMinutes) / 60);
         totalSlots += slotsPerDay;
       }
-      
+
       currentDate.setDate(currentDate.getDate() + 1);
     }
-    
+
     return totalSlots;
   };
 
@@ -343,11 +355,12 @@ export const getOwnerCourts = asyncHandler(async (req, res) => {
   const courtsWithStats = courts.map((court) => {
     const stats = statsMap.get(court._id.toString());
     const bookedSlots = stats?.totalTimeSlots || 0;
-    
+
     // Tính tỷ lệ lấp đầy
-    const occupancyRate = totalAvailableSlots > 0
-      ? ((bookedSlots / totalAvailableSlots) * 100).toFixed(1)
-      : 0;
+    const occupancyRate =
+      totalAvailableSlots > 0
+        ? ((bookedSlots / totalAvailableSlots) * 100).toFixed(1)
+        : 0;
 
     return {
       ...court,
@@ -386,7 +399,7 @@ export const getOwnerPeakHours = asyncHandler(async (req, res) => {
 
   // Phân tích theo giờ (từ timeSlots)
   const hourStats = {};
-  
+
   bookings.forEach((booking) => {
     booking.timeSlots.forEach((slot) => {
       // Parse time slot: "18:00-19:00" -> lấy giờ bắt đầu "18:00"
@@ -394,7 +407,7 @@ export const getOwnerPeakHours = asyncHandler(async (req, res) => {
       // startTime đã có format "HH:MM", ta chỉ cần lấy phần giờ và thêm ":00"
       // Ví dụ: "18:00" -> "18:00", "08:00" -> "08:00"
       const hourKey = startTime.trim(); // startTime đã là "HH:MM" format
-      
+
       if (!hourStats[hourKey]) {
         hourStats[hourKey] = {
           hour: hourKey,
@@ -402,7 +415,7 @@ export const getOwnerPeakHours = asyncHandler(async (req, res) => {
           revenue: 0,
         };
       }
-      
+
       // Tính revenue cho slot này (chia đều totalAmount cho số slots)
       const revenuePerSlot = booking.totalAmount / booking.timeSlots.length;
       hourStats[hourKey].slotCount += 1;
@@ -417,7 +430,12 @@ export const getOwnerPeakHours = asyncHandler(async (req, res) => {
       hour: stat.hour,
       bookings: stat.slotCount, // Số lượng time slots đã đặt trong giờ này
       revenue: Math.round(stat.revenue),
-      type: stat.slotCount >= 10 ? "Cao điểm" : stat.slotCount >= 5 ? "Trung bình" : "Thấp điểm",
+      type:
+        stat.slotCount >= 10
+          ? "Cao điểm"
+          : stat.slotCount >= 5
+          ? "Trung bình"
+          : "Thấp điểm",
     }));
 
   res.json({
@@ -466,12 +484,12 @@ export const getOwnerLoyalCustomers = asyncHandler(async (req, res) => {
   const loyalCustomers = await Promise.all(
     customerStats.map(async (stat) => {
       const user = await User.findById(stat._id).select("name email phone");
-      
+
       // Tính loyalty score (dựa trên số lần đặt và tổng chi tiêu)
       const bookingScore = Math.min(stat.totalBookings * 10, 50); // Max 50 điểm
       const spendingScore = Math.min((stat.totalSpent / 1000000) * 10, 50); // Max 50 điểm
       const loyaltyScore = Math.round(bookingScore + spendingScore);
-      
+
       // Xác định tier
       let tier = "Silver";
       if (loyaltyScore >= 80) tier = "VIP";
@@ -532,7 +550,7 @@ export const getOwnerCancellations = asyncHandler(async (req, res) => {
 
   // Tính tỷ lệ hủy cho từng sân
   const courtCancellationMap = new Map();
-  
+
   cancellationStats.forEach((stat) => {
     const courtId = stat._id.court.toString();
     if (!courtCancellationMap.has(courtId)) {
@@ -542,10 +560,10 @@ export const getOwnerCancellations = asyncHandler(async (req, res) => {
         noShow: 0, // Có thể thêm logic để detect no-show
       });
     }
-    
+
     const stats = courtCancellationMap.get(courtId);
     stats.totalBookings += stat.count;
-    
+
     if (stat._id.status === "cancelled") {
       stats.cancelled += stat.count;
     }
@@ -559,14 +577,16 @@ export const getOwnerCancellations = asyncHandler(async (req, res) => {
       cancelled: 0,
       noShow: 0,
     };
-    
-    const cancellationRate = stats.totalBookings > 0
-      ? ((stats.cancelled / stats.totalBookings) * 100).toFixed(1)
-      : 0;
-    
-    const noShowRate = stats.totalBookings > 0
-      ? ((stats.noShow / stats.totalBookings) * 100).toFixed(1)
-      : 0;
+
+    const cancellationRate =
+      stats.totalBookings > 0
+        ? ((stats.cancelled / stats.totalBookings) * 100).toFixed(1)
+        : 0;
+
+    const noShowRate =
+      stats.totalBookings > 0
+        ? ((stats.noShow / stats.totalBookings) * 100).toFixed(1)
+        : 0;
 
     let status = "Tốt";
     if (parseFloat(cancellationRate) > 20) status = "Cần cải thiện";
@@ -622,7 +642,15 @@ export const getOwnerTodaySchedule = asyncHandler(async (req, res) => {
 
   // Lấy operating hours hôm nay
   const dayOfWeek = today.getDay();
-  const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const dayNames = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ];
   const dayName = dayNames[dayOfWeek];
   const dayOperatingHours = facility?.operatingHours?.[dayName];
 
@@ -633,34 +661,38 @@ export const getOwnerTodaySchedule = asyncHandler(async (req, res) => {
   if (dayOperatingHours && dayOperatingHours.isOpen) {
     const openTime = dayOperatingHours.open || "06:00";
     const closeTime = dayOperatingHours.close || "22:00";
-    
+
     const [openHour, openMin] = openTime.split(":").map(Number);
     const [closeHour, closeMin] = closeTime.split(":").map(Number);
-    
+
     const openMinutes = openHour * 60 + openMin;
     const closeMinutes = closeHour * 60 + closeMin;
-    
+
     // Tạo tất cả slots có thể
     let currentMinutes = openMinutes;
     while (currentMinutes < closeMinutes) {
       const currentHour = Math.floor(currentMinutes / 60);
       const currentMin = currentMinutes % 60;
       const nextMinutes = currentMinutes + 60;
-      
+
       if (nextMinutes > closeMinutes) break;
-      
-      const startTime = `${String(currentHour).padStart(2, "0")}:${String(currentMin).padStart(2, "0")}`;
+
+      const startTime = `${String(currentHour).padStart(2, "0")}:${String(
+        currentMin
+      ).padStart(2, "0")}`;
       const nextHour = Math.floor(nextMinutes / 60);
       const nextMin = nextMinutes % 60;
-      const endTime = `${String(nextHour).padStart(2, "0")}:${String(nextMin).padStart(2, "0")}`;
-      
+      const endTime = `${String(nextHour).padStart(2, "0")}:${String(
+        nextMin
+      ).padStart(2, "0")}`;
+
       scheduleMap.set(startTime, {
         time: startTime,
         status: "available",
         customer: null,
         court: null,
       });
-      
+
       currentMinutes = nextMinutes;
     }
   }
@@ -671,30 +703,35 @@ export const getOwnerTodaySchedule = asyncHandler(async (req, res) => {
       // Parse slot: "18:00-19:00" -> lấy startTime "18:00"
       const [startTime] = slot.split("-");
       const timeKey = startTime.trim();
-      
+
       if (scheduleMap.has(timeKey)) {
         // Cập nhật slot đã đặt
         scheduleMap.set(timeKey, {
           time: timeKey,
           status: "booked",
-          customer: booking.user?.name || booking.contactInfo?.name || "Khách vãng lai",
-          court: booking.court?.name || `Sân ${booking.court?.courtNumber || ""}`,
+          customer:
+            booking.user?.name || booking.contactInfo?.name || "Khách vãng lai",
+          court:
+            booking.court?.name || `Sân ${booking.court?.courtNumber || ""}`,
         });
       } else {
         // Thêm slot mới nếu không có trong operating hours
         scheduleMap.set(timeKey, {
           time: timeKey,
           status: "booked",
-          customer: booking.user?.name || booking.contactInfo?.name || "Khách vãng lai",
-          court: booking.court?.name || `Sân ${booking.court?.courtNumber || ""}`,
+          customer:
+            booking.user?.name || booking.contactInfo?.name || "Khách vãng lai",
+          court:
+            booking.court?.name || `Sân ${booking.court?.courtNumber || ""}`,
         });
       }
     });
   });
 
   // Chuyển thành array và sắp xếp theo giờ
-  const schedule = Array.from(scheduleMap.values())
-    .sort((a, b) => a.time.localeCompare(b.time));
+  const schedule = Array.from(scheduleMap.values()).sort((a, b) =>
+    a.time.localeCompare(b.time)
+  );
 
   res.json({
     success: true,

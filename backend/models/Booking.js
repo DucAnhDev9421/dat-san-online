@@ -44,13 +44,13 @@ const bookingSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: [
-        "pending",         // Chờ xác nhận (cho thanh toán tiền mặt hoặc chờ owner xác nhận)
+        "pending", // Chờ xác nhận (cho thanh toán tiền mặt hoặc chờ owner xác nhận)
         "pending_payment", // Đang chờ thanh toán (HOLD - cho online payment)
-        "hold",            // Giữ slot tạm thời
-        "confirmed",       // Đã xác nhận (sau khi thanh toán)
-        "expired",         // Hết hạn thanh toán
-        "cancelled",       // Đã hủy
-        "completed"        // Đã hoàn thành
+        "hold", // Giữ slot tạm thời
+        "confirmed", // Đã xác nhận (sau khi thanh toán)
+        "expired", // Hết hạn thanh toán
+        "cancelled", // Đã hủy
+        "completed", // Đã hoàn thành
       ],
       default: "pending_payment",
     },
@@ -58,7 +58,7 @@ const bookingSchema = new mongoose.Schema(
     // Thời gian hết hạn giữ slot (tự động expire sau X phút)
     holdUntil: {
       type: Date,
-      default: function() {
+      default: function () {
         // Mặc định 5 phút từ thời điểm tạo
         return new Date(Date.now() + 5 * 60 * 1000);
       },
@@ -109,7 +109,7 @@ const bookingSchema = new mongoose.Schema(
       },
       phone: {
         type: String,
-        required: [true, "Số điện thoại là bắt buộc"],
+        required: false,
         trim: true,
         match: [/^[0-9]{10,11}$/, "Số điện thoại không hợp lệ"],
       },
@@ -235,15 +235,19 @@ bookingSchema.methods.isHold = function () {
 
 // Method để check xem booking có hết hạn không
 bookingSchema.methods.isExpired = function () {
-  return this.status === "expired" || (this.holdUntil && new Date() > this.holdUntil);
+  return (
+    this.status === "expired" || (this.holdUntil && new Date() > this.holdUntil)
+  );
 };
 
 // Method để check xem booking có thể cancel không
 bookingSchema.methods.canCancel = function () {
-  return this.status === "pending" ||           // Chờ xác nhận (thanh toán tiền mặt)
-         this.status === "pending_payment" ||   // Chờ thanh toán (online payment)
-         this.status === "hold" ||              // Đang giữ chỗ
-         this.status === "confirmed";           // Đã xác nhận
+  return (
+    this.status === "pending" || // Chờ xác nhận (thanh toán tiền mặt)
+    this.status === "pending_payment" || // Chờ thanh toán (online payment)
+    this.status === "hold" || // Đang giữ chỗ
+    this.status === "confirmed"
+  ); // Đã xác nhận
 };
 
 // Method để check xem booking có thể refund không
@@ -283,8 +287,8 @@ bookingSchema.statics.checkAvailability = async function (
     $or: [
       { holdUntil: { $exists: false } },
       { holdUntil: { $gt: now } },
-      { status: "confirmed" } // Confirmed bookings don't expire
-    ]
+      { status: "confirmed" }, // Confirmed bookings don't expire
+    ],
   });
 
   return bookings.length === 0;
