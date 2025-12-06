@@ -14,7 +14,7 @@ import { credit } from "../utils/walletService.js";
 import { processBookingRewards } from "../utils/rewardService.js";
 import mongoose from "mongoose";
 import { sendPaymentReceipt } from "../utils/emailService.js";
-
+import User from "../models/User.js";
 // Hàm helper sắp xếp object (cho VNPay)
 function sortObject(obj) {
   let sorted = {};
@@ -50,6 +50,8 @@ const processSuccessfulPayment = async (paymentId, transactionId) => {
       payment.transactionId = transactionId;
       payment.paidAt = new Date();
       await payment.save({ session });
+      const user = await User.findById(payment.user).session(session);
+      const phoneToUpdate = user && user.phone ? user.phone : "0900000000"; // Mặc định nếu không có số điện thoại
 
       // 3. Cập nhật Booking
       const booking = await Booking.findByIdAndUpdate(
@@ -57,6 +59,9 @@ const processSuccessfulPayment = async (paymentId, transactionId) => {
         {
           paymentStatus: "paid",
           status: "confirmed",
+          $set: {
+            "contactInfo.phone": phoneToUpdate,
+          },
         },
         { new: true, session }
       );
@@ -424,8 +429,28 @@ export const paymentCash = asyncHandler(async (req, res, next) => {
       .json({ success: false, message: "Booking đã được thanh toán" });
   }
 
-  const paymentId = `CASH_${booking._id}_${new Date().getTime()}`;
+  // 1. Chuẩn bị số điện thoại để update (tránh lỗi Validation)
+  const user = await User.findById(booking.user);
+  const phoneToUpdate = user && user.phone ? user.phone : "0900000000";
 
+  // 2. Cập nhật Booking (Sử dụng findByIdAndUpdate để an toàn hơn và bypass validate lỗi)
+  const updatedBooking = await Booking.findByIdAndUpdate(
+    booking._id,
+    {
+      paymentStatus: "paid",
+      status: "confirmed",
+      $set: {
+        "contactInfo.phone": phoneToUpdate,
+      },
+    },
+    { new: true } // Lấy về dữ liệu mới nhất
+  )
+    .populate("user", "name email")
+    .populate("court", "name")
+    .populate("facility", "name address");
+
+  // 3. Tạo record Payment
+  const paymentId = `CASH_${booking._id}_${new Date().getTime()}`;
   const payment = await Payment.create({
     user: booking.user,
     booking: booking._id,
@@ -438,12 +463,26 @@ export const paymentCash = asyncHandler(async (req, res, next) => {
     paidAt: new Date(),
   });
 
-  booking.paymentStatus = "paid";
-  booking.status = "confirmed";
-  await booking.save();
+  // 4. Gửi Email Biên Lai (Logic thêm mới)
+  try {
+    if (updatedBooking) {
+      sendPaymentReceipt(updatedBooking);
+      console.log(
+        `📧 (Tiền mặt) Đã gửi biên lai cho đơn: ${
+          updatedBooking.bookingCode || updatedBooking._id
+        }`
+      );
+    }
+  } catch (emailError) {
+    console.error("❌ Lỗi gửi email biên lai:", emailError);
+  }
 
-  // Xử lý điểm thưởng cho thanh toán tiền mặt
-  await processBookingRewards(booking);
+  // 5. Xử lý điểm thưởng
+  try {
+    await processBookingRewards(updatedBooking);
+  } catch (error) {
+    console.error("Lỗi cộng điểm thưởng:", error);
+  }
 
   res.status(201).json({
     success: true,

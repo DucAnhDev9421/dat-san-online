@@ -53,100 +53,71 @@ export const sendEmail = async ({ to, subject, html }) => {
  */
 export const sendPaymentReceipt = async (booking) => {
   try {
-    // 1. Format dữ liệu hiển thị
-    const bookingDate = format(new Date(booking.date), "dd/MM/yyyy");
-    const totalAmountStr = new Intl.NumberFormat("vi-VN", {
+    if (!booking || !booking.user) return;
+
+    // Lấy email: ưu tiên trong contactInfo, nếu không có thì lấy của tài khoản User
+    const recipientEmail = booking.contactInfo?.email || booking.user.email;
+
+    if (!recipientEmail) {
+      console.log("⚠️ Không tìm thấy email người nhận biên lai.");
+      return;
+    }
+
+    // Format tiền và ngày
+    const formattedAmount = new Intl.NumberFormat("vi-VN", {
       style: "currency",
       currency: "VND",
     }).format(booking.totalAmount);
 
-    // Ưu tiên gửi về email trong contactInfo, nếu không có thì lấy email của User account
-    const recipientEmail = booking.contactInfo?.email || booking.user?.email;
+    const bookingDate = new Date(booking.date).toLocaleDateString("vi-VN");
 
-    if (!recipientEmail) {
-      console.log("⚠️ Không tìm thấy email người nhận, bỏ qua gửi biên lai.");
-      return;
-    }
-
-    // 2. Nội dung HTML
+    // Mẫu Email HTML
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
         <div style="background-color: #2e7d32; padding: 20px; text-align: center; color: #ffffff;">
-          <h1 style="margin: 0; font-size: 24px;">THANH TOÁN THÀNH CÔNG</h1>
-          <p style="margin: 10px 0 0;">Mã đặt sân: <strong>${
-            booking.bookingCode || booking._id
+          <h2 style="margin: 0;">THANH TOÁN THÀNH CÔNG</h2>
+          <p>Mã đơn: <strong>${
+            booking.bookingCode ||
+            booking._id.toString().slice(-6).toUpperCase()
           }</strong></p>
         </div>
-        
         <div style="padding: 20px;">
           <p>Xin chào <strong>${
-            booking.contactInfo?.name || booking.user?.name
+            booking.contactInfo?.name || booking.user.name
           }</strong>,</p>
-          <p>Cảm ơn bạn đã đặt sân tại <strong>${
-            booking.facility?.name
-          }</strong>. Đơn đặt sân của bạn đã được xác nhận.</p>
+          <p>Cảm ơn bạn đã đặt sân. Dưới đây là biên lai điện tử của bạn:</p>
           
-          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 10px;">Chi tiết đặt sân</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr>
-                <td style="padding: 8px 0; color: #666;">Sân:</td>
-                <td style="padding: 8px 0; text-align: right; font-weight: bold;">${
-                  booking.court?.name
-                }</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #666;">Ngày đá:</td>
-                <td style="padding: 8px 0; text-align: right;">${bookingDate}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #666;">Khung giờ:</td>
-                <td style="padding: 8px 0; text-align: right;">
-                  ${booking.timeSlots
-                    .map(
-                      (slot) =>
-                        `<span style="background: #e8f5e9; color: #2e7d32; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 5px;">${slot}</span>`
-                    )
-                    .join("")}
-                </td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #666;">Cơ sở:</td>
-                <td style="padding: 8px 0; text-align: right;">${
-                  booking.facility?.address
-                }</td>
-              </tr>
-            </table>
-          </div>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+            <tr style="border-bottom: 1px solid #eee;"><td style="padding: 10px;">Sân:</td><td style="font-weight: bold; text-align: right;">${
+              booking.court?.name || "Sân bóng"
+            }</td></tr>
+            <tr style="border-bottom: 1px solid #eee;"><td style="padding: 10px;">Cơ sở:</td><td style="text-align: right;">${
+              booking.facility?.name || "Sân bóng"
+            }</td></tr>
+            <tr style="border-bottom: 1px solid #eee;"><td style="padding: 10px;">Ngày:</td><td style="text-align: right;">${bookingDate}</td></tr>
+            <tr style="border-bottom: 1px solid #eee;"><td style="padding: 10px;">Giờ:</td><td style="text-align: right;">${booking.timeSlots.join(
+              ", "
+            )}</td></tr>
+            <tr><td style="padding: 10px; font-weight: bold;">Tổng tiền:</td><td style="text-align: right; color: #d32f2f; font-weight: bold; font-size: 18px;">${formattedAmount}</td></tr>
+          </table>
 
-          <div style="text-align: right; margin-bottom: 20px;">
-            <span style="font-size: 16px; color: #333;">Tổng thanh toán:</span>
-            <span style="font-size: 24px; color: #d32f2f; font-weight: bold; margin-left: 10px;">${totalAmountStr}</span>
-          </div>
-
-          <p style="text-align: center; color: #666; font-size: 14px;">
-            Vui lòng đến sân sớm 15 phút và xuất trình Mã đặt sân hoặc QR Code cho nhân viên.
+          <p style="text-align: center; color: #666; font-size: 13px; margin-top: 30px;">
+            Vui lòng đưa mã đơn hàng này cho nhân viên khi đến sân.
           </p>
-        </div>
-        
-        <div style="background-color: #f9f9f9; padding: 15px; text-align: center; font-size: 12px; color: #999;">
-          Đây là email tự động từ hệ thống Dat San Online. Vui lòng không trả lời email này.
         </div>
       </div>
     `;
 
-    // 3. Gọi hàm sendEmail có sẵn
     await sendEmail({
       to: recipientEmail,
-      subject: `[DAT-SAN-ONLINE] Xác nhận thanh toán #${
+      subject: `[DAT-SAN-ONLINE] Biên lai thanh toán #${
         booking.bookingCode || booking._id
       }`,
       html: htmlContent,
     });
 
-    console.log(`✅ Đã gửi biên lai tới ${recipientEmail}`);
+    console.log(`📧 Đã gửi biên lai tới: ${recipientEmail}`);
   } catch (error) {
-    console.error("❌ Lỗi gửi email biên lai:", error);
-    // Không throw error để tránh làm lỗi luồng thanh toán chính
+    console.error("❌ Lỗi gửi biên lai:", error);
   }
 };
