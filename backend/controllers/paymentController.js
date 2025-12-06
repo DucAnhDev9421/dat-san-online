@@ -13,6 +13,7 @@ import { credit } from "../utils/walletService.js";
 // === IMPORTS TỪ STASH ===
 import { processBookingRewards } from "../utils/rewardService.js";
 import mongoose from "mongoose";
+import { sendPaymentReceipt } from "../utils/emailService.js";
 
 // Hàm helper sắp xếp object (cho VNPay)
 function sortObject(obj) {
@@ -40,15 +41,17 @@ const processSuccessfulPayment = async (paymentId, transactionId) => {
   session.startTransaction();
 
   try {
+    // 1. Tìm và lock payment trong session
     const payment = await Payment.findOne({ paymentId }).session(session);
 
     if (payment && payment.status === "pending") {
+      // 2. Cập nhật Payment
       payment.status = "success";
       payment.transactionId = transactionId;
       payment.paidAt = new Date();
       await payment.save({ session });
 
-      // Cập nhật Booking
+      // 3. Cập nhật Booking
       const booking = await Booking.findByIdAndUpdate(
         payment.booking,
         {
@@ -61,15 +64,32 @@ const processSuccessfulPayment = async (paymentId, transactionId) => {
       if (!booking) {
         throw new Error("Không tìm thấy booking để cập nhật.");
       }
-
+      // 4. CHỐT GIAO DỊCH (Commit)
       await session.commitTransaction();
+      // A. Gửi Email Biên Lai
+      try {
+        const fullBookingDetails = await Booking.findById(booking._id)
+          .populate("user", "name email")
+          .populate("court", "name")
+          .populate("facility", "name address");
 
-      // Xử lý cộng điểm thưởng (chạy sau khi transaction thành công)
+        if (fullBookingDetails) {
+          sendPaymentReceipt(fullBookingDetails);
+          console.log(
+            `📧 Đã gửi biên lai cho đơn: ${
+              fullBookingDetails.bookingCode || fullBookingDetails._id
+            }`
+          );
+        }
+      } catch (emailError) {
+        console.error("❌ Lỗi gửi email biên lai:", emailError);
+      }
+
+      // B. Xử lý cộng điểm thưởng
       try {
         await processBookingRewards(booking);
       } catch (rewardError) {
         console.error("Lỗi cộng điểm thưởng:", rewardError);
-        // Không throw lỗi ở đây để tránh rollback thanh toán đã thành công
       }
 
       return true;
@@ -79,6 +99,7 @@ const processSuccessfulPayment = async (paymentId, transactionId) => {
     await session.abortTransaction();
     return false;
   } catch (error) {
+    // Nếu có lỗi bất kỳ trong quá trình update DB, rollback lại toàn bộ
     await session.abortTransaction();
     console.error("LỖI TRANSACTION khi xử lý thanh toán:", error);
     return false;
