@@ -13,9 +13,8 @@ import { credit } from "../utils/walletService.js";
 // === IMPORTS TỪ STASH ===
 import { processBookingRewards } from "../utils/rewardService.js";
 import mongoose from "mongoose";
-import { sendPaymentReceipt } from "../utils/emailService.js";
 import User from "../models/User.js";
-// Hàm helper sắp xếp object (cho VNPay)
+import { sendEmail, sendPaymentReceipt } from "../utils/emailService.js";
 function sortObject(obj) {
   let sorted = {};
   let str = [];
@@ -31,27 +30,26 @@ function sortObject(obj) {
   }
   return sorted;
 }
-
 /**
  * Cập nhật trạng thái sau khi thanh toán thành công
  * (Hàm helper dùng chung - Sử dụng Transaction để an toàn dữ liệu)
  */
 const processSuccessfulPayment = async (paymentId, transactionId) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
+  // KHÔNG dùng transaction cho MongoDB local
   try {
-    // 1. Tìm và lock payment trong session
-    const payment = await Payment.findOne({ paymentId }).session(session);
+    // 1. Tìm payment
+    const payment = await Payment.findOne({ paymentId });
 
     if (payment && payment.status === "pending") {
       // 2. Cập nhật Payment
       payment.status = "success";
       payment.transactionId = transactionId;
       payment.paidAt = new Date();
-      await payment.save({ session });
-      const user = await User.findById(payment.user).session(session);
-      const phoneToUpdate = user && user.phone ? user.phone : "0900000000"; // Mặc định nếu không có số điện thoại
+      await payment.save();
+
+      // Lấy user để update thông tin phone nếu cần
+      const user = await User.findById(payment.user);
+      const phoneToUpdate = user && user.phone ? user.phone : "0900000000";
 
       // 3. Cập nhật Booking
       const booking = await Booking.findByIdAndUpdate(
@@ -59,57 +57,78 @@ const processSuccessfulPayment = async (paymentId, transactionId) => {
         {
           paymentStatus: "paid",
           status: "confirmed",
-          $set: {
-            "contactInfo.phone": phoneToUpdate,
-          },
+          $set: { "contactInfo.phone": phoneToUpdate },
         },
-        { new: true, session }
+        { new: true }
       );
 
       if (!booking) {
-        throw new Error("Không tìm thấy booking để cập nhật.");
+        throw new Error("Không tìm thấy booking liên quan đến payment này.");
       }
-      // 4. CHỐT GIAO DỊCH (Commit)
-      await session.commitTransaction();
-      // A. Gửi Email Biên Lai
+
+      // --- CÁC TÁC VỤ PHỤ (Sau khi lưu DB) ---
+
+      // A. Gửi Email
       try {
+        console.log("🔍 [EMAIL] Đang lấy thông tin booking để gửi email...");
+
         const fullBookingDetails = await Booking.findById(booking._id)
-          .populate("user", "name email")
+          .populate("user", "name email phone") // Lấy cả phone để log
           .populate("court", "name")
           .populate("facility", "name address");
 
-        if (fullBookingDetails) {
-          sendPaymentReceipt(fullBookingDetails);
-          console.log(
-            `📧 Đã gửi biên lai cho đơn: ${
-              fullBookingDetails.bookingCode || fullBookingDetails._id
-            }`
-          );
+        if (!fullBookingDetails) {
+          console.error("❌ [EMAIL] Không tìm thấy booking details");
+          return true; // Return true để không rollback transaction
         }
-      } catch (emailError) {
-        console.error("❌ Lỗi gửi email biên lai:", emailError);
+
+        // LOGIC MỚI: Kiểm tra linh hoạt cả 2 nguồn email
+        const userEmail = fullBookingDetails.user?.email;
+        const contactEmail = fullBookingDetails.contactInfo?.email;
+
+        // Email nhận sẽ ưu tiên Contact Info (người điền form), nếu không thì lấy User Account
+        const recipientEmail = contactEmail || userEmail;
+
+        console.log("📧 [DEBUG INFO]:", {
+          bookingId: fullBookingDetails._id,
+          userAccountEmail: userEmail || "Không có",
+          contactFormEmail: contactEmail || "Không có",
+          finalRecipient: recipientEmail || "KHÔNG TÌM THẤY EMAIL NÀO",
+        });
+
+        if (!recipientEmail) {
+          console.error(
+            "⚠️ [EMAIL SKIP] Không tìm thấy bất kỳ email nào để gửi (User lẫn ContactInfo đều trống)."
+          );
+          return true;
+        }
+
+        console.log(`📬 [EMAIL] Đang tiến hành gửi tới: ${recipientEmail}`);
+
+        // Gọi hàm gửi mail (Hàm này trong emailService.js cũng cần update logic lấy email tương tự)
+        await sendPaymentReceipt(fullBookingDetails);
+
+        console.log("✅ [EMAIL] Email đã được gửi thành công!");
+      } catch (e) {
+        console.error("❌ [EMAIL] Lỗi ngoại lệ khi gửi mail:", e);
       }
 
-      // B. Xử lý cộng điểm thưởng
+      // B. Cộng điểm thưởng
       try {
-        await processBookingRewards(booking);
-      } catch (rewardError) {
-        console.error("Lỗi cộng điểm thưởng:", rewardError);
+        if (typeof processBookingRewards === "function") {
+          await processBookingRewards(booking);
+        }
+      } catch (e) {
+        console.error("Lỗi cộng điểm thưởng webhook:", e);
       }
 
       return true;
     }
 
-    // Nếu status không phải pending, hủy transaction
-    await session.abortTransaction();
     return false;
   } catch (error) {
-    // Nếu có lỗi bất kỳ trong quá trình update DB, rollback lại toàn bộ
-    await session.abortTransaction();
-    console.error("LỖI TRANSACTION khi xử lý thanh toán:", error);
+    console.error("❌ LỖI xử lý payment:", error);
     return false;
-  } finally {
-    session.endSession();
   }
 };
 
@@ -413,82 +432,89 @@ export const payosBookingCallback = asyncHandler(async (req, res, next) => {
 });
 
 // === POST /api/payments/cash ===
-// Thanh toán tiền mặt (owner/admin)
+// Thanh toán tiền mặt (owner)
 export const paymentCash = asyncHandler(async (req, res, next) => {
   const { bookingId } = req.body;
 
-  const booking = await Booking.findById(bookingId);
-  if (!booking) {
-    return res
-      .status(404)
-      .json({ success: false, message: "Không tìm thấy booking" });
-  }
-  if (booking.paymentStatus === "paid") {
-    return res
-      .status(400)
-      .json({ success: false, message: "Booking đã được thanh toán" });
-  }
-
-  // 1. Chuẩn bị số điện thoại để update (tránh lỗi Validation)
-  const user = await User.findById(booking.user);
-  const phoneToUpdate = user && user.phone ? user.phone : "0900000000";
-
-  // 2. Cập nhật Booking (Sử dụng findByIdAndUpdate để an toàn hơn và bypass validate lỗi)
-  const updatedBooking = await Booking.findByIdAndUpdate(
-    booking._id,
-    {
-      paymentStatus: "paid",
-      status: "confirmed",
-      $set: {
-        "contactInfo.phone": phoneToUpdate,
-      },
-    },
-    { new: true } // Lấy về dữ liệu mới nhất
-  )
-    .populate("user", "name email")
-    .populate("court", "name")
-    .populate("facility", "name address");
-
-  // 3. Tạo record Payment
-  const paymentId = `CASH_${booking._id}_${new Date().getTime()}`;
-  const payment = await Payment.create({
-    user: booking.user,
-    booking: booking._id,
-    amount: booking.totalAmount,
-    method: "cash",
-    status: "success",
-    paymentId: paymentId,
-    transactionId: paymentId,
-    orderInfo: `Thanh toan tien mat boi ${req.user.name}`,
-    paidAt: new Date(),
-  });
-
-  // 4. Gửi Email Biên Lai (Logic thêm mới)
   try {
-    if (updatedBooking) {
-      sendPaymentReceipt(updatedBooking);
-      console.log(
-        `📧 (Tiền mặt) Đã gửi biên lai cho đơn: ${
-          updatedBooking.bookingCode || updatedBooking._id
-        }`
-      );
+    // 1. Check Booking
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy booking" });
     }
-  } catch (emailError) {
-    console.error("❌ Lỗi gửi email biên lai:", emailError);
-  }
+    if (booking.paymentStatus === "paid") {
+      return res
+        .status(400)
+        .json({ success: false, message: "Booking đã được thanh toán" });
+    }
 
-  // 5. Xử lý điểm thưởng
-  try {
-    await processBookingRewards(updatedBooking);
+    // 2. Chuẩn bị thông tin User
+    const user = await User.findById(booking.user);
+    const phoneToUpdate = user && user.phone ? user.phone : "0900000000";
+
+    // 3. Update Booking
+    const updatedBooking = await Booking.findByIdAndUpdate(
+      booking._id,
+      {
+        paymentStatus: "paid",
+        status: "confirmed",
+        $set: { "contactInfo.phone": phoneToUpdate },
+      },
+      { new: true }
+    )
+      .populate("user", "name email")
+      .populate("court", "name")
+      .populate("facility", "name address");
+
+    // 4. Create Payment
+    const paymentId = `CASH_${booking._id}_${new Date().getTime()}`;
+    const payment = new Payment({
+      user: booking.user,
+      booking: booking._id,
+      amount: booking.totalAmount,
+      method: "cash",
+      status: "success",
+      paymentId: paymentId,
+      transactionId: paymentId,
+      orderInfo: `Thanh toan tien mat boi ${req.user.name}`,
+      paidAt: new Date(),
+    });
+    await payment.save();
+
+    // --- LOGIC PHỤ ---
+    // Gửi email
+    try {
+      if (updatedBooking) {
+        console.log(
+          "🔍 [EMAIL CASH] Đang gửi email cho thanh toán tiền mặt..."
+        );
+        await sendPaymentReceipt(updatedBooking);
+        console.log("✅ [EMAIL CASH] Đã gửi email thành công");
+      }
+    } catch (e) {
+      console.error("Lỗi gửi mail tiền mặt:", e);
+    }
+
+    // Cộng điểm
+    try {
+      if (typeof processBookingRewards === "function") {
+        await processBookingRewards(updatedBooking);
+      }
+    } catch (e) {
+      console.error("Lỗi cộng điểm tiền mặt:", e);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Xác nhận thanh toán tiền mặt thành công",
+      data: payment,
+    });
   } catch (error) {
-    console.error("Lỗi cộng điểm thưởng:", error);
+    console.error("Lỗi thanh toán tiền mặt:", error);
+    next(error);
   }
-
-  res.status(201).json({
-    success: true,
-    message: "Xác nhận thanh toán tiền mặt thành công",
-    data: payment,
-  });
 });
 
 // === GET /api/payments/history ===

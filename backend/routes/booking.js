@@ -25,7 +25,7 @@ import Payment from "../models/Payment.js";
 import { isSlotLocked } from "../socket/bookingSocket.js";
 import asyncHandler from "express-async-handler";
 import { processBookingRewards } from "../utils/rewardService.js";
-
+import { sendPaymentReceipt } from "../utils/emailService.js";
 const router = express.Router();
 
 // === MIDDLEWARE TÙY CHỈNH ===
@@ -206,8 +206,8 @@ router.get("/availability", async (req, res, next) => {
       $or: [
         { holdUntil: { $exists: false } },
         { holdUntil: { $gt: now } },
-        { status: "confirmed" } // Confirmed bookings don't expire
-      ]
+        { status: "confirmed" }, // Confirmed bookings don't expire
+      ],
     });
 
     // Generate time slots based on operating hours
@@ -351,10 +351,12 @@ router.post("/", authenticateToken, async (req, res, next) => {
     // Validate and process promotion code if provided
     let promotion = null;
     let finalDiscountAmount = discountAmount || 0;
-    
+
     if (promotionCode) {
-      promotion = await Promotion.findOne({ code: promotionCode.toUpperCase() });
-      
+      promotion = await Promotion.findOne({
+        code: promotionCode.toUpperCase(),
+      });
+
       if (!promotion) {
         return res.status(400).json({
           success: false,
@@ -374,7 +376,9 @@ router.post("/", authenticateToken, async (req, res, next) => {
       // Calculate discount amount if not provided
       if (!discountAmount || discountAmount === 0) {
         // Use totalAmount (subtotal) to calculate discount
-        const discountCalc = promotion.calculateDiscount(totalAmount || (court.price * timeSlots.length));
+        const discountCalc = promotion.calculateDiscount(
+          totalAmount || court.price * timeSlots.length
+        );
         finalDiscountAmount = discountCalc.discountAmount;
       }
     }
@@ -390,7 +394,7 @@ router.post("/", authenticateToken, async (req, res, next) => {
 
     // Create booking với status pending_payment và holdUntil
     const holdUntil = new Date(Date.now() + 5 * 60 * 1000); // 5 phút từ bây giờ
-    
+
     const booking = new Booking({
       user: req.user._id,
       court: courtId,
@@ -525,10 +529,7 @@ router.get("/my-bookings", authenticateToken, async (req, res, next) => {
 
       // If booking date has passed and status is confirmed, update to completed
       // (pending_payment/hold bookings will be expired before this)
-      if (
-        bookingDate < today &&
-        booking.status === "confirmed"
-      ) {
+      if (bookingDate < today && booking.status === "confirmed") {
         booking.status = "completed";
         booking.completedAt = new Date();
         updatePromises.push(booking.save());
@@ -982,7 +983,17 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
   try {
     const { status, notes } = req.body;
 
-    if (!["pending", "pending_payment", "hold", "confirmed", "expired", "cancelled", "completed"].includes(status)) {
+    if (
+      ![
+        "pending",
+        "pending_payment",
+        "hold",
+        "confirmed",
+        "expired",
+        "cancelled",
+        "completed",
+      ].includes(status)
+    ) {
       return res.status(400).json({
         success: false,
         message: "Trạng thái không hợp lệ",
@@ -1064,26 +1075,33 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
     };
 
     const statusTitles = {
-      confirmed: booking.paymentMethod === "cash" && booking.paymentStatus === "paid"
-        ? "Đặt sân đã được xác nhận và thanh toán"
-        : "Đặt sân đã được xác nhận",
+      confirmed:
+        booking.paymentMethod === "cash" && booking.paymentStatus === "paid"
+          ? "Đặt sân đã được xác nhận và thanh toán"
+          : "Đặt sân đã được xác nhận",
       cancelled: "Đặt sân đã bị hủy",
       completed: "Đặt sân đã hoàn thành",
       pending: "Đặt sân đang chờ xác nhận",
       pending_payment: "Đặt sân chờ thanh toán",
     };
-    
+
     // Custom message for cash payment confirmation
     let notificationMessage = `Đặt sân ${
       booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()
     } tại ${booking.facility.name} đã được ${
       statusMessages[status] || status
     }.`;
-    
-    if (status === "confirmed" && booking.paymentMethod === "cash" && booking.paymentStatus === "paid") {
+
+    if (
+      status === "confirmed" &&
+      booking.paymentMethod === "cash" &&
+      booking.paymentStatus === "paid"
+    ) {
       notificationMessage = `Đặt sân ${
         booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()
-      } tại ${booking.facility.name} đã được xác nhận và thanh toán tiền mặt thành công.`;
+      } tại ${
+        booking.facility.name
+      } đã được xác nhận và thanh toán tiền mặt thành công.`;
     }
 
     // Create notification for user
@@ -1114,7 +1132,7 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
       courtId: booking.court._id?.toString() || booking.court.toString(),
       status,
       date: booking.date,
-      timeSlots: status === 'cancelled' ? booking.timeSlots : undefined, // Include timeSlots when cancelled
+      timeSlots: status === "cancelled" ? booking.timeSlots : undefined, // Include timeSlots when cancelled
     });
 
     res.json({
@@ -1151,9 +1169,10 @@ router.patch(
 
       // Nếu booking đang pending_payment hoặc hold, set expired thay vì cancelled
       // (vì đây là auto-expire do hết thời gian thanh toán)
-      const isPendingPayment = booking.status === "pending_payment" || booking.status === "hold";
+      const isPendingPayment =
+        booking.status === "pending_payment" || booking.status === "hold";
       const isExpired = booking.holdUntil && new Date() > booking.holdUntil;
-      
+
       if (isPendingPayment || isExpired) {
         booking.status = "expired";
         booking.cancelledAt = new Date();
@@ -1215,28 +1234,28 @@ router.patch(
         },
       });
 
-    // Notify facility room about cancelled booking slots
-    const courtId = booking.court._id?.toString() || booking.court.toString();
-    emitToFacility(facilityId, 'booking:slot:cancelled', {
-      bookingId: booking._id,
-      facilityId,
-      courtId,
-      date: booking.date,
-      timeSlots: booking.timeSlots,
-    });
+      // Notify facility room about cancelled booking slots
+      const courtId = booking.court._id?.toString() || booking.court.toString();
+      emitToFacility(facilityId, "booking:slot:cancelled", {
+        bookingId: booking._id,
+        facilityId,
+        courtId,
+        date: booking.date,
+        timeSlots: booking.timeSlots,
+      });
 
-    res.json({
-      success: true,
-      message: "Đã hủy booking thành công",
-      data: {
-        booking,
-        refundAmount,
-        refundStatus: refundAmount > 0 ? "processing" : "not_eligible",
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
+      res.json({
+        success: true,
+        message: "Đã hủy booking thành công",
+        data: {
+          booking,
+          refundAmount,
+          refundStatus: refundAmount > 0 ? "processing" : "not_eligible",
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 );
 
@@ -1496,6 +1515,18 @@ router.post(
 
     // 6. Gửi thông báo (tương tự logic thanh toán online)
     await booking.populate("facility", "name");
+    try {
+      // Cần populate đầy đủ thông tin để render email template
+      const fullBookingForEmail = await Booking.findById(booking._id)
+        .populate("user", "name email phone")
+        .populate("court", "name")
+        .populate("facility", "name address");
+
+      console.log("🔍 [WALLET] Đang gửi email biên lai...");
+      await sendPaymentReceipt(fullBookingForEmail);
+    } catch (emailError) {
+      console.error("❌ [WALLET] Lỗi gửi email:", emailError);
+    }
     await createNotification({
       userId: user._id.toString(),
       type: "payment",
