@@ -23,7 +23,8 @@ export const geocodeAddress = async (address) => {
         input: address,
         api_key: GOONG_API_KEY,
         limit: 1 // Chỉ cần kết quả đầu tiên
-      }
+      },
+      timeout: 5000 // 5 seconds timeout
     });
 
     if (autocompleteResponse.data && 
@@ -38,7 +39,8 @@ export const geocodeAddress = async (address) => {
           params: {
             place_id: prediction.place_id,
             api_key: GOONG_API_KEY
-          }
+          },
+          timeout: 5000 // 5 seconds timeout
         });
 
         if (detailResponse.data && detailResponse.data.result) {
@@ -88,7 +90,8 @@ export const reverseGeocode = async (lat, lng) => {
       params: {
         latlng: `${lat},${lng}`,
         api_key: GOONG_API_KEY
-      }
+      },
+      timeout: 5000 // 5 seconds timeout
     });
 
     if (response.data && response.data.results && response.data.results.length > 0) {

@@ -418,6 +418,95 @@ router.post("/:id/report", authenticateToken, checkFacilityOwner, async (req, re
 });
 
 /**
+ * GET /api/reviews/reports
+ * Lấy danh sách báo cáo đánh giá (Admin only)
+ * Query params: page, limit, status, search
+ */
+router.get("/reports", authenticateToken, requireAdmin, async (req, res, next) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      search,
+    } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build query - chỉ lấy reviews có report
+    const query = {
+      isDeleted: false,
+      "report.status": status || "pending", // Mặc định chỉ lấy pending
+    };
+
+    if (status && ["pending", "approved", "rejected"].includes(status)) {
+      query["report.status"] = status;
+    }
+
+    if (search) {
+      // Search sẽ được thực hiện sau khi populate
+      // Tạm thời search trong comment và report.reason
+      query.$or = [
+        { comment: { $regex: search, $options: "i" } },
+        { "report.reason": { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // Get reviews with reports
+    const reviews = await Review.find(query)
+      .populate("user", "name email avatar")
+      .populate("facility", "name")
+      .populate("booking", "bookingCode")
+      .populate("report.reportedBy", "name email")
+      .populate("report.processedBy", "name email")
+      .sort({ "report.reportedAt": -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    // Get total count
+    const total = await Review.countDocuments(query);
+
+    // Calculate stats
+    const stats = {
+      total: await Review.countDocuments({
+        isDeleted: false,
+        "report.status": { $exists: true },
+      }),
+      pending: await Review.countDocuments({
+        isDeleted: false,
+        "report.status": "pending",
+      }),
+      approved: await Review.countDocuments({
+        isDeleted: false,
+        "report.status": "approved",
+      }),
+      rejected: await Review.countDocuments({
+        isDeleted: false,
+        "report.status": "rejected",
+      }),
+    };
+
+    res.json({
+      success: true,
+      data: {
+        reviews,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum),
+        },
+        stats,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * PATCH /api/reviews/:id/report-status
  * Admin xử lý báo cáo: approved/rejected
  */

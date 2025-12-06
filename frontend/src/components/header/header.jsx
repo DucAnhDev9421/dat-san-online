@@ -10,7 +10,7 @@ import UserMenu from './UserMenu'
 import NavigationBar from './NavigationBar'
 import { notificationApi } from '../../api/notificationApi'
 import { toast } from 'react-toastify'
-import { Menu, X, CheckCircle, DollarSign, XCircle, Star, Wrench, Tag, Clock, Info } from 'lucide-react'
+import { Menu, X, CheckCircle, DollarSign, XCircle, Star, Wrench, Tag, Clock, Info, Gift, Ticket } from 'lucide-react'
 
 function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth()
@@ -203,6 +203,20 @@ function Header() {
     navigate('/wallet')
   }
 
+  const handleTournamentManagementClick = () => {
+    closeUserMenu()
+    navigate('/profile/tournaments')
+  }
+
+  const handleFeedbackClick = () => {
+    closeUserMenu()
+    navigate('/feedback')
+  }
+
+  const handleRedeemPointsClick = () => {
+    navigate('/loyalty/redeem')
+  }
+
   // Helper function to get notification icon
   const getNotificationIcon = (type) => {
     const iconMap = {
@@ -302,6 +316,19 @@ function Header() {
             </div>
           ) : isAuthenticated ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : isTablet ? '10px' : '12px' }}>
+               {/* Đổi điểm Button */}
+               <button
+                 onClick={handleRedeemPointsClick}
+                 className="nav-item"
+                 style={{ 
+                   whiteSpace: 'nowrap',
+                   flexShrink: 0
+                 }}
+               >
+                 <Gift size={20} />
+                 {!isMobile && <span>Đổi điểm</span>}
+               </button>
+
               {/* Notification Button with Dropdown */}
               <div style={{ position: 'relative' }}>
                 <NotificationButton 
@@ -350,6 +377,8 @@ function Header() {
                 onSettingsClick={handleSettingsClick}
                 onBookingHistoryClick={handleBookingHistoryClick}
                 onTopUpClick={handleTopUpClick}
+                onTournamentManagementClick={handleTournamentManagementClick}
+                onFeedbackClick={handleFeedbackClick}
               />
             </div>
           ) : (
@@ -420,7 +449,18 @@ function Header() {
           display: flex;
           align-items: center;
           gap: 12px;
-          flex: 1;
+          flex: 0 0 auto;
+          min-width: 0;
+          max-width: fit-content;
+        }
+        
+        .header-left .brand {
+          flex-shrink: 0;
+        }
+        
+        .desktop-nav-wrapper {
+          flex: 0 0 auto;
+          min-width: 0;
         }
 
         /* Mobile Navigation Overlay */

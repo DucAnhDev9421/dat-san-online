@@ -80,6 +80,17 @@ export const config = {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 minutes
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
   },
+
+  // Gemini AI Configuration
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || "",
+    model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+  },
+
+  // Google Sheets API Configuration
+  googleSheets: {
+    apiKey: process.env.GOOGLE_SHEETS_API_KEY || "",
+  },
 };
 
 // Validation function

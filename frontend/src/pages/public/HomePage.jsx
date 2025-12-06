@@ -65,14 +65,29 @@ function HomePage() {
       return '06:00 - 22:00'
     }
 
-    // Format price
-    const formatPrice = (pricePerHour) => {
-      if (!pricePerHour) return null
-      return new Intl.NumberFormat('vi-VN', {
-        style: 'currency',
-        currency: 'VND',
-        minimumFractionDigits: 0
-      }).format(pricePerHour) + '/giờ'
+    // Format price range
+    const formatPrice = (priceRange, pricePerHour) => {
+      // Ưu tiên sử dụng priceRange nếu có
+      if (priceRange && priceRange.min !== undefined && priceRange.max !== undefined) {
+        const minFormatted = new Intl.NumberFormat('vi-VN', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(priceRange.min);
+        const maxFormatted = new Intl.NumberFormat('vi-VN', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(priceRange.max);
+        return `${minFormatted} - ${maxFormatted} VND/khung giờ`;
+      }
+      // Fallback về pricePerHour nếu không có priceRange
+      if (pricePerHour) {
+        const formatted = new Intl.NumberFormat('vi-VN', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(pricePerHour);
+        return `${formatted} VND/giờ`;
+      }
+      return null;
     }
 
     return {
@@ -81,7 +96,7 @@ function HomePage() {
       address: facility.address,
       rating: facility.averageRating || facility.rating || 0,
       totalReviews: facility.totalReviews || 0,
-      price: formatPrice(facility.pricePerHour),
+      price: formatPrice(facility.priceRange, facility.pricePerHour),
       operatingHours: formatOperatingHours(facility.operatingHours),
       image: facility.images && facility.images.length > 0 
         ? facility.images[0].url 

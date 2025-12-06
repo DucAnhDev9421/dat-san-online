@@ -1,8 +1,11 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiMapPin, FiClock, FiDollarSign, FiNavigation } from 'react-icons/fi'
-import { AiFillStar } from 'react-icons/ai'
+import { FiMapPin, FiClock, FiNavigation } from 'react-icons/fi'
+import { AiFillStar, AiFillHeart, AiOutlineHeart } from 'react-icons/ai'
 import { calculateDistance, formatDistance } from '../utils/distance'
+import { useAuth } from '../contexts/AuthContext'
+import { userApi } from '../api/userApi'
+import { toast } from 'react-toastify'
 
 export default function VenueCard({
   image,
@@ -22,8 +25,34 @@ export default function VenueCard({
   facilityLocation = null, // { coordinates: [longitude, latitude] } hoặc { latitude, longitude }
 }) {
   const navigate = useNavigate()
+  const { isAuthenticated } = useAuth()
   const [mousePosition, setMousePosition] = React.useState({ x: 0, y: 0 })
   const cardRef = React.useRef(null)
+  const [isFavorite, setIsFavorite] = React.useState(false)
+  const [isLoadingFavorite, setIsLoadingFavorite] = React.useState(false)
+  
+  // Kiểm tra trạng thái yêu thích khi component mount hoặc venueId thay đổi
+  React.useEffect(() => {
+    const checkFavoriteStatus = async () => {
+      if (!isAuthenticated || !venueId) {
+        setIsFavorite(false)
+        return
+      }
+
+      try {
+        const result = await userApi.getFavorites()
+        if (result.success && result.data?.favorites) {
+          const favoriteIds = result.data.favorites.map(f => f._id || f.id)
+          setIsFavorite(favoriteIds.includes(venueId))
+        }
+      } catch (error) {
+        // Nếu lỗi, giả sử không phải favorite
+        setIsFavorite(false)
+      }
+    }
+
+    checkFavoriteStatus()
+  }, [isAuthenticated, venueId])
 
   const handleMouseMove = (e) => {
     if (!cardRef.current) return
@@ -56,8 +85,8 @@ export default function VenueCard({
   }
 
   const handleCardClick = (e) => {
-    // Don't navigate if clicking the button
-    if (e.target.closest('.venue-card-button')) {
+    // Don't navigate if clicking the button or heart icon
+    if (e.target.closest('.venue-card-button') || e.target.closest('.favorite-button')) {
       return
     }
     
@@ -65,6 +94,43 @@ export default function VenueCard({
       navigate(`/booking?venue=${venueId}`)
     } else if (onBook) {
       onBook()
+    }
+  }
+
+  // Xử lý thêm/xóa yêu thích
+  const handleToggleFavorite = async (e) => {
+    e.stopPropagation()
+    
+    if (!isAuthenticated) {
+      toast.info('Vui lòng đăng nhập để thêm vào danh sách yêu thích')
+      return
+    }
+
+    if (!venueId || isLoadingFavorite) return
+
+    try {
+      setIsLoadingFavorite(true)
+      
+      if (isFavorite) {
+        // Xóa khỏi yêu thích
+        await userApi.removeFavorite(venueId)
+        setIsFavorite(false)
+        toast.success('Đã xóa khỏi danh sách yêu thích')
+      } else {
+        // Thêm vào yêu thích
+        await userApi.addFavorite(venueId)
+        setIsFavorite(true)
+        toast.success('Đã thêm vào danh sách yêu thích')
+      }
+      
+      // Dispatch event để cập nhật favorites page
+      window.dispatchEvent(new Event('favoritesUpdated'))
+    } catch (error) {
+      console.error('Error toggling favorite:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Có lỗi xảy ra'
+      toast.error(errorMessage)
+    } finally {
+      setIsLoadingFavorite(false)
     }
   }
 
@@ -137,29 +203,71 @@ export default function VenueCard({
             }} 
           />
         ) : null}
-        {rating > 0 && (
-          <span style={{
-            position: 'absolute',
-            top: 12,
-            right: 12,
-            background: '#111827',
-            color: '#fff',
-            padding: '4px 10px',
-            borderRadius: 12,
-            fontSize: 12,
-            fontWeight: 700,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6
-          }}>
-            <AiFillStar style={{ color: '#fbbf24' }} /> 
-            <span>{typeof rating === 'number' ? rating.toFixed(1) : rating}</span>
-            {totalReviews > 0 && (
-              <span style={{ fontSize: 11, opacity: 0.9, marginLeft: 2 }}>
-                ({totalReviews})
-              </span>
+        {/* Biểu tượng trái tim yêu thích */}
+        {isAuthenticated && (
+          <button
+            className="favorite-button"
+            onClick={handleToggleFavorite}
+            disabled={isLoadingFavorite}
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              background: 'rgba(255, 255, 255, 0.95)',
+              border: 'none',
+              borderRadius: '50%',
+              width: 40,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: isLoadingFavorite ? 'wait' : 'pointer',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+              transition: 'all 0.3s ease',
+              zIndex: 10,
+              transform: 'translateZ(30px)',
+              opacity: isLoadingFavorite ? 0.6 : 1
+            }}
+            onMouseEnter={(e) => {
+              if (!isLoadingFavorite) {
+                e.currentTarget.style.background = '#fff'
+                e.currentTarget.style.transform = 'translateZ(30px) scale(1.1)'
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)'
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)'
+              e.currentTarget.style.transform = 'translateZ(30px) scale(1)'
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)'
+            }}
+          >
+            {isLoadingFavorite ? (
+              <div style={{
+                width: 16,
+                height: 16,
+                border: '2px solid #6b7280',
+                borderTopColor: 'transparent',
+                borderRadius: '50%',
+                animation: 'spin 0.6s linear infinite'
+              }} />
+            ) : isFavorite ? (
+              <AiFillHeart 
+                style={{ 
+                  color: '#ef4444', 
+                  fontSize: 22,
+                  transition: 'transform 0.2s ease'
+                }} 
+              />
+            ) : (
+              <AiOutlineHeart 
+                style={{ 
+                  color: '#6b7280', 
+                  fontSize: 22,
+                  transition: 'transform 0.2s ease'
+                }} 
+              />
             )}
-          </span>
+          </button>
         )}
       </div>
       <div style={{ 
@@ -207,6 +315,25 @@ export default function VenueCard({
         {address && (
           <div style={{ fontSize: 13, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
             <FiMapPin /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{address}</span>
+          </div>
+        )}
+        {rating > 0 && (
+          <div style={{ 
+            fontSize: 13, 
+            color: '#6b7280', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 6 
+          }}>
+            <AiFillStar style={{ color: '#fbbf24', fontSize: 16 }} />
+            <span style={{ fontWeight: 600, color: '#1f2937' }}>
+              {typeof rating === 'number' ? rating.toFixed(1) : rating}
+            </span>
+            {totalReviews > 0 && (
+              <span style={{ fontSize: 12, color: '#6b7280' }}>
+                ({totalReviews} đánh giá)
+              </span>
+            )}
           </div>
         )}
         {distance && (
@@ -257,37 +384,8 @@ export default function VenueCard({
         {price && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
             <span style={{ color: '#16a34a', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <FiDollarSign /> {price}
+              {price}
             </span>
-            {onBook && (
-              <button 
-                className="venue-card-button"
-                onClick={onBook} 
-                style={{ 
-                  marginLeft: 'auto', 
-                  background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)', 
-                  color: '#fff', 
-                  fontWeight: 700, 
-                  border: 'none', 
-                  borderRadius: 10, 
-                  padding: '10px 16px', 
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 4px 8px rgba(17, 24, 39, 0.2)',
-                  transform: 'translateZ(5px)'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.transform = 'translateZ(5px) translateY(-2px)'
-                  e.target.style.boxShadow = '0 6px 16px rgba(17, 24, 39, 0.3)'
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.transform = 'translateZ(5px)'
-                  e.target.style.boxShadow = '0 4px 8px rgba(17, 24, 39, 0.2)'
-                }}
-              >
-                Đặt sân ngay
-              </button>
-            )}
           </div>
         )}
       </div>

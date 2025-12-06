@@ -11,7 +11,7 @@ const axiosInstance = axios.create({
   httpsAgent: new https.Agent({
     rejectUnauthorized: false, // Bỏ qua lỗi certificate (tạm thời)
   }),
-  timeout: 10000,
+  timeout: 20000,
 });
 
 /**

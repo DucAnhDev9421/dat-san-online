@@ -24,6 +24,7 @@ const notificationSchema = new mongoose.Schema(
         "promotion",
         "reminder",
         "system",
+        "feedback",
       ],
       index: true,
     },

@@ -84,6 +84,50 @@ export const userApi = {
   },
 
   /**
+   * Get user favorites
+   * GET /api/users/favorites
+   * @returns {Promise} List of favorite facilities
+   */
+  getFavorites: async () => {
+    try {
+      const response = await api.get('/users/favorites');
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Add facility to favorites
+   * POST /api/users/favorites/:facilityId
+   * @param {string} facilityId - Facility ID
+   * @returns {Promise} Success message
+   */
+  addFavorite: async (facilityId) => {
+    try {
+      const response = await api.post(`/users/favorites/${facilityId}`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Remove facility from favorites
+   * DELETE /api/users/favorites/:facilityId
+   * @param {string} facilityId - Facility ID
+   * @returns {Promise} Success message
+   */
+  removeFavorite: async (facilityId) => {
+    try {
+      const response = await api.delete(`/users/favorites/${facilityId}`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
    * Change password
    * PUT /api/users/change-password
    * @param {string} currentPassword
@@ -95,6 +139,20 @@ export const userApi = {
         currentPassword,
         newPassword
       });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Delete own account
+   * DELETE /api/users/account
+   * @returns {Promise} Success message
+   */
+  deleteAccount: async () => {
+    try {
+      const response = await api.delete('/users/account');
       return handleApiSuccess(response);
     } catch (error) {
       throw handleApiError(error);
@@ -206,6 +264,40 @@ export const userApi = {
   restoreUser: async (userId) => {
     try {
       const response = await api.patch(`/users/${userId}/restore`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Get tournament fee configuration (Owner only)
+   * GET /api/users/tournament-fee-config
+   * @returns {Promise<{success: boolean, data: Object}>}
+   */
+  getTournamentFeeConfig: async () => {
+    try {
+      const response = await api.get('/users/tournament-fee-config');
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Update tournament fee configuration (Owner only)
+   * PUT /api/users/tournament-fee-config
+   * @param {Object} config - Tournament fee configuration
+   * @param {number} [config.registrationFee] - Registration fee
+   * @param {Object} [config.internalTournamentFees] - Internal tournament fees
+   * @param {number} [config.internalTournamentFees.serviceFee] - Service fee
+   * @param {Object} [config.internalTournamentFees.courtTypeFees] - Court type fees (courtTypeId -> fee)
+   * @param {number} [config.internalTournamentFees.refereeFee] - Referee fee
+   * @returns {Promise<{success: boolean, data: Object}>}
+   */
+  updateTournamentFeeConfig: async (config) => {
+    try {
+      const response = await api.put('/users/tournament-fee-config', config);
       return handleApiSuccess(response);
     } catch (error) {
       throw handleApiError(error);

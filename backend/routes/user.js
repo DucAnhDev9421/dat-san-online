@@ -1,5 +1,6 @@
 // routes/user.js
 import express from "express";
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import Facility from "../models/Facility.js";
 import { authenticateToken, requireAdmin } from "../middleware/auth.js";
@@ -214,6 +215,82 @@ router.put("/change-password", async (req, res, next) => {
   }
 });
 
+/**
+ * API: Xóa tài khoản của chính mình
+ * DELETE /api/users/account
+ */
+router.delete("/account", async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Không cho phép admin xóa tài khoản của mình
+    if (user.role === "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Tài khoản admin không thể tự xóa. Vui lòng liên hệ quản trị viên.",
+      });
+    }
+
+    // Kiểm tra nếu user là owner và có facilities
+    if (user.role === "owner") {
+      const facilityCount = await Facility.countDocuments({ 
+        owner: user._id,
+        status: { $ne: "deleted" }
+      });
+      
+      if (facilityCount > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Bạn không thể xóa tài khoản vì bạn đang quản lý ${facilityCount} sân. Vui lòng xóa hoặc chuyển quyền quản lý các sân trước khi xóa tài khoản.`,
+        });
+      }
+    }
+
+    // Xóa avatar từ Cloudinary nếu có
+    if (user.avatarPublicId) {
+      try {
+        await cloudinaryUtils.deleteImage(user.avatarPublicId);
+        console.log('✅ Deleted avatar from Cloudinary:', user.avatarPublicId);
+      } catch (deleteError) {
+        console.warn('⚠️ Could not delete avatar from Cloudinary:', deleteError.message);
+        // Vẫn tiếp tục xóa tài khoản
+      }
+    }
+
+    // Soft delete tài khoản
+    const deletedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        isLocked: false, // Unlock khi xóa
+        refreshTokens: [], // Xóa tất cả refresh tokens
+      },
+      { new: true }
+    ).select("-password -refreshTokens");
+
+    logAudit("DELETE_OWN_ACCOUNT", req.user._id, req, {
+      userName: user.name,
+      email: user.email,
+    });
+
+    res.json({
+      success: true,
+      message: "Tài khoản đã được xóa thành công.",
+      data: { user: deletedUser },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // --- ADMIN ROUTES ---
 // (Di chuyển từ auth.js)
 
@@ -375,6 +452,392 @@ router.delete("/avatar", async (req, res, next) => {
       success: true,
       message: "Xóa ảnh đại diện thành công.",
       data: { user: updatedUser }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// =============================================
+// ===== FAVORITES ROUTES (PHẢI ĐẶT TRƯỚC /:userId) =====
+// =============================================
+
+/**
+ * GET /api/users/favorites
+ * Lấy danh sách sân yêu thích của user hiện tại
+ */
+router.get("/favorites", async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate({
+        path: 'favorites',
+        select: '-owner -createdAt -updatedAt',
+        populate: {
+          path: 'types',
+          select: 'name'
+        }
+      })
+      .select('favorites');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        favorites: user.favorites || [],
+        count: user.favorites?.length || 0
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/users/favorites/:facilityId
+ * Thêm sân vào danh sách yêu thích
+ */
+router.post("/favorites/:facilityId", async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+
+    // Validate facilityId
+    if (!mongoose.Types.ObjectId.isValid(facilityId)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID sân không hợp lệ",
+      });
+    }
+
+    // Kiểm tra facility có tồn tại không
+    const facility = await Facility.findById(facilityId);
+    if (!facility) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy sân",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Kiểm tra đã có trong favorites chưa
+    if (user.favorites && user.favorites.includes(facilityId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Sân đã có trong danh sách yêu thích",
+      });
+    }
+
+    // Thêm vào favorites
+    if (!user.favorites) {
+      user.favorites = [];
+    }
+    user.favorites.push(facilityId);
+    await user.save();
+
+    logAudit("ADD_FAVORITE", req.user._id, req, {
+      facilityId: facilityId,
+      facilityName: facility.name
+    });
+
+    res.json({
+      success: true,
+      message: "Đã thêm sân vào danh sách yêu thích",
+      data: {
+        facilityId: facilityId,
+        favoritesCount: user.favorites.length
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/users/favorites/:facilityId
+ * Xóa sân khỏi danh sách yêu thích
+ */
+router.delete("/favorites/:facilityId", async (req, res, next) => {
+  try {
+    const { facilityId } = req.params;
+
+    // Validate facilityId
+    if (!mongoose.Types.ObjectId.isValid(facilityId)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID sân không hợp lệ",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Kiểm tra có trong favorites không
+    if (!user.favorites || !user.favorites.includes(facilityId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Sân không có trong danh sách yêu thích",
+      });
+    }
+
+    // Xóa khỏi favorites
+    user.favorites = user.favorites.filter(
+      (id) => id.toString() !== facilityId
+    );
+    await user.save();
+
+    const facility = await Facility.findById(facilityId);
+
+    logAudit("REMOVE_FAVORITE", req.user._id, req, {
+      facilityId: facilityId,
+      facilityName: facility?.name || 'Unknown'
+    });
+
+    res.json({
+      success: true,
+      message: "Đã xóa sân khỏi danh sách yêu thích",
+      data: {
+        facilityId: facilityId,
+        favoritesCount: user.favorites.length
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// --- TOURNAMENT FEE CONFIG ROUTES (Must be before /:userId route) ---
+
+/**
+ * GET /api/users/tournament-fee-config
+ * Lấy cấu hình phí giải đấu của owner hiện tại
+ */
+router.get("/tournament-fee-config", async (req, res, next) => {
+  try {
+    // Chỉ owner mới có thể xem cấu hình phí giải đấu
+    if (!req.user || req.user.role !== "owner") {
+      return res.status(403).json({
+        success: false,
+        message: "Chỉ owner mới có thể xem cấu hình phí giải đấu",
+      });
+    }
+
+    const user = await User.findById(req.user._id).select("tournamentFeeConfig");
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Trả về cấu hình hoặc giá trị mặc định
+    const rawConfig = user.tournamentFeeConfig || {
+      registrationFee: 0,
+      internalTournamentFees: {
+        serviceFee: 0,
+        courtTypeFees: new Map(),
+        refereeFee: 0,
+      },
+    };
+
+    // Build config object manually để đảm bảo Map được convert đúng
+    const config = {
+      registrationFee: rawConfig.registrationFee || 0,
+      internalTournamentFees: {
+        serviceFee: rawConfig.internalTournamentFees?.serviceFee || 0,
+        refereeFee: rawConfig.internalTournamentFees?.refereeFee || 0,
+        courtTypeFees: {}
+      }
+    };
+
+    // Convert Map to Object - xử lý cả Map instance và plain object từ MongoDB
+    const rawCourtTypeFees = rawConfig.internalTournamentFees?.courtTypeFees;
+    if (rawCourtTypeFees) {
+      if (rawCourtTypeFees instanceof Map) {
+        // Nếu là Map instance, convert sang Object
+        config.internalTournamentFees.courtTypeFees = Object.fromEntries(
+          rawCourtTypeFees
+        );
+      } else if (typeof rawCourtTypeFees === 'object' && 
+                 rawCourtTypeFees !== null &&
+                 !Array.isArray(rawCourtTypeFees)) {
+        // Nếu đã là plain object (sau khi load từ MongoDB), giữ nguyên
+        config.internalTournamentFees.courtTypeFees = rawCourtTypeFees;
+      }
+    }
+
+    res.json({
+      success: true,
+      data: config,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/users/tournament-fee-config
+ * Lưu cấu hình phí giải đấu của owner
+ */
+router.put("/tournament-fee-config", async (req, res, next) => {
+  try {
+    // Chỉ owner mới có thể cập nhật cấu hình phí giải đấu
+    if (!req.user || req.user.role !== "owner") {
+      return res.status(403).json({
+        success: false,
+        message: "Chỉ owner mới có thể cập nhật cấu hình phí giải đấu",
+      });
+    }
+
+    const {
+      registrationFee,
+      internalTournamentFees,
+    } = req.body;
+
+    // Validation
+    if (registrationFee !== undefined && (isNaN(registrationFee) || registrationFee < 0)) {
+      return res.status(400).json({
+        success: false,
+        message: "Phí đăng ký phải là số không âm",
+      });
+    }
+
+    if (internalTournamentFees) {
+      if (internalTournamentFees.serviceFee !== undefined && 
+          (isNaN(internalTournamentFees.serviceFee) || internalTournamentFees.serviceFee < 0)) {
+        return res.status(400).json({
+          success: false,
+          message: "Phí tạo giải phải là số không âm",
+        });
+      }
+
+      if (internalTournamentFees.refereeFee !== undefined && 
+          (isNaN(internalTournamentFees.refereeFee) || internalTournamentFees.refereeFee < 0)) {
+        return res.status(400).json({
+          success: false,
+          message: "Phí trọng tài phải là số không âm",
+        });
+      }
+
+      // Validate courtTypeFees nếu có
+      if (internalTournamentFees.courtTypeFees) {
+        const courtTypeFees = internalTournamentFees.courtTypeFees;
+        for (const [courtTypeId, fee] of Object.entries(courtTypeFees)) {
+          // Convert fee sang number nếu là string
+          const feeNumber = typeof fee === 'string' ? parseFloat(fee) : fee;
+          if (isNaN(feeNumber) || feeNumber < 0) {
+            return res.status(400).json({
+              success: false,
+              message: `Phí cho loại sân ${courtTypeId} phải là số không âm`,
+            });
+          }
+        }
+      }
+    }
+
+    // Lấy user hiện tại
+    const user = await User.findById(req.user._id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Khởi tạo tournamentFeeConfig nếu chưa có
+    if (!user.tournamentFeeConfig) {
+      user.tournamentFeeConfig = {
+        registrationFee: 0,
+        internalTournamentFees: {
+          serviceFee: 0,
+          courtTypeFees: new Map(),
+          refereeFee: 0,
+        },
+      };
+    }
+
+    // Cập nhật registrationFee nếu có
+    if (registrationFee !== undefined) {
+      user.tournamentFeeConfig.registrationFee = registrationFee;
+    }
+
+    // Cập nhật internalTournamentFees nếu có
+    if (internalTournamentFees) {
+      if (internalTournamentFees.serviceFee !== undefined) {
+        user.tournamentFeeConfig.internalTournamentFees.serviceFee = internalTournamentFees.serviceFee;
+      }
+
+      if (internalTournamentFees.refereeFee !== undefined) {
+        user.tournamentFeeConfig.internalTournamentFees.refereeFee = internalTournamentFees.refereeFee;
+      }
+
+      // Cập nhật courtTypeFees
+      if (internalTournamentFees.courtTypeFees) {
+        // Khởi tạo Map nếu chưa có
+        if (!(user.tournamentFeeConfig.internalTournamentFees.courtTypeFees instanceof Map)) {
+          user.tournamentFeeConfig.internalTournamentFees.courtTypeFees = new Map();
+        }
+
+        // Cập nhật từng courtTypeFee
+        for (const [courtTypeId, fee] of Object.entries(internalTournamentFees.courtTypeFees)) {
+          // Convert fee sang number nếu là string
+          const feeNumber = typeof fee === 'string' ? parseFloat(fee) : Number(fee);
+          
+          // Chỉ lưu nếu fee là số hợp lệ và > 0
+          if (!isNaN(feeNumber) && feeNumber > 0) {
+            user.tournamentFeeConfig.internalTournamentFees.courtTypeFees.set(courtTypeId, feeNumber);
+          } else {
+            // Xóa nếu fee = 0, NaN, hoặc rỗng
+            user.tournamentFeeConfig.internalTournamentFees.courtTypeFees.delete(courtTypeId);
+          }
+        }
+      }
+    }
+
+    await user.save();
+
+    // Reload user để đảm bảo có dữ liệu mới nhất
+    const savedUser = await User.findById(req.user._id).select("tournamentFeeConfig");
+    
+    // Convert Map to Object để trả về
+    const config = savedUser.tournamentFeeConfig ? { ...savedUser.tournamentFeeConfig.toObject() } : {};
+    if (config.internalTournamentFees?.courtTypeFees instanceof Map) {
+      config.internalTournamentFees.courtTypeFees = Object.fromEntries(
+        config.internalTournamentFees.courtTypeFees
+      );
+    }
+
+    await logAudit(
+      "UPDATE_TOURNAMENT_FEE_CONFIG",
+      req.user._id,
+      req,
+      {
+        config: config,
+      }
+    );
+
+    res.json({
+      success: true,
+      message: "Cập nhật cấu hình phí giải đấu thành công",
+      data: config,
     });
   } catch (error) {
     next(error);
@@ -606,6 +1069,47 @@ router.patch("/:userId/restore", requireAdmin, async (req, res, next) => {
       success: true,
       message: `Đã khôi phục tài khoản ${user.name}`,
       data: { user },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/users/:userId
+ * Lấy thông tin user theo ID (Admin only)
+ */
+router.get("/:userId", requireAdmin, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId)
+      .select("-password -refreshTokens");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Nếu user là owner, lấy danh sách facilities của họ
+    let facilities = [];
+    if (user.role === "owner") {
+      facilities = await Facility.find({ 
+        owner: userId,
+        status: { $ne: "deleted" }
+      })
+      .select("name address status createdAt")
+      .sort({ createdAt: -1 });
+    }
+
+    res.json({
+      success: true,
+      data: { 
+        user: user.toObject(),
+        facilities: facilities.length > 0 ? facilities : undefined
+      },
     });
   } catch (error) {
     next(error);

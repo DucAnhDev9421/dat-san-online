@@ -92,7 +92,8 @@ const BookingRow = ({ booking, handlers }) => {
             title="Xác nhận"
           />
         )}
-        {booking.status !== "cancelled" && (
+        {/* Không hiển thị nút hủy cho các đơn đã hết hạn hoặc đã hủy */}
+        {booking.status !== "cancelled" && booking.status !== "expired" && (
           <ActionButton
             bg="#ef4444"
             Icon={XCircle}

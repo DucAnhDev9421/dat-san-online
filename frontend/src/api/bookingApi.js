@@ -109,10 +109,11 @@ export const bookingApi = {
   /**
    * Hủy booking
    * @param {string} bookingId - ID của booking
+   * @param {string} reason - Lý do hủy (optional)
    */
-  cancelBooking: async (bookingId) => {
+  cancelBooking: async (bookingId, reason) => {
     try {
-      const response = await api.patch(`/bookings/${bookingId}/cancel`);
+      const response = await api.patch(`/bookings/${bookingId}/cancel`, { reason });
       return handleApiSuccess(response);
     } catch (error) {
       throw handleApiError(error);
@@ -156,6 +157,19 @@ export const bookingApi = {
   updatePaymentMethod: async (bookingId, paymentMethod) => {
     try {
       const response = await api.patch(`/bookings/${bookingId}/payment-method`, { paymentMethod });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Lấy tất cả bookings (chỉ admin)
+   * @param {Object} params - Query parameters (page, limit, status, paymentStatus, date, startDate, endDate, facilityId, search)
+   */
+  getAllBookings: async (params = {}) => {
+    try {
+      const response = await api.get('/bookings/admin/all', { params });
       return handleApiSuccess(response);
     } catch (error) {
       throw handleApiError(error);

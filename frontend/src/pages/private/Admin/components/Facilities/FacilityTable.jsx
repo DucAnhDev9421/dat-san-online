@@ -6,7 +6,6 @@ const FacilityTable = ({
   page,
   pageSize,
   totalItems,
-  activeTab,
   statusMap,
   formatPrice,
   onPageChange,
@@ -25,7 +24,7 @@ const FacilityTable = ({
     "Giá / giờ",
     "Tình trạng",
     "Ngày tạo",
-    activeTab === "pending" ? "Duyệt" : "Hành động",
+    "Hành động",
   ];
 
   return (
@@ -98,9 +97,7 @@ const FacilityTable = ({
                     color: "#6b7280",
                   }}
                 >
-                  {activeTab === "pending"
-                    ? "Không có cơ sở nào chờ duyệt"
-                    : "Không tìm thấy cơ sở nào"}
+                  Không tìm thấy cơ sở nào
                 </td>
               </tr>
             ) : (
@@ -110,11 +107,10 @@ const FacilityTable = ({
                   facility={facility}
                   statusMap={statusMap}
                   formatPrice={formatPrice}
-                  activeTab={activeTab}
                   onView={onView}
                   onApprove={onApprove}
                   onReject={onReject}
-                  onNavigateToOwner={onNavigateToOwner}
+                  onNavigateToOwner={(ownerId, facility) => onNavigateToOwner(ownerId, facility)}
                 />
               ))
             )}

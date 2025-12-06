@@ -67,6 +67,8 @@ export default function userSocket(namespace) {
     // Handle disconnect
     socket.on('disconnect', (reason) => {
       console.log(`❌ User disconnected [/user]: ${socket.userId} - Reason: ${reason}`);
+      
+      // Online status is handled in default namespace
     });
 
     // Handle errors

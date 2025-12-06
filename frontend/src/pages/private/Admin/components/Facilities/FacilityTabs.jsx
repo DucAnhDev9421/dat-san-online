@@ -1,6 +1,6 @@
 import React from "react";
 
-const FacilityTabs = ({ activeTab, onTabChange, approvedCount, pendingCount }) => {
+const FacilityTabs = ({ activeTab, onTabChange, approvedCount, pendingCount, partnerApplicationCount = 0 }) => {
   return (
     <div
       style={{
@@ -44,8 +44,8 @@ const FacilityTabs = ({ activeTab, onTabChange, approvedCount, pendingCount }) =
           position: "relative",
         }}
       >
-        Chờ duyệt ({pendingCount})
-        {pendingCount > 0 && (
+        Chờ duyệt ({partnerApplicationCount})
+        {partnerApplicationCount > 0 && (
           <span
             style={{
               position: "absolute",

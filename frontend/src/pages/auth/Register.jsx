@@ -41,27 +41,24 @@ function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setLoading(true)
     setError('')
 
-    // Validate form
-    if (!formData.name || !formData.email || !formData.password) {
+    if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
       setError('Vui lòng điền đầy đủ thông tin bắt buộc')
-      setLoading(false)
       return
     }
 
     if (formData.password !== formData.confirmPassword) {
       setError('Mật khẩu không khớp')
-      setLoading(false)
       return
     }
 
     if (formData.password.length < 6) {
       setError('Mật khẩu phải có ít nhất 6 ký tự')
-      setLoading(false)
       return
     }
+
+    setLoading(true)
 
     try {
       const result = await authService.register({

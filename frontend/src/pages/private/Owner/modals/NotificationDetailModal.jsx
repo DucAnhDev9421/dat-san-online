@@ -70,7 +70,7 @@ const NotificationDetailModal = ({ isOpen, onClose, notification = {} }) => {
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Bell size={24} color="#3b82f6" />
             <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#111827" }}>
-              Chi tiết thông báo
+              Chi tiết tin nhắn
             </h3>
           </div>
           <button

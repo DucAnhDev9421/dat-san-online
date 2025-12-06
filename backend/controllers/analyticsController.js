@@ -2,6 +2,8 @@ import asyncHandler from "express-async-handler";
 import Booking from "../models/Booking.js";
 import Review from "../models/Review.js";
 import Court from "../models/Court.js";
+import User from "../models/User.js";
+import Facility from "../models/Facility.js";
 import mongoose from "mongoose";
 
 /**
@@ -260,17 +262,202 @@ export const getOwnerBookings = asyncHandler(async (req, res) => {
 
 /**
  * API 4: GET /api/analytics/owner/courts
- * Thống kê từng sân: lượt đặt, doanh thu
+ * Thống kê từng sân: lượt đặt, doanh thu, tỷ lệ lấp đầy
  */
 export const getOwnerCourts = asyncHandler(async (req, res) => {
   const facilityId = req.facilityId;
+  const { startDate, endDate } = parseDateRange(
+    req.query.startDate,
+    req.query.endDate
+  );
   const facilityObjectId = new mongoose.Types.ObjectId(facilityId);
 
-  // 1. Lấy thông tin các sân
+  // 1. Lấy facility để có operatingHours
+  const facility = await Facility.findById(facilityId).select("operatingHours");
+
+  // 2. Lấy thông tin các sân
   const courts = await Court.find({ facility: facilityId }).lean();
 
-  // 2. Lấy thống kê booking (chỉ tính các booking đã trả tiền)
+  // 3. Tính tổng số slots có thể đặt trong khoảng thời gian
+  const calculateAvailableSlots = (startDate, endDate, operatingHours) => {
+    let totalSlots = 0;
+    const currentDate = new Date(startDate);
+    const end = new Date(endDate);
+
+    const dayNames = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+
+    while (currentDate <= end) {
+      const dayOfWeek = currentDate.getDay();
+      const dayName = dayNames[dayOfWeek];
+      const dayHours = operatingHours?.[dayName];
+
+      if (dayHours && dayHours.isOpen) {
+        const [openHour, openMin] = (dayHours.open || "06:00")
+          .split(":")
+          .map(Number);
+        const [closeHour, closeMin] = (dayHours.close || "22:00")
+          .split(":")
+          .map(Number);
+
+        const openMinutes = openHour * 60 + openMin;
+        const closeMinutes = closeHour * 60 + closeMin;
+
+        // Mỗi slot là 1 giờ (60 phút)
+        const slotsPerDay = Math.floor((closeMinutes - openMinutes) / 60);
+        totalSlots += slotsPerDay;
+      }
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return totalSlots;
+  };
+
+  // 4. Lấy thống kê booking với tổng số time slots (chỉ tính booking đã thanh toán trong khoảng thời gian)
   const courtStats = await Booking.aggregate([
+    {
+      $match: {
+        facility: facilityObjectId,
+        paymentStatus: "paid",
+        date: { $gte: startDate, $lte: endDate },
+      },
+    },
+    {
+      $group: {
+        _id: "$court", // Nhóm theo courtId
+        totalRevenue: { $sum: "$totalAmount" },
+        totalBookings: { $sum: 1 },
+        totalTimeSlots: { $sum: { $size: "$timeSlots" } }, // Tổng số time slots đã đặt
+      },
+    },
+  ]);
+
+  // 5. Tính tổng slots có thể đặt
+  const totalAvailableSlots = calculateAvailableSlots(
+    startDate,
+    endDate,
+    facility?.operatingHours
+  );
+
+  // 6. Map (ánh xạ) thống kê vào danh sách sân
+  const statsMap = new Map(
+    courtStats.map((stat) => [stat._id.toString(), stat])
+  );
+
+  const courtsWithStats = courts.map((court) => {
+    const stats = statsMap.get(court._id.toString());
+    const bookedSlots = stats?.totalTimeSlots || 0;
+
+    // Tính tỷ lệ lấp đầy
+    const occupancyRate =
+      totalAvailableSlots > 0
+        ? ((bookedSlots / totalAvailableSlots) * 100).toFixed(1)
+        : 0;
+
+    return {
+      ...court,
+      totalRevenue: stats?.totalRevenue || 0,
+      totalBookings: stats?.totalBookings || 0,
+      totalTimeSlots: bookedSlots,
+      availableSlots: totalAvailableSlots,
+      occupancyRate: parseFloat(occupancyRate),
+    };
+  });
+
+  res.json({
+    success: true,
+    data: courtsWithStats,
+  });
+});
+
+/**
+ * API 5: GET /api/analytics/owner/peak-hours
+ * Thống kê giờ cao điểm (theo timeSlots)
+ */
+export const getOwnerPeakHours = asyncHandler(async (req, res) => {
+  const facilityId = req.facilityId;
+  const { startDate, endDate } = parseDateRange(
+    req.query.startDate,
+    req.query.endDate
+  );
+  const facilityObjectId = new mongoose.Types.ObjectId(facilityId);
+
+  // Lấy tất cả bookings đã thanh toán trong khoảng thời gian
+  const bookings = await Booking.find({
+    facility: facilityObjectId,
+    paymentStatus: "paid",
+    date: { $gte: startDate, $lte: endDate },
+  }).select("timeSlots totalAmount");
+
+  // Phân tích theo giờ (từ timeSlots)
+  const hourStats = {};
+
+  bookings.forEach((booking) => {
+    booking.timeSlots.forEach((slot) => {
+      // Parse time slot: "18:00-19:00" -> lấy giờ bắt đầu "18:00"
+      const [startTime] = slot.split("-");
+      // startTime đã có format "HH:MM", ta chỉ cần lấy phần giờ và thêm ":00"
+      // Ví dụ: "18:00" -> "18:00", "08:00" -> "08:00"
+      const hourKey = startTime.trim(); // startTime đã là "HH:MM" format
+
+      if (!hourStats[hourKey]) {
+        hourStats[hourKey] = {
+          hour: hourKey,
+          slotCount: 0, // Số lượng time slots đã đặt trong giờ này
+          revenue: 0,
+        };
+      }
+
+      // Tính revenue cho slot này (chia đều totalAmount cho số slots)
+      const revenuePerSlot = booking.totalAmount / booking.timeSlots.length;
+      hourStats[hourKey].slotCount += 1;
+      hourStats[hourKey].revenue += revenuePerSlot;
+    });
+  });
+
+  // Chuyển đổi thành array và sắp xếp theo giờ
+  const peakHoursData = Object.values(hourStats)
+    .sort((a, b) => a.hour.localeCompare(b.hour))
+    .map((stat) => ({
+      hour: stat.hour,
+      bookings: stat.slotCount, // Số lượng time slots đã đặt trong giờ này
+      revenue: Math.round(stat.revenue),
+      type:
+        stat.slotCount >= 10
+          ? "Cao điểm"
+          : stat.slotCount >= 5
+          ? "Trung bình"
+          : "Thấp điểm",
+    }));
+
+  res.json({
+    success: true,
+    data: {
+      startDate,
+      endDate,
+      peakHours: peakHoursData,
+    },
+  });
+});
+
+/**
+ * API 6: GET /api/analytics/owner/loyal-customers
+ * Thống kê khách hàng trung thành
+ */
+export const getOwnerLoyalCustomers = asyncHandler(async (req, res) => {
+  const facilityId = req.facilityId;
+  const facilityObjectId = new mongoose.Types.ObjectId(facilityId);
+
+  // Thống kê theo user (chỉ tính booking đã thanh toán)
+  const customerStats = await Booking.aggregate([
     {
       $match: {
         facility: facilityObjectId,
@@ -279,29 +466,278 @@ export const getOwnerCourts = asyncHandler(async (req, res) => {
     },
     {
       $group: {
-        _id: "$court", // Nhóm theo courtId
-        totalRevenue: { $sum: "$totalAmount" },
+        _id: "$user",
         totalBookings: { $sum: 1 },
+        totalSpent: { $sum: "$totalAmount" },
+        lastBooking: { $max: "$date" },
+      },
+    },
+    {
+      $sort: { totalSpent: -1 },
+    },
+    {
+      $limit: 20, // Top 20 khách hàng
+    },
+  ]);
+
+  // Populate user info
+  const loyalCustomers = await Promise.all(
+    customerStats.map(async (stat) => {
+      const user = await User.findById(stat._id).select("name email phone");
+
+      // Tính loyalty score (dựa trên số lần đặt và tổng chi tiêu)
+      const bookingScore = Math.min(stat.totalBookings * 10, 50); // Max 50 điểm
+      const spendingScore = Math.min((stat.totalSpent / 1000000) * 10, 50); // Max 50 điểm
+      const loyaltyScore = Math.round(bookingScore + spendingScore);
+
+      // Xác định tier
+      let tier = "Silver";
+      if (loyaltyScore >= 80) tier = "VIP";
+      else if (loyaltyScore >= 60) tier = "Gold";
+
+      return {
+        customer: user?.name || "Khách vãng lai",
+        email: user?.email || "",
+        phone: user?.phone || "",
+        totalBookings: stat.totalBookings,
+        totalSpent: stat.totalSpent,
+        lastBooking: stat.lastBooking,
+        loyaltyScore,
+        tier,
+      };
+    })
+  );
+
+  res.json({
+    success: true,
+    data: loyalCustomers,
+  });
+});
+
+/**
+ * API 7: GET /api/analytics/owner/cancellations
+ * Thống kê tỷ lệ hủy theo sân
+ */
+export const getOwnerCancellations = asyncHandler(async (req, res) => {
+  const facilityId = req.facilityId;
+  const { startDate, endDate } = parseDateRange(
+    req.query.startDate,
+    req.query.endDate
+  );
+  const facilityObjectId = new mongoose.Types.ObjectId(facilityId);
+
+  // Lấy thông tin các sân
+  const courts = await Court.find({ facility: facilityId }).lean();
+
+  // Thống kê booking theo court và status
+  const cancellationStats = await Booking.aggregate([
+    {
+      $match: {
+        facility: facilityObjectId,
+        date: { $gte: startDate, $lte: endDate },
+      },
+    },
+    {
+      $group: {
+        _id: {
+          court: "$court",
+          status: "$status",
+        },
+        count: { $sum: 1 },
       },
     },
   ]);
 
-  // 3. Map (ánh xạ) thống kê vào danh sách sân
-  const statsMap = new Map(
-    courtStats.map((stat) => [stat._id.toString(), stat])
-  );
+  // Tính tỷ lệ hủy cho từng sân
+  const courtCancellationMap = new Map();
 
-  const courtsWithStats = courts.map((court) => {
-    const stats = statsMap.get(court._id.toString());
+  cancellationStats.forEach((stat) => {
+    const courtId = stat._id.court.toString();
+    if (!courtCancellationMap.has(courtId)) {
+      courtCancellationMap.set(courtId, {
+        totalBookings: 0,
+        cancelled: 0,
+        noShow: 0, // Có thể thêm logic để detect no-show
+      });
+    }
+
+    const stats = courtCancellationMap.get(courtId);
+    stats.totalBookings += stat.count;
+
+    if (stat._id.status === "cancelled") {
+      stats.cancelled += stat.count;
+    }
+    // Có thể thêm logic để detect no-show (ví dụ: booking confirmed nhưng không đến)
+  });
+
+  // Map vào danh sách sân
+  const cancellationData = courts.map((court) => {
+    const stats = courtCancellationMap.get(court._id.toString()) || {
+      totalBookings: 0,
+      cancelled: 0,
+      noShow: 0,
+    };
+
+    const cancellationRate =
+      stats.totalBookings > 0
+        ? ((stats.cancelled / stats.totalBookings) * 100).toFixed(1)
+        : 0;
+
+    const noShowRate =
+      stats.totalBookings > 0
+        ? ((stats.noShow / stats.totalBookings) * 100).toFixed(1)
+        : 0;
+
+    let status = "Tốt";
+    if (parseFloat(cancellationRate) > 20) status = "Cần cải thiện";
+    else if (parseFloat(cancellationRate) > 10) status = "Trung bình";
+
     return {
-      ...court,
-      totalRevenue: stats?.totalRevenue || 0,
-      totalBookings: stats?.totalBookings || 0,
+      court: court.name || `Sân ${court.courtNumber || ""}`,
+      totalBookings: stats.totalBookings,
+      cancelled: stats.cancelled,
+      noShow: stats.noShow,
+      cancellationRate: parseFloat(cancellationRate),
+      noShowRate: parseFloat(noShowRate),
+      status,
     };
   });
 
   res.json({
     success: true,
-    data: courtsWithStats,
+    data: {
+      startDate,
+      endDate,
+      cancellations: cancellationData,
+    },
+  });
+});
+
+/**
+ * API 8: GET /api/analytics/owner/today-schedule
+ * Lịch sân hôm nay (theo time slots)
+ */
+export const getOwnerTodaySchedule = asyncHandler(async (req, res) => {
+  const facilityId = req.facilityId;
+  const facilityObjectId = new mongoose.Types.ObjectId(facilityId);
+
+  // Lấy ngày hôm nay (00:00:00 - 23:59:59)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  // Lấy facility để có operatingHours
+  const facility = await Facility.findById(facilityId).select("operatingHours");
+
+  // Lấy tất cả bookings hôm nay (pending, confirmed, completed)
+  const todayBookings = await Booking.find({
+    facility: facilityObjectId,
+    date: { $gte: today, $lt: tomorrow },
+    status: { $in: ["pending", "confirmed", "completed"] },
+  })
+    .populate("court", "name courtNumber")
+    .populate("user", "name")
+    .select("timeSlots court user contactInfo status");
+
+  // Lấy operating hours hôm nay
+  const dayOfWeek = today.getDay();
+  const dayNames = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ];
+  const dayName = dayNames[dayOfWeek];
+  const dayOperatingHours = facility?.operatingHours?.[dayName];
+
+  // Tạo map để track các time slots đã được đặt
+  const scheduleMap = new Map();
+
+  // Nếu facility có operating hours, tạo tất cả slots có thể
+  if (dayOperatingHours && dayOperatingHours.isOpen) {
+    const openTime = dayOperatingHours.open || "06:00";
+    const closeTime = dayOperatingHours.close || "22:00";
+
+    const [openHour, openMin] = openTime.split(":").map(Number);
+    const [closeHour, closeMin] = closeTime.split(":").map(Number);
+
+    const openMinutes = openHour * 60 + openMin;
+    const closeMinutes = closeHour * 60 + closeMin;
+
+    // Tạo tất cả slots có thể
+    let currentMinutes = openMinutes;
+    while (currentMinutes < closeMinutes) {
+      const currentHour = Math.floor(currentMinutes / 60);
+      const currentMin = currentMinutes % 60;
+      const nextMinutes = currentMinutes + 60;
+
+      if (nextMinutes > closeMinutes) break;
+
+      const startTime = `${String(currentHour).padStart(2, "0")}:${String(
+        currentMin
+      ).padStart(2, "0")}`;
+      const nextHour = Math.floor(nextMinutes / 60);
+      const nextMin = nextMinutes % 60;
+      const endTime = `${String(nextHour).padStart(2, "0")}:${String(
+        nextMin
+      ).padStart(2, "0")}`;
+
+      scheduleMap.set(startTime, {
+        time: startTime,
+        status: "available",
+        customer: null,
+        court: null,
+      });
+
+      currentMinutes = nextMinutes;
+    }
+  }
+
+  // Cập nhật schedule với các booking thực tế
+  todayBookings.forEach((booking) => {
+    booking.timeSlots.forEach((slot) => {
+      // Parse slot: "18:00-19:00" -> lấy startTime "18:00"
+      const [startTime] = slot.split("-");
+      const timeKey = startTime.trim();
+
+      if (scheduleMap.has(timeKey)) {
+        // Cập nhật slot đã đặt
+        scheduleMap.set(timeKey, {
+          time: timeKey,
+          status: "booked",
+          customer:
+            booking.user?.name || booking.contactInfo?.name || "Khách vãng lai",
+          court:
+            booking.court?.name || `Sân ${booking.court?.courtNumber || ""}`,
+        });
+      } else {
+        // Thêm slot mới nếu không có trong operating hours
+        scheduleMap.set(timeKey, {
+          time: timeKey,
+          status: "booked",
+          customer:
+            booking.user?.name || booking.contactInfo?.name || "Khách vãng lai",
+          court:
+            booking.court?.name || `Sân ${booking.court?.courtNumber || ""}`,
+        });
+      }
+    });
+  });
+
+  // Chuyển thành array và sắp xếp theo giờ
+  const schedule = Array.from(scheduleMap.values()).sort((a, b) =>
+    a.time.localeCompare(b.time)
+  );
+
+  res.json({
+    success: true,
+    data: {
+      date: today,
+      schedule,
+    },
   });
 });

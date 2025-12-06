@@ -82,4 +82,16 @@ router.get("/owner/bookings", analyticsController.getOwnerBookings);
 // GET /api/analytics/owner/courts?facilityId=xxx
 router.get("/owner/courts", analyticsController.getOwnerCourts);
 
+// GET /api/analytics/owner/peak-hours?facilityId=xxx&startDate=xxx&endDate=xxx
+router.get("/owner/peak-hours", analyticsController.getOwnerPeakHours);
+
+// GET /api/analytics/owner/loyal-customers?facilityId=xxx
+router.get("/owner/loyal-customers", analyticsController.getOwnerLoyalCustomers);
+
+// GET /api/analytics/owner/cancellations?facilityId=xxx&startDate=xxx&endDate=xxx
+router.get("/owner/cancellations", analyticsController.getOwnerCancellations);
+
+// GET /api/analytics/owner/today-schedule?facilityId=xxx
+router.get("/owner/today-schedule", analyticsController.getOwnerTodaySchedule);
+
 export default router;

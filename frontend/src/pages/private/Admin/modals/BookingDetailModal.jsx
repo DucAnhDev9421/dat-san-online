@@ -76,9 +76,21 @@ const BookingDetailModal = ({ isOpen, onClose, booking }) => {
       bg: "#e6effe", color: "#4338ca",
       icon: <Clock5 size={14} />, label: "Chờ xử lý",
     },
+    pending_payment: {
+      bg: "#fef3c7", color: "#d97706",
+      icon: <Clock5 size={14} />, label: "Chờ thanh toán",
+    },
+    hold: {
+      bg: "#fef3c7", color: "#d97706",
+      icon: <Clock5 size={14} />, label: "Đang giữ chỗ",
+    },
     confirmed: {
       bg: "#e6f9f0", color: "#059669",
       icon: <CheckCircle2 size={14} />, label: "Đã xác nhận",
+    },
+    expired: {
+      bg: "#fee2e2", color: "#dc2626",
+      icon: <XCircle size={14} />, label: "Hết hạn",
     },
     cancelled: {
       bg: "#fee2e2", color: "#ef4444",
@@ -242,7 +254,34 @@ const BookingDetailModal = ({ isOpen, onClose, booking }) => {
             </div>
           </div>
           
-          {/* Card 4: Ghi chú */}
+          {/* Card 4: Thông tin hủy đơn - Hiển thị khi booking đã bị hủy */}
+          {(booking.status === "cancelled" || booking.status === "expired") && (booking.cancellationReason || booking.cancelledAt) && (
+            <div style={{ background: "#fef2f2", border: "2px solid #fee2e2", borderRadius: 10, marginBottom: 16, overflow: "hidden" }}>
+              <CardHeader Icon={XCircle} title="Thông tin hủy đơn" />
+              <div style={{ padding: 20 }}>
+                {booking.cancelledAt && (
+                  <DetailRow 
+                    label="Thời gian hủy" 
+                    value={new Date(booking.cancelledAt).toLocaleString('vi-VN', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })} 
+                  />
+                )}
+                {booking.cancellationReason && (
+                  <DetailRow 
+                    label="Lý do hủy" 
+                    value={booking.cancellationReason || "Không có lý do"} 
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Card 5: Ghi chú */}
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 16, overflow: "hidden" }}>
             <CardHeader Icon={ClipboardList} title="Ghi chú" />
             <div style={{ padding: 20 }}>
