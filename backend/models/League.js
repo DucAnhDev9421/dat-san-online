@@ -27,6 +27,12 @@ const leagueSchema = new mongoose.Schema(
       required: [true, "Môn thể thao là bắt buộc"],
       trim: true,
     },
+    // Loại sân được chọn (tham chiếu đến CourtType)
+    courtType: {
+      type: Schema.Types.ObjectId,
+      ref: "CourtType",
+      default: null,
+    },
     // Tên người tạo (có thể lưu để hiển thị nhanh)
     creatorName: {
       type: String,
@@ -247,6 +253,12 @@ const leagueSchema = new mongoose.Schema(
         hasBye: {
           type: Boolean,
           default: false,
+        },
+        // Sân được đặt cho trận đấu
+        courtId: {
+          type: Schema.Types.ObjectId,
+          ref: "Court",
+          default: null,
         },
       },
     ],

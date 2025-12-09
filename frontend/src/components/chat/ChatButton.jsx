@@ -28,7 +28,7 @@ const ChatButton = () => {
   const messagesEndRef = useRef(null);
   const { user } = useAuth();
   const { userLocation } = useUserLocation();
-  
+
   // Booking flow state
   const [bookingStep, setBookingStep] = useState(null); // 'sport' | 'courtType' | 'date' | 'timeSlots' | 'search' | 'suggest' | 'priceRange' | 'radius'
   const [flowType, setFlowType] = useState(null); // 'booking' | 'suggest'
@@ -41,7 +41,7 @@ const ChatButton = () => {
   const [dynamicQuickReplies, setDynamicQuickReplies] = useState([]);
   const [sportCategories, setSportCategories] = useState([]);
   const [courtTypes, setCourtTypes] = useState([]);
-  
+
   // Hide chat button on auth pages, admin pages, owner pages, and chat page
   const authPages = ['/login', '/register', '/verify-otp', '/forgot-password', '/reset-password', '/auth/callback', '/auth/error'];
   const isAuthPage = authPages.some(path => location.pathname.startsWith(path));
@@ -55,7 +55,7 @@ const ChatButton = () => {
       setMessages([{
         id: Date.now(),
         role: 'bot',
-        content: 'Xin chào! 👋 Tôi là AI Assistant. Tôi có thể giúp bạn:\n\n• Tìm các cơ sở gần nhất 📍\n• Gợi ý sân giá rẻ 💰\n• Hỗ trợ đặt sân ⚽\n\nBạn cần hỗ trợ gì hôm nay?',
+        content: 'Chào bạn! Chào mừng bạn đến với hệ thống đặt sân thể thao.\n\nTôi có thể giúp bạn tìm kiếm sân, kiểm tra lịch trống hoặc đặt sân ngay bây giờ không?',
         timestamp: new Date()
       }]);
       // Reset booking flow
@@ -163,7 +163,7 @@ const ChatButton = () => {
       // Start booking flow
       setFlowType('booking');
       setBookingStep('sport');
-      
+
       // Load sport categories
       try {
         const response = await aiApi.getBookingData();
@@ -175,7 +175,7 @@ const ChatButton = () => {
             data: { type: 'sport', id: cat.id, name: cat.name }
           }));
           setDynamicQuickReplies(quickReplies);
-          
+
           // Add bot message
           const botMessage = {
             id: Date.now(),
@@ -196,7 +196,7 @@ const ChatButton = () => {
     if (bookingStep === 'sport' && data && data.type === 'sport') {
       setSelectedSport(data);
       setBookingStep('courtType');
-      
+
       // Load court types for selected sport
       try {
         const response = await aiApi.getBookingData(data.id);
@@ -208,7 +208,7 @@ const ChatButton = () => {
             data: { type: 'courtType', id: ct.id, name: ct.name }
           }));
           setDynamicQuickReplies(quickReplies);
-          
+
           // Add user and bot messages
           const userMsg = {
             id: Date.now(),
@@ -234,20 +234,20 @@ const ChatButton = () => {
     if (bookingStep === 'courtType' && data && data.type === 'courtType') {
       setSelectedCourtType(data);
       setBookingStep('date');
-      
+
       // Generate date options (today, tomorrow, and next 6 days)
       const dateOptions = [];
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       const dayNames = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-      
+
       for (let i = 0; i < 7; i++) {
         const date = new Date(today);
         date.setDate(today.getDate() + i);
         const dayName = dayNames[date.getDay()];
         const dateStr = date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-        
+
         let label = '';
         if (i === 0) {
           label = `Hôm nay (${dateStr})`;
@@ -256,20 +256,20 @@ const ChatButton = () => {
         } else {
           label = `${dayName} (${dateStr})`;
         }
-        
+
         dateOptions.push({
           text: label,
           message: label,
-          data: { 
-            type: 'date', 
+          data: {
+            type: 'date',
             date: date.toISOString().split('T')[0],
             dateObj: date
           }
         });
       }
-      
+
       setDynamicQuickReplies(dateOptions);
-      
+
       // Add user and bot messages
       const userMsg = {
         id: Date.now(),
@@ -291,7 +291,7 @@ const ChatButton = () => {
     if (bookingStep === 'date' && data && data.type === 'date') {
       setSelectedDate(data.dateObj);
       setBookingStep('timeSlots');
-      
+
       // Generate time slot options
       const timeSlots = [];
       for (let hour = 6; hour <= 22; hour++) {
@@ -304,14 +304,14 @@ const ChatButton = () => {
         });
       }
       setDynamicQuickReplies(timeSlots);
-      
+
       // Format date for display
-      const dateDisplay = data.dateObj.toLocaleDateString('vi-VN', { 
-        weekday: 'long', 
-        day: 'numeric', 
-        month: 'numeric' 
+      const dateDisplay = data.dateObj.toLocaleDateString('vi-VN', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'numeric'
       });
-      
+
       // Add user and bot messages
       const userMsg = {
         id: Date.now(),
@@ -338,7 +338,7 @@ const ChatButton = () => {
         const newSlots = exists
           ? prev.filter(s => s !== data.slot)
           : [...prev, data.slot];
-        
+
         // Update quick replies to show search button if slots selected
         if (newSlots.length > 0) {
           const timeSlots = [];
@@ -367,10 +367,10 @@ const ChatButton = () => {
           }
           setDynamicQuickReplies(timeSlots);
         }
-        
+
         return newSlots;
       });
-      
+
       // Don't add user message - just visual feedback via selected state
       return;
     }
@@ -392,7 +392,7 @@ const ChatButton = () => {
       setBookingStep('search');
       setIsTyping(true);
       setIsLoading(true);
-      
+
       // Add user message showing selected time slots
       const userMsg = {
         id: Date.now(),
@@ -401,7 +401,7 @@ const ChatButton = () => {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, userMsg]);
-      
+
       try {
         const location = userLocation ? {
           lat: userLocation.latitude,
@@ -423,18 +423,18 @@ const ChatButton = () => {
         });
 
         if (response.success) {
-          
+
           const facilities = response.data.facilities || [];
           const botMsg = {
             id: Date.now() + 1,
             role: 'bot',
-            content: facilities.length > 0 
+            content: facilities.length > 0
               ? `Tôi tìm thấy ${facilities.length} cơ sở phù hợp với yêu cầu của bạn:`
               : 'Không tìm thấy cơ sở nào phù hợp. Vui lòng thử lại với khung giờ khác.',
             facilities: facilities,
             timestamp: new Date()
           };
-          
+
           setMessages(prev => [...prev, userMsg, botMsg]);
           setBookingStep(null);
           setFlowType(null);
@@ -468,7 +468,7 @@ const ChatButton = () => {
       // Start suggest flow
       setFlowType('suggest');
       setBookingStep('sport');
-      
+
       // Load sport categories
       try {
         const response = await aiApi.getBookingData();
@@ -480,7 +480,7 @@ const ChatButton = () => {
             data: { type: 'sport', id: cat.id, name: cat.name }
           }));
           setDynamicQuickReplies(quickReplies);
-          
+
           // Add bot message
           const botMessage = {
             id: Date.now(),
@@ -501,7 +501,7 @@ const ChatButton = () => {
     if (bookingStep === 'sport' && data && data.type === 'sport') {
       setSelectedSport(data);
       setBookingStep('priceRange');
-      
+
       // Price range options
       const priceRanges = [
         { text: 'Dưới 100k/giờ', min: 0, max: 100000 },
@@ -511,14 +511,14 @@ const ChatButton = () => {
         { text: 'Trên 500k/giờ', min: 500000, max: null },
         { text: 'Không quan tâm', min: null, max: null }
       ];
-      
+
       const quickReplies = priceRanges.map(pr => ({
         text: pr.text,
         message: pr.text,
         data: { type: 'priceRange', min: pr.min, max: pr.max, text: pr.text }
       }));
       setDynamicQuickReplies(quickReplies);
-      
+
       // Add user and bot messages
       const userMsg = {
         id: Date.now(),
@@ -541,7 +541,7 @@ const ChatButton = () => {
     if (bookingStep === 'priceRange' && data && data.type === 'priceRange') {
       setSelectedPriceRange(data);
       setBookingStep('radius');
-      
+
       // Radius options (in km)
       const radiusOptions = [
         { text: '1 km', value: 1 },
@@ -551,14 +551,14 @@ const ChatButton = () => {
         { text: '15 km', value: 15 },
         { text: 'Không giới hạn', value: null }
       ];
-      
+
       const quickReplies = radiusOptions.map(r => ({
         text: r.text,
         message: r.text,
         data: { type: 'radius', value: r.value, text: r.text }
       }));
       setDynamicQuickReplies(quickReplies);
-      
+
       // Add user and bot messages
       const userMsg = {
         id: Date.now(),
@@ -581,7 +581,7 @@ const ChatButton = () => {
     if (bookingStep === 'radius' && data && data.type === 'radius') {
       setSelectedRadius(data);
       setBookingStep('timeSlots');
-      
+
       // Generate time slot options
       const timeSlots = [];
       for (let hour = 6; hour <= 22; hour++) {
@@ -594,7 +594,7 @@ const ChatButton = () => {
         });
       }
       setDynamicQuickReplies(timeSlots);
-      
+
       // Add user and bot messages
       const userMsg = {
         id: Date.now(),
@@ -622,7 +622,7 @@ const ChatButton = () => {
         const newSlots = exists
           ? prev.filter(s => s !== data.slot)
           : [...prev, data.slot];
-        
+
         // Update quick replies to show search button if slots selected
         if (newSlots.length > 0) {
           const timeSlots = [];
@@ -651,10 +651,10 @@ const ChatButton = () => {
           }
           setDynamicQuickReplies(timeSlots);
         }
-        
+
         return newSlots;
       });
-      
+
       // Don't add user message - just visual feedback via selected state
       return;
     }
@@ -677,14 +677,14 @@ const ChatButton = () => {
       setBookingStep('search');
       setIsTyping(true);
       setIsLoading(true);
-      
+
       // Add user message showing selected criteria
       const criteria = [];
       if (selectedSport) criteria.push(`Môn: ${selectedSport.name}`);
       if (selectedPriceRange) criteria.push(`Giá: ${selectedPriceRange.text}`);
       if (selectedRadius) criteria.push(`Bán kính: ${selectedRadius.text}`);
       if (selectedTimeSlots.length > 0) criteria.push(`Giờ: ${selectedTimeSlots.join(', ')}`);
-      
+
       const userMsg = {
         id: Date.now(),
         role: 'user',
@@ -692,7 +692,7 @@ const ChatButton = () => {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, userMsg]);
-      
+
       try {
         const location = userLocation ? {
           lat: userLocation.latitude,
@@ -717,13 +717,13 @@ const ChatButton = () => {
           const botMsg = {
             id: Date.now() + 1,
             role: 'bot',
-            content: facilities.length > 0 
+            content: facilities.length > 0
               ? `Tôi tìm thấy ${facilities.length} cơ sở phù hợp với yêu cầu của bạn:`
               : 'Không tìm thấy cơ sở nào phù hợp. Vui lòng thử lại với tiêu chí khác.',
             facilities: facilities,
             timestamp: new Date()
           };
-          
+
           setMessages(prev => [...prev, botMsg]);
           setBookingStep(null);
           setFlowType(null);
@@ -753,20 +753,20 @@ const ChatButton = () => {
   const shouldShowQuickReplies = () => {
     if (messages.length === 0) return false;
     if (isTyping || isLoading) return false;
-    
+
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage || lastMessage.role !== 'bot') return false;
-    
+
     // Show dynamic quick replies if in booking/suggest flow
     if (dynamicQuickReplies.length > 0 && bookingStep) {
       return true;
     }
-    
+
     // Show static quick replies if not in any flow (user hasn't selected a Quick Reply yet)
     if (!bookingStep) {
       return true;
     }
-    
+
     return false;
   };
 
@@ -786,23 +786,23 @@ const ChatButton = () => {
   return (
     <>
       {/* Chat Button */}
-      <button 
+      <button
         className={`chat-button ${isOpen ? 'active' : ''}`}
         onClick={toggleChat}
         title="Chat với AI Assistant"
       >
-        <svg 
-          className="chat-icon" 
-          viewBox="0 0 24 24" 
-          fill="none" 
+        <svg
+          className="chat-icon"
+          viewBox="0 0 24 24"
+          fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <path 
-            d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM20 16H5.17L4 17.17V4H20V16Z" 
+          <path
+            d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM20 16H5.17L4 17.17V4H20V16Z"
             fill="currentColor"
           />
-          <path 
-            d="M7 9H17V11H7V9ZM7 12H15V14H7V12Z" 
+          <path
+            d="M7 9H17V11H7V9ZM7 12H15V14H7V12Z"
             fill="currentColor"
           />
         </svg>
@@ -810,7 +810,7 @@ const ChatButton = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <div 
+        <div
           className="chat-window"
           style={isMobile ? {
             width: 'calc(100vw - 40px)',
@@ -832,11 +832,11 @@ const ChatButton = () => {
             </div>
             <button className="close-button" onClick={toggleChat}>
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z" fill="currentColor"/>
+                <path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z" fill="currentColor" />
               </svg>
             </button>
           </div>
-          
+
           <div className="chat-messages">
             {messages.map((message) => (
               <React.Fragment key={message.id}>
@@ -849,9 +849,9 @@ const ChatButton = () => {
                   <div className="message-content">
                     <p style={{ whiteSpace: 'pre-wrap' }}>{message.content}</p>
                     <span className="message-time">
-                      {new Date(message.timestamp).toLocaleTimeString('vi-VN', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
+                      {new Date(message.timestamp).toLocaleTimeString('vi-VN', {
+                        hour: '2-digit',
+                        minute: '2-digit'
                       })}
                     </span>
                   </div>
@@ -862,8 +862,8 @@ const ChatButton = () => {
                     <div className="chat-results-title">Cơ sở tìm thấy:</div>
                     <div className="chat-facilities-list">
                       {message.facilities.map((facility) => (
-                        <FacilityCard 
-                          key={facility.id} 
+                        <FacilityCard
+                          key={facility.id}
                           facility={facility}
                           userLocation={userLocation}
                         />
@@ -877,8 +877,8 @@ const ChatButton = () => {
                     <div className="chat-results-title">Sân tìm thấy:</div>
                     <div className="chat-facilities-list">
                       {message.courts.map((court) => (
-                        <CourtCard 
-                          key={court.id} 
+                        <CourtCard
+                          key={court.id}
                           court={court}
                           userLocation={userLocation}
                         />
@@ -888,7 +888,7 @@ const ChatButton = () => {
                 )}
               </React.Fragment>
             ))}
-            
+
             {isTyping && (
               <div className="message bot-message typing-message">
                 <div className="message-avatar">
@@ -903,7 +903,7 @@ const ChatButton = () => {
                 </div>
               </div>
             )}
-            
+
             {/* Quick Replies */}
             {shouldShowQuickReplies() && (
               <div className="chat-quick-replies">
@@ -928,27 +928,27 @@ const ChatButton = () => {
                 )}
               </div>
             )}
-            
+
             <div ref={messagesEndRef} />
           </div>
-          
+
           <form className="chat-input" onSubmit={handleSendMessage}>
             <div className="input-container">
-              <input 
-                type="text" 
-                placeholder="Nhập tin nhắn của bạn..." 
+              <input
+                type="text"
+                placeholder="Nhập tin nhắn của bạn..."
                 className="message-input"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 disabled={isLoading}
               />
-              <button 
+              <button
                 type="submit"
                 className="send-button"
                 disabled={!inputMessage.trim() || isLoading}
               >
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M2.01 21L23 12L2.01 3L2 10L17 12L2 14L2.01 21Z" fill="currentColor"/>
+                  <path d="M2.01 21L23 12L2.01 3L2 10L17 12L2 14L2.01 21Z" fill="currentColor" />
                 </svg>
               </button>
             </div>

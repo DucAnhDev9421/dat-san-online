@@ -59,6 +59,8 @@ const auditLogSchema = new mongoose.Schema(
         "DELETE_TEAM_LOGO",
         "DRAW_MATCHES",
         "UPDATE_MATCH_SCHEDULE",
+        "AUTO_SCHEDULE",
+        "CONFIRM_SCHEDULE",
         "UPDATE_MATCH_RESULT",
         "IMPORT_SCHEDULE",
         "APPROVE_LEAGUE",

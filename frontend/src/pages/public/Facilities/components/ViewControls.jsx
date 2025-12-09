@@ -2,16 +2,17 @@ import React from 'react'
 import { FiGrid, FiList, FiNavigation, FiTag, FiStar } from 'react-icons/fi'
 import '../../../../styles/Facilities.css'
 
-export default function ViewControls({ 
-  quick, 
-  view, 
-  onQuickChange, 
+export default function ViewControls({
+  quick,
+  view,
+  onQuickChange,
   onViewChange,
   filterNearby,
   onToggleNearby,
   maxDistance,
   onMaxDistanceChange,
-  userLocation
+  userLocation,
+  isMobile
 }) {
   const QuickButton = ({ value, label, icon: Icon }) => (
     <button
@@ -73,20 +74,22 @@ export default function ViewControls({
           <QuickButton value="cheap" label="Giá tốt" icon={FiTag} />
           <QuickButton value="top" label="Đánh giá cao" icon={FiStar} />
         </div>
-        <div className="view-toggle-group">
-          <button 
-            onClick={() => onViewChange("grid")}
-            className={`view-toggle-btn ${view === "grid" ? 'active' : ''}`}
-          >
-            <FiGrid />
-          </button>
-          <button 
-            onClick={() => onViewChange("list")}
-            className={`view-toggle-btn ${view === "list" ? 'active' : ''}`}
-          >
-            <FiList />
-          </button>
-        </div>
+        {!isMobile && (
+          <div className="view-toggle-group">
+            <button
+              onClick={() => onViewChange("grid")}
+              className={`view-toggle-btn ${view === "grid" ? 'active' : ''}`}
+            >
+              <FiGrid />
+            </button>
+            <button
+              onClick={() => onViewChange("list")}
+              className={`view-toggle-btn ${view === "list" ? 'active' : ''}`}
+            >
+              <FiList />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

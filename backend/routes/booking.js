@@ -198,9 +198,25 @@ router.get("/availability", async (req, res, next) => {
 
     // Get existing bookings for this date (exclude expired)
     const now = new Date();
+    
+    // Tạo date range để query (từ 00:00:00 đến 23:59:59 của ngày)
+    // Sử dụng range rộng hơn để tránh vấn đề timezone
+    const startOfDay = new Date(bookingDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    // Trừ 12 giờ để cover timezone (UTC+7)
+    startOfDay.setTime(startOfDay.getTime() - 12 * 60 * 60 * 1000);
+    
+    const endOfDay = new Date(bookingDate);
+    endOfDay.setHours(23, 59, 59, 999);
+    // Cộng 12 giờ để cover timezone
+    endOfDay.setTime(endOfDay.getTime() + 12 * 60 * 60 * 1000);
+    
     const existingBookings = await Booking.find({
       court: courtId,
-      date: bookingDate,
+      date: {
+        $gte: startOfDay,
+        $lte: endOfDay
+      },
       status: { $in: ["pending_payment", "hold", "confirmed"] },
       // Exclude expired bookings
       $or: [
@@ -208,6 +224,26 @@ router.get("/availability", async (req, res, next) => {
         { holdUntil: { $gt: now } },
         { status: "confirmed" }, // Confirmed bookings don't expire
       ],
+    });
+    
+    console.log(`[BOOKING_AVAILABILITY] Kiểm tra sân ${courtId} ngày ${bookingDate.toISOString().split('T')[0]}:`, {
+      queryDateRange: {
+        start: startOfDay.toISOString(),
+        end: endOfDay.toISOString(),
+        bookingDate: bookingDate.toISOString()
+      },
+      foundBookings: existingBookings.length,
+      bookings: existingBookings.map(b => ({
+        id: b._id,
+        status: b.status,
+        date: b.date,
+        dateISO: b.date?.toISOString(),
+        timeSlots: b.timeSlots,
+        league: b.league,
+        matchInfo: b.matchInfo,
+        holdUntil: b.holdUntil,
+        court: b.court
+      }))
     });
 
     // Generate time slots based on operating hours
@@ -237,10 +273,58 @@ router.get("/availability", async (req, res, next) => {
       ).padStart(2, "0")}`;
       const slotString = `${startTime}-${endTime}`;
 
-      // Check if this slot is booked
-      const isBooked = existingBookings.some((booking) =>
-        booking.timeSlots.includes(slotString)
-      );
+      // Helper để chuyển time string sang phút
+      const timeToMinutes = (timeStr) => {
+        if (!timeStr) return null;
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
+
+      // Check if this slot is booked (check overlap, không chỉ exact match)
+      const slotStartMinutes = timeToMinutes(startTime);
+      const slotEndMinutes = timeToMinutes(endTime);
+      
+      const isBooked = existingBookings.some((booking) => {
+        // Check overlap với bất kỳ slot nào trong booking
+        for (const bookingSlot of booking.timeSlots || []) {
+          const [bookingSlotStart, bookingSlotEnd] = bookingSlot.split('-');
+          const bookingSlotStartMinutes = timeToMinutes(bookingSlotStart);
+          const bookingSlotEndMinutes = timeToMinutes(bookingSlotEnd);
+          
+          if (slotStartMinutes !== null && slotEndMinutes !== null &&
+              bookingSlotStartMinutes !== null && bookingSlotEndMinutes !== null) {
+            // Check overlap: không overlap nếu slot kết thúc trước booking bắt đầu HOẶC slot bắt đầu sau booking kết thúc
+            const hasOverlap = !(slotEndMinutes <= bookingSlotStartMinutes || slotStartMinutes >= bookingSlotEndMinutes);
+            if (hasOverlap) {
+              return true; // Có overlap, slot bị block
+            }
+          }
+        }
+        return false;
+      });
+      
+      if (isBooked) {
+        const blockingBooking = existingBookings.find(b => {
+          for (const bookingSlot of b.timeSlots || []) {
+            const [bookingSlotStart, bookingSlotEnd] = bookingSlot.split('-');
+            const bookingSlotStartMinutes = timeToMinutes(bookingSlotStart);
+            const bookingSlotEndMinutes = timeToMinutes(bookingSlotEnd);
+            
+            if (slotStartMinutes !== null && slotEndMinutes !== null &&
+                bookingSlotStartMinutes !== null && bookingSlotEndMinutes !== null) {
+              const hasOverlap = !(slotEndMinutes <= bookingSlotStartMinutes || slotStartMinutes >= bookingSlotEndMinutes);
+              if (hasOverlap) return true;
+            }
+          }
+          return false;
+        });
+        console.log(`[BOOKING_AVAILABILITY] Slot ${slotString} bị block bởi booking ${blockingBooking?._id}:`, {
+          status: blockingBooking?.status,
+          league: blockingBooking?.league,
+          matchInfo: blockingBooking?.matchInfo,
+          bookingTimeSlots: blockingBooking?.timeSlots
+        });
+      }
 
       allSlots.push({
         time: startTime,

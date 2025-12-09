@@ -12,11 +12,13 @@ const sports = [
   { id: 'pickleball', name: 'Pickleball', value: 'Pickleball' }
 ]
 
-export default function VenuesSection({ 
-  id, 
-  title, 
-  venues, 
-  loading, 
+import Slider from '../../../../components/ui/Slider'
+
+export default function VenuesSection({
+  id,
+  title,
+  venues,
+  loading,
   onBookVenue,
   userLocation
 }) {
@@ -28,16 +30,18 @@ export default function VenuesSection({
     }
     const sportFilter = sports.find(s => s.id === selectedSport)
     if (!sportFilter) return venues
-    
+
     return venues.filter(venue => {
       // Check if venue facilities include the selected sport
       const facilities = venue.facilities || []
-      return facilities.some(facility => 
+      return facilities.some(facility =>
         facility.toLowerCase().includes(sportFilter.value.toLowerCase()) ||
         sportFilter.value.toLowerCase().includes(facility.toLowerCase())
       )
     })
   }, [venues, selectedSport])
+
+  const cardStyle = { flex: '0 0 300px', width: '300px' }
 
   return (
     <section id={id} className="venues-section">
@@ -46,21 +50,21 @@ export default function VenuesSection({
           <div>
             <h3>{title}</h3>
             {id === 'featured' && (
-              <p style={{ 
-                fontSize: '14px', 
-                color: '#6b7280', 
-                fontWeight: '400', 
-                margin: '4px 0 0 0' 
+              <p style={{
+                fontSize: '14px',
+                color: '#6b7280',
+                fontWeight: '400',
+                margin: '4px 0 0 0'
               }}>
                 Sân tập tốt nhất được lựa chọn
               </p>
             )}
             {id === 'recent' && (
-              <p style={{ 
-                fontSize: '14px', 
-                color: '#6b7280', 
-                fontWeight: '400', 
-                margin: '4px 0 0 0' 
+              <p style={{
+                fontSize: '14px',
+                color: '#6b7280',
+                fontWeight: '400',
+                margin: '4px 0 0 0'
               }}>
                 Khu vực được đề xuất gần vị trí của bạn
               </p>
@@ -86,32 +90,35 @@ export default function VenuesSection({
           </div>
         </div>
         {loading ? (
-          <div className="venues-grid">
+          <Slider itemWidth={300} gap={16}>
             {[...Array(id === 'featured' ? 4 : 8)].map((_, i) => (
-              <SkeletonVenueCard key={i} />
+              <div key={i} style={cardStyle}>
+                <SkeletonVenueCard />
+              </div>
             ))}
-          </div>
+          </Slider>
         ) : filteredVenues.length > 0 ? (
-          <div className="venues-grid">
+          <Slider itemWidth={300} gap={16}>
             {filteredVenues.map((venue) => (
-              <VenueCard
-                key={venue.id}
-                venueId={venue.id}
-                image={venue.image || venue.images?.[0] || venue.imageUrl}
-                name={venue.name}
-                address={venue.address}
-                rating={venue.rating || venue.averageRating}
-                totalReviews={venue.totalReviews || 0}
-                open={venue.operatingHours || venue.hours}
-                price={venue.price || venue.pricePerHour}
-                chip={venue.facilities?.[0] || venue.sportCategory}
-                services={venue.services || []}
-                onBook={() => onBookVenue(venue.id)}
-                userLocation={userLocation}
-                facilityLocation={venue.location}
-              />
+              <div key={venue.id} style={cardStyle}>
+                <VenueCard
+                  venueId={venue.id}
+                  image={venue.image || venue.images?.[0] || venue.imageUrl}
+                  name={venue.name}
+                  address={venue.address}
+                  rating={venue.rating ?? venue.averageRating ?? 0}
+                  totalReviews={venue.totalReviews || 0}
+                  open={venue.operatingHours || venue.hours}
+                  price={venue.price || venue.pricePerHour}
+                  chip={venue.facilities?.[0] || venue.sportCategory}
+                  services={venue.services || []}
+                  onBook={() => onBookVenue(venue.id)}
+                  userLocation={userLocation}
+                  facilityLocation={venue.location}
+                />
+              </div>
             ))}
-          </div>
+          </Slider>
         ) : (
           <div className="no-venues-message">
             <p>Không tìm thấy sân thể thao nào cho môn này.</p>

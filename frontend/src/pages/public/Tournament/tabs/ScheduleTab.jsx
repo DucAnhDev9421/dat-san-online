@@ -43,8 +43,8 @@ const ScheduleTab = ({ tournament }) => {
   // Helper: Tìm team từ tournament.teams dựa trên teamId
   const findTeamById = (teamId) => {
     if (!teamId || teamId === "BYE") return null
-    return tournament.teams?.find(t => 
-      (t.id === teamId) || 
+    return tournament.teams?.find(t =>
+      (t.id === teamId) ||
       (t._id?.toString() === teamId?.toString())
     ) || null
   }
@@ -52,16 +52,16 @@ const ScheduleTab = ({ tournament }) => {
   // Helper: Lấy stage trước đó dựa trên matches thực tế
   const getPreviousStage = (currentStage) => {
     if (!tournament?.matches) return null
-    
+
     // Lấy tất cả các stage có matches (single-elimination)
     const allStages = [...new Set(
       tournament.matches
         .filter(m => m.stage && !m.stage.startsWith('round-robin'))
         .map(m => m.stage)
     )]
-    
+
     if (allStages.length === 0) return null
-    
+
     // Sắp xếp các stage theo thứ tự
     const stageOrder = ['round1', 'round2', 'round3', 'round4', 'semi', 'final']
     const sortedStages = allStages.sort((a, b) => {
@@ -69,36 +69,36 @@ const ScheduleTab = ({ tournament }) => {
       const indexB = stageOrder.indexOf(b)
       return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB)
     })
-    
+
     // Tìm index của currentStage trong sortedStages
     const currentIndex = sortedStages.indexOf(currentStage)
     if (currentIndex > 0) {
       return sortedStages[currentIndex - 1]
     }
-    
+
     return null
   }
 
   // Helper: Tính toán matchNumber và stage của match trước đó
   const getPreviousMatchInfo = (currentMatch, isTeam1) => {
     if (!currentMatch) return null
-    
+
     const currentStage = currentMatch.stage
     const currentMatchNumber = currentMatch.matchNumber || 1
     const previousStage = getPreviousStage(currentStage)
-    
+
     if (!previousStage) return null
-    
+
     // Tính matchNumber ở vòng trước:
     // Match 1, 2 ở vòng trước -> Match 1 ở vòng hiện tại (team1 từ match 1, team2 từ match 2)
     // Match 3, 4 ở vòng trước -> Match 2 ở vòng hiện tại (team1 từ match 3, team2 từ match 4)
     // Công thức: 
     // - team1: matchNumber = (currentMatchNumber - 1) * 2 + 1
     // - team2: matchNumber = (currentMatchNumber - 1) * 2 + 2
-    const previousMatchNumber = isTeam1 
+    const previousMatchNumber = isTeam1
       ? (currentMatchNumber - 1) * 2 + 1
       : (currentMatchNumber - 1) * 2 + 2
-    
+
     return {
       stage: previousStage,
       matchNumber: previousMatchNumber,
@@ -112,7 +112,7 @@ const ScheduleTab = ({ tournament }) => {
     if (teamId === "BYE") {
       return "BYE"
     }
-    
+
     // Nếu teamId là null/undefined, hiển thị W#matchNumber tên_vòng
     if (!teamId && match) {
       const prevMatchInfo = getPreviousMatchInfo(match, isTeam1)
@@ -130,6 +130,16 @@ const ScheduleTab = ({ tournament }) => {
 
     // Fallback: hiển thị ID
     return `Đội #${teamId}`
+  }
+
+  // Helper: Lấy tên sân từ match
+  const getCourtName = (match) => {
+    if (!match?.courtId) return null
+    // courtId có thể là object (đã populate) hoặc string (chưa populate)
+    if (typeof match.courtId === 'object') {
+      return match.courtId.name || null
+    }
+    return null
   }
 
   // Tính toán rounds cho Single-Elimination: CHỈ nhóm matches từ API, KHÔNG tính toán
@@ -156,11 +166,11 @@ const ScheduleTab = ({ tournament }) => {
     // Nhóm matches theo stage
     const matchesByStage = {}
     singleEliminationMatches.forEach(match => {
-        if (!matchesByStage[match.stage]) {
-          matchesByStage[match.stage] = []
-        }
-        matchesByStage[match.stage].push(match)
-      })
+      if (!matchesByStage[match.stage]) {
+        matchesByStage[match.stage] = []
+      }
+      matchesByStage[match.stage].push(match)
+    })
 
     // Sắp xếp các stage theo thứ tự: round1, round2, round3, round4, semi, final
     const stageOrder = ['round1', 'round2', 'round3', 'round4', 'semi', 'final']
@@ -188,27 +198,28 @@ const ScheduleTab = ({ tournament }) => {
 
           return {
             id: match.matchNumber || match.id || `${stage}_${match.matchNumber}`,
-            date: match.date 
+            date: match.date
               ? new Date(match.date).toLocaleDateString('vi-VN', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric'
-                })
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+              })
               : new Date().toLocaleDateString('vi-VN', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric'
-            }),
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+              }),
+            courtName: getCourtName(match),
             teams: [
-              { 
-                name: team1Name, 
+              {
+                name: team1Name,
                 score: match.score1 ?? null,
-                teamId: match.team1Id 
+                teamId: match.team1Id
               },
-              { 
-                name: team2Name, 
+              {
+                name: team2Name,
                 score: match.score2 ?? null,
-                teamId: match.team2Id 
+                teamId: match.team2Id
               }
             ],
             _match: match
@@ -220,24 +231,24 @@ const ScheduleTab = ({ tournament }) => {
         seeds: seeds
       }
     })
-    
+
     return calculatedRounds
   }, [tournament, isRoundRobin])
 
   // Tính toán rounds cho Round-Robin: CHỈ nhóm matches từ API
   const roundRobinRounds = useMemo(() => {
     if (!isRoundRobin) return []
-    
+
     // Nếu không có matches, trả về mảng rỗng
     if (!tournament?.matches || tournament.matches.length === 0) {
       return []
     }
 
     // Lọc tất cả matches round-robin (bao gồm round-robin, round-robin-round1, round-robin-round2, ...)
-    const roundRobinMatches = tournament.matches.filter(m => 
+    const roundRobinMatches = tournament.matches.filter(m =>
       m.stage === 'round-robin' || (m.stage && m.stage.startsWith('round-robin'))
     )
-      
+
     if (roundRobinMatches.length === 0) {
       return []
     }
@@ -277,10 +288,10 @@ const ScheduleTab = ({ tournament }) => {
         }
         return { round: 1, v: 0 }
       }
-      
+
       const aParsed = parseStage(a)
       const bParsed = parseStage(b)
-      
+
       if (aParsed.round !== bParsed.round) {
         return aParsed.round - bParsed.round
       }
@@ -290,14 +301,14 @@ const ScheduleTab = ({ tournament }) => {
     // Tạo danh sách rounds đơn giản, đánh số liên tục từ 1
     const rounds = []
     let roundCounter = 1
-    
+
     sortedStages.forEach(stage => {
       const stageMatches = matchesByStage[stage]
         .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
         .map(match => {
           const team1 = findTeamById(match.team1Id)
           const team2 = findTeamById(match.team2Id)
-              
+
           return {
             id: match.matchNumber || match.id,
             team1: team1 || { id: match.team1Id, teamNumber: getTeamDisplayName(match.team1Id, match, true) },
@@ -306,19 +317,20 @@ const ScheduleTab = ({ tournament }) => {
             score2: match.score2 ?? 0,
             matchNumber: match.matchNumber || match.id,
             date: match.date,
-            time: match.time
+            time: match.time,
+            courtName: getCourtName(match)
           }
         })
-      
+
       rounds.push({
         id: roundCounter,
         title: `VÒNG ${roundCounter}`,
         matches: stageMatches
       })
-      
+
       roundCounter++
     })
-    
+
     return rounds
   }, [tournament, isRoundRobin])
 
@@ -333,7 +345,7 @@ const ScheduleTab = ({ tournament }) => {
     // Lưu ý: seed.teams có thể chưa có nếu data không chuẩn, cần optional chaining
     const team1Name = seed.teams?.[0]?.name;
     const team2Name = seed.teams?.[1]?.name;
-    
+
     // Kiểm tra xem có phải là trận đấu thủ tục (Bye) hay không
     // Logic: Nếu tên đội là "BYE" hoặc teamId là "BYE"
     const isTeam1Bye = team1Name === 'BYE' || seed.teams?.[0]?.teamId === 'BYE';
@@ -354,12 +366,12 @@ const ScheduleTab = ({ tournament }) => {
       <div className="schedule-section">
         <div className="section-card">
           <h2>Lịch thi đấu - Vòng tròn</h2>
-          
+
           {/* Round Selector */}
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '12px', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
             marginTop: '24px',
             marginBottom: '24px',
             flexWrap: 'wrap'
@@ -427,7 +439,7 @@ const ScheduleTab = ({ tournament }) => {
                 }}>
                   {round.title}
                 </div>
-                
+
                 {/* Danh sách trận đấu */}
                 <div style={{
                   border: '1px solid #e5e7eb',
@@ -440,9 +452,9 @@ const ScheduleTab = ({ tournament }) => {
                     const team2 = match.team2
                     const hasScore = match.score1 !== undefined && match.score2 !== undefined
                     const scoreText = hasScore ? `${match.score1 || 0}-${match.score2 || 0}` : 'Chưa có lịch thi đấu'
-                    
+
                     return (
-                      <div 
+                      <div
                         key={match.id || matchIndex}
                         className="match-row-hover"
                         style={{
@@ -475,7 +487,7 @@ const ScheduleTab = ({ tournament }) => {
                         }}>
                           {match.matchNumber || matchIndex + 1}
                         </div>
-                        
+
                         {/* Phần giữa - căn giữa */}
                         <div style={{
                           display: 'flex',
@@ -486,16 +498,16 @@ const ScheduleTab = ({ tournament }) => {
                         }}>
                           {/* Đội 1 */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-                            <img 
-                              src={team1.logo || '/team.png'} 
-                              alt="Team" 
+                            <img
+                              src={team1.logo || '/team.png'}
+                              alt="Team"
                               style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
                             />
                             <span style={{ fontSize: '14px', fontWeight: '500' }}>
                               {team1.teamNumber || `Đội #${team1.id}`}
                             </span>
                           </div>
-                          
+
                           {/* Tỷ số */}
                           <div style={{
                             padding: '8px 16px',
@@ -510,21 +522,21 @@ const ScheduleTab = ({ tournament }) => {
                           }}>
                             {scoreText}
                           </div>
-                          
+
                           {/* Đội 2 */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
                             <span style={{ fontSize: '14px', fontWeight: '500' }}>
                               {team2.teamNumber || `Đội #${team2.id}`}
                             </span>
-                            <img 
-                              src={team2.logo || '/team.png'} 
-                              alt="Team" 
+                            <img
+                              src={team2.logo || '/team.png'}
+                              alt="Team"
                               style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
                             />
                           </div>
                         </div>
-                        
-                        {/* Trạng thái - cố định bên phải */}
+
+                        {/* Trạng thái và sân - cố định bên phải */}
                         <div style={{
                           fontSize: '12px',
                           color: '#6b7280',
@@ -532,9 +544,31 @@ const ScheduleTab = ({ tournament }) => {
                           flexShrink: 0,
                           minWidth: '150px',
                           position: 'absolute',
-                          right: '20px'
+                          right: '20px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                          alignItems: 'flex-end'
                         }}>
-                          Chưa có lịch thi đấu
+                          {match.courtName ? (
+                            <div style={{
+                              fontSize: '11px',
+                              color: '#10b981',
+                              fontWeight: '500'
+                            }}>
+                              {match.courtName}
+                            </div>
+                          ) : (
+                            <div>Chưa có lịch thi đấu</div>
+                          )}
+                          {match.date && match.time && (
+                            <div style={{ fontSize: '11px' }}>
+                              {new Date(match.date).toLocaleDateString('vi-VN', {
+                                day: '2-digit',
+                                month: '2-digit'
+                              })} {match.time}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
@@ -558,12 +592,12 @@ const ScheduleTab = ({ tournament }) => {
             Chưa có lịch đấu. Vui lòng bốc thăm để tạo lịch đấu.
           </div>
         ) : (
-        <div className="bracket-container">
-          <Bracket
-            rounds={rounds}
-            renderSeedComponent={(props) => {
+          <div className="bracket-container">
+            <Bracket
+              rounds={rounds}
+              renderSeedComponent={(props) => {
                 const status = checkMatchStatus(props.seed);
-                
+
                 // Kiểm tra xem có cần ẩn không (Double Bye hoặc Single Bye)
                 // Nếu là EMPTY (Cả 2 là Bye) -> Có thể return null nếu muốn xóa hẳn nhánh
                 // Nhưng nếu là BYE (1 đội đấu với Bye) -> BẮT BUỘC PHẢI GIỮ KHUNG (dùng visibility hidden)
@@ -578,23 +612,23 @@ const ScheduleTab = ({ tournament }) => {
                 const team2Data = getTeamDataFromId(team2Id)
                 const team1Name = props.seed.teams[0]?.name || 'TBD'
                 const team2Name = props.seed.teams[1]?.name || 'TBD'
-                
+
                 // Logic hiển thị màu sắc (copy từ code cũ)
                 const isTeam1Bye = team1Id === "BYE"
                 const isTeam2Bye = team2Id === "BYE"
                 const hasBye = isTeam1Bye || isTeam2Bye
-              
-              return (
-                  <Seed 
-                    {...props} 
-                    style={{ 
+
+                return (
+                  <Seed
+                    {...props}
+                    style={{
                       // QUAN TRỌNG: KHÔNG ĐƯỢC ẨN SEED, NẾU KHÔNG SẼ MẤT DÂY
                       fontSize: '12px',
-                      opacity: 1 
+                      opacity: 1
                     }}
                   >
-                    <SeedItem 
-                      style={{ 
+                    <SeedItem
+                      style={{
                         // CHỈ ẨN NỘI DUNG BÊN TRONG
                         // Dùng opacity: 0 để nó vẫn chiếm diện tích (giữ dây thẳng hàng) nhưng không nhìn thấy
                         opacity: isHidden ? 0 : 1,
@@ -609,11 +643,24 @@ const ScheduleTab = ({ tournament }) => {
                         backgroundColor: hasBye ? '#f59e0b' : '#10b981',
                         padding: '4px 8px' // Đảm bảo padding giống thật
                       }}>
-                        <div className="seed-title">
-                          {props.seed.date}
-                          {hasBye && (
-                            <span style={{ 
-                              marginLeft: '8px', 
+                        <div className="seed-title" style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          fontSize: '11px'
+                        }}>
+                          <div>{props.seed.date}</div>
+                          {props.seed.courtName && (
+                            <div style={{
+                              fontSize: '10px',
+                              opacity: 0.9,
+                              fontWeight: '500'
+                            }}>
+                              {props.seed.courtName}
+                            </div>
+                          )}
+                          {hasBye && !props.seed.courtName && (
+                            <span style={{
                               fontSize: '10px',
                               opacity: 0.9
                             }}>
@@ -622,14 +669,14 @@ const ScheduleTab = ({ tournament }) => {
                           )}
                         </div>
                       </div>
-                      
+
                       <div style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
                         {/* Team 1 - Render đầy đủ */}
-                        <SeedTeam className="seed-team" style={{ 
-                          padding: '8px', 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
-                          height: '40px', 
+                        <SeedTeam className="seed-team" style={{
+                          padding: '8px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          height: '40px',
                           alignItems: 'center',
                           backgroundColor: isTeam1Bye ? '#fef3c7' : 'white'
                         }}>
@@ -649,12 +696,12 @@ const ScheduleTab = ({ tournament }) => {
                                 fontSize: '10px'
                               }}>
                                 BYE
-                    </div>
+                              </div>
                             ) : (
-                        <img 
-                          src={team1Data?.logo || '/team.png'} 
-                          alt="Team" 
-                          className="team-logo-bracket"
+                              <img
+                                src={team1Data?.logo || '/team.png'}
+                                alt="Team"
+                                className="team-logo-bracket"
                                 style={{ width: '24px', height: '24px', objectFit: 'cover', borderRadius: '4px' }}
                               />
                             )}
@@ -668,18 +715,18 @@ const ScheduleTab = ({ tournament }) => {
                           <div className="team-score" style={{
                             color: isTeam1Bye ? '#f59e0b' : '#10b981'
                           }}>
-                            {props.seed.teams[0]?.score !== null && props.seed.teams[0]?.score !== undefined 
-                              ? props.seed.teams[0].score 
+                            {props.seed.teams[0]?.score !== null && props.seed.teams[0]?.score !== undefined
+                              ? props.seed.teams[0].score
                               : '-'}
-                      </div>
-                    </SeedTeam>
-                        
+                          </div>
+                        </SeedTeam>
+
                         {/* Team 2 - Render đầy đủ */}
-                        <SeedTeam className="seed-team" style={{ 
-                          padding: '8px', 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
-                          height: '40px', 
+                        <SeedTeam className="seed-team" style={{
+                          padding: '8px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          height: '40px',
                           alignItems: 'center',
                           backgroundColor: isTeam2Bye ? '#fef3c7' : 'white'
                         }}>
@@ -700,10 +747,10 @@ const ScheduleTab = ({ tournament }) => {
                                 BYE
                               </div>
                             ) : (
-                        <img 
-                          src={team2Data?.logo || '/team.png'} 
-                          alt="Team" 
-                          className="team-logo-bracket"
+                              <img
+                                src={team2Data?.logo || '/team.png'}
+                                alt="Team"
+                                className="team-logo-bracket"
                                 style={{ width: '24px', height: '24px', objectFit: 'cover', borderRadius: '4px' }}
                               />
                             )}
@@ -717,18 +764,18 @@ const ScheduleTab = ({ tournament }) => {
                           <div className="team-score" style={{
                             color: isTeam2Bye ? '#f59e0b' : '#10b981'
                           }}>
-                            {props.seed.teams[1]?.score !== null && props.seed.teams[1]?.score !== undefined 
-                              ? props.seed.teams[1].score 
+                            {props.seed.teams[1]?.score !== null && props.seed.teams[1]?.score !== undefined
+                              ? props.seed.teams[1].score
                               : '-'}
                           </div>
                         </SeedTeam>
                       </div>
-                  </SeedItem>
-                </Seed>
-              )
-            }}
-          />
-        </div>
+                    </SeedItem>
+                  </Seed>
+                )
+              }}
+            />
+          </div>
         )}
       </div>
     </div>

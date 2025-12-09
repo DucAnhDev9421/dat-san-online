@@ -30,7 +30,7 @@ export default function VenueCard({
   const cardRef = React.useRef(null)
   const [isFavorite, setIsFavorite] = React.useState(false)
   const [isLoadingFavorite, setIsLoadingFavorite] = React.useState(false)
-  
+
   // Kiểm tra trạng thái yêu thích khi component mount hoặc venueId thay đổi
   React.useEffect(() => {
     const checkFavoriteStatus = async () => {
@@ -60,13 +60,13 @@ export default function VenueCard({
     const rect = card.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-    
+
     const centerX = rect.width / 2
     const centerY = rect.height / 2
-    
+
     const rotateX = ((y - centerY) / centerY) * 10
     const rotateY = ((centerX - x) / centerX) * 10
-    
+
     setMousePosition({ x: rotateY, y: rotateX })
   }
 
@@ -89,7 +89,7 @@ export default function VenueCard({
     if (e.target.closest('.venue-card-button') || e.target.closest('.favorite-button')) {
       return
     }
-    
+
     if (venueId) {
       navigate(`/booking?venue=${venueId}`)
     } else if (onBook) {
@@ -100,7 +100,7 @@ export default function VenueCard({
   // Xử lý thêm/xóa yêu thích
   const handleToggleFavorite = async (e) => {
     e.stopPropagation()
-    
+
     if (!isAuthenticated) {
       toast.info('Vui lòng đăng nhập để thêm vào danh sách yêu thích')
       return
@@ -110,7 +110,7 @@ export default function VenueCard({
 
     try {
       setIsLoadingFavorite(true)
-      
+
       if (isFavorite) {
         // Xóa khỏi yêu thích
         await userApi.removeFavorite(venueId)
@@ -122,7 +122,7 @@ export default function VenueCard({
         setIsFavorite(true)
         toast.success('Đã thêm vào danh sách yêu thích')
       }
-      
+
       // Dispatch event để cập nhật favorites page
       window.dispatchEvent(new Event('favoritesUpdated'))
     } catch (error) {
@@ -137,9 +137,9 @@ export default function VenueCard({
   // Tính khoảng cách
   const distance = React.useMemo(() => {
     if (!userLocation || !facilityLocation) return null
-    
+
     let lat2, lon2
-    
+
     // Xử lý format tọa độ từ backend (GeoJSON: [longitude, latitude])
     if (facilityLocation.coordinates && Array.isArray(facilityLocation.coordinates)) {
       [lon2, lat2] = facilityLocation.coordinates
@@ -149,19 +149,19 @@ export default function VenueCard({
     } else {
       return null
     }
-    
+
     const dist = calculateDistance(
       userLocation.latitude,
       userLocation.longitude,
       lat2,
       lon2
     )
-    
+
     return formatDistance(dist)
   }, [userLocation, facilityLocation])
 
   return (
-    <div 
+    <div
       ref={cardRef}
       className="venue-card"
       onMouseMove={handleMouseMove}
@@ -183,24 +183,24 @@ export default function VenueCard({
         willChange: 'transform'
       }}
     >
-      <div className="venue-card-image" style={{ 
-        position: 'relative', 
-        width: '100%', 
-        height: 200, 
+      <div className="venue-card-image" style={{
+        position: 'relative',
+        width: '100%',
+        height: 200,
         background: '#f3f4f6',
         transform: 'translateZ(20px)',
         transition: 'all 0.3s ease'
       }}>
         {image ? (
-          <img 
-            src={image} 
-            alt={name} 
-            style={{ 
-              width: '100%', 
-              height: '100%', 
+          <img
+            src={image}
+            alt={name}
+            style={{
+              width: '100%',
+              height: '100%',
               objectFit: 'cover',
               transition: 'transform 0.3s ease'
-            }} 
+            }}
           />
         ) : null}
         {/* Biểu tượng trái tim yêu thích */}
@@ -251,39 +251,39 @@ export default function VenueCard({
                 animation: 'spin 0.6s linear infinite'
               }} />
             ) : isFavorite ? (
-              <AiFillHeart 
-                style={{ 
-                  color: '#ef4444', 
+              <AiFillHeart
+                style={{
+                  color: '#ef4444',
                   fontSize: 22,
                   transition: 'transform 0.2s ease'
-                }} 
+                }}
               />
             ) : (
-              <AiOutlineHeart 
-                style={{ 
-                  color: '#6b7280', 
+              <AiOutlineHeart
+                style={{
+                  color: '#6b7280',
                   fontSize: 22,
                   transition: 'transform 0.2s ease'
-                }} 
+                }}
               />
             )}
           </button>
         )}
       </div>
-      <div style={{ 
-        padding: 16, 
-        display: 'flex', 
-        flexDirection: 'column', 
+      <div style={{
+        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
         gap: 8,
         transform: 'translateZ(10px)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {(chip || sport) && (
-            <span style={{ 
-              fontSize: 12, 
-              color: '#16a34a', 
-              background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', 
-              padding: '4px 10px', 
+            <span style={{
+              fontSize: 12,
+              color: '#16a34a',
+              background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+              padding: '4px 10px',
               borderRadius: 999,
               fontWeight: 600,
               boxShadow: '0 2px 4px rgba(22, 163, 74, 0.1)'
@@ -291,12 +291,12 @@ export default function VenueCard({
               {chip || sport}
             </span>
           )}
-          <span style={{ 
-            marginLeft: 'auto', 
-            fontSize: 12, 
-            color: '#10b981', 
-            background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', 
-            padding: '4px 10px', 
+          <span style={{
+            marginLeft: 'auto',
+            fontSize: 12,
+            color: '#10b981',
+            background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)',
+            padding: '4px 10px',
             borderRadius: 999,
             fontWeight: 600,
             boxShadow: '0 2px 4px rgba(16, 185, 129, 0.1)'
@@ -304,9 +304,9 @@ export default function VenueCard({
             {status}
           </span>
         </div>
-        <div style={{ 
-          fontSize: 16, 
-          fontWeight: 800, 
+        <div style={{
+          fontSize: 16,
+          fontWeight: 800,
           color: '#0f172a',
           textShadow: '0 1px 2px rgba(0,0,0,0.05)'
         }}>
@@ -317,19 +317,19 @@ export default function VenueCard({
             <FiMapPin /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{address}</span>
           </div>
         )}
-        {rating > 0 && (
-          <div style={{ 
-            fontSize: 13, 
-            color: '#6b7280', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 6 
+        {(rating !== undefined && rating !== null) && (
+          <div style={{
+            fontSize: 13,
+            color: '#6b7280',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6
           }}>
             <AiFillStar style={{ color: '#fbbf24', fontSize: 16 }} />
             <span style={{ fontWeight: 600, color: '#1f2937' }}>
               {typeof rating === 'number' ? rating.toFixed(1) : rating}
             </span>
-            {totalReviews > 0 && (
+            {totalReviews >= 0 && (
               <span style={{ fontSize: 12, color: '#6b7280' }}>
                 ({totalReviews} đánh giá)
               </span>
@@ -348,18 +348,18 @@ export default function VenueCard({
           </div>
         )}
         {services && services.length > 0 && (
-          <div style={{ 
-            fontSize: 12, 
-            color: '#6b7280', 
-            display: 'flex', 
-            alignItems: 'center', 
+          <div style={{
+            fontSize: 12,
+            color: '#6b7280',
+            display: 'flex',
+            alignItems: 'center',
             gap: 6,
             flexWrap: 'wrap'
           }}>
             <span style={{ color: '#667eea', fontWeight: 600 }}>Dịch vụ:</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
               {services.slice(0, 2).map((service, index) => (
-                <span 
+                <span
                   key={index}
                   style={{
                     fontSize: 11,

@@ -1,33 +1,28 @@
 import React, { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
-import useDeviceType from '../../../../hook/use-device-type'
-import useMobile from '../../../../hook/use-mobile'
 import { formatDate } from '../utils/dateHelpers'
 import { Calendar, Clock, DollarSign, CheckCircle, Tag, MapPin, Grid3x3, X, MessageCircle } from 'lucide-react'
 import { promotionApi } from '../../../../api/promotionApi'
 import ChatModal from './ChatModal'
 import useToggle from '../../../../hook/use-toggle'
 
-export default function BookingSummary({ 
-  selectedDate, 
-  selectedSlots, 
-  selectedCourt, 
-  selectedFieldType, 
-  courts, 
-  timeSlotsData, 
+export default function BookingSummary({
+  selectedDate,
+  selectedSlots,
+  selectedCourt,
+  selectedFieldType,
+  courts,
+  timeSlotsData,
   onBookNow,
   venueId,
   timeSlotDuration = 60, // Khung giờ đặt sân (30 hoặc 60 phút)
   onPromotionChange // Callback to pass promotion data to parent
 }) {
-  const { isMobile, isTablet } = useDeviceType()
-  const isSmallMobile = useMobile(480)
-  const isVerySmallMobile = useMobile(360)
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [showChatModal, { toggle: toggleChatModal, setFalse: closeChatModal }] = useToggle(false)
-  
+
   const [promoCode, setPromoCode] = useState('')
   const [appliedPromotion, setAppliedPromotion] = useState(null)
   const [discountAmount, setDiscountAmount] = useState(0)
@@ -91,9 +86,6 @@ export default function BookingSummary({
                 discountAmount: discount
               })
             }
-
-            // Không hiển thị toast khi auto-apply từ URL để tránh duplicate
-            // toast.success(`Áp dụng mã khuyến mãi "${promoFromUrl.toUpperCase()}" thành công!`)
           }
         } catch (error) {
           console.error('Error validating promotion from URL:', error)
@@ -101,7 +93,7 @@ export default function BookingSummary({
           setValidating(false)
         }
       }
-      
+
       // Delay to ensure component is fully mounted
       setTimeout(applyPromo, 100)
     }
@@ -123,7 +115,7 @@ export default function BookingSummary({
   // Handle promo code apply
   const handleApplyPromo = async (code = null) => {
     const codeToValidate = code || promoCode.trim().toUpperCase()
-    
+
     if (!codeToValidate) {
       toast.error('Vui lòng nhập mã khuyến mãi')
       return
@@ -131,7 +123,7 @@ export default function BookingSummary({
 
     try {
       setValidating(true)
-      
+
       // Validate promotion code with API
       const result = await promotionApi.validatePromotionCode(
         codeToValidate,
@@ -165,7 +157,7 @@ export default function BookingSummary({
         setAppliedPromotion(null)
         setDiscountAmount(0)
         setPromoApplied(false)
-        
+
         if (onPromotionChange) {
           onPromotionChange(null)
         }
@@ -176,7 +168,7 @@ export default function BookingSummary({
       setAppliedPromotion(null)
       setDiscountAmount(0)
       setPromoApplied(false)
-      
+
       if (onPromotionChange) {
         onPromotionChange(null)
       }
@@ -191,11 +183,11 @@ export default function BookingSummary({
     setAppliedPromotion(null)
     setDiscountAmount(0)
     setPromoApplied(false)
-    
+
     if (onPromotionChange) {
       onPromotionChange(null)
     }
-    
+
     toast.info('Đã xóa mã khuyến mãi')
   }
 
@@ -211,7 +203,7 @@ export default function BookingSummary({
       const subtotal = calculateTotal()
       const newDiscount = calculateDiscount(appliedPromotion, subtotal)
       setDiscountAmount(newDiscount)
-      
+
       if (onPromotionChange) {
         onPromotionChange({
           code: promoCode,
@@ -224,20 +216,9 @@ export default function BookingSummary({
   }, [selectedSlots, timeSlotsData, appliedPromotion, promoApplied, promoCode])
 
   return (
-    <div style={{
-      background: '#fff',
-      border: '1px solid #e5e7eb',
-      borderRadius: '12px',
-      padding: isMobile ? '16px' : isTablet ? '20px' : '24px',
-      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-    }}>
+    <div className="booking-summary-card">
       {/* Header */}
-      <h3 style={{ 
-        margin: '0 0 20px 0', 
-        fontSize: isMobile ? '16px' : isTablet ? '17px' : '18px', 
-        fontWeight: '600', 
-        color: '#1f2937' 
-      }}>
+      <h3 className="summary-title">
         Tóm tắt đặt sân
       </h3>
 
@@ -249,7 +230,7 @@ export default function BookingSummary({
             <span style={{ fontSize: '14px', color: '#6b7280' }}>Sân:</span>
           </div>
           <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-            {courts && selectedCourt 
+            {courts && selectedCourt
               ? (courts.find(c => (c.id || c._id) === selectedCourt)?.name || 'Chưa chọn sân')
               : 'Chưa chọn sân'}
           </span>
@@ -264,7 +245,7 @@ export default function BookingSummary({
             {selectedFieldType}
           </span>
         </div>
-        
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Calendar size={16} style={{ color: '#6b7280' }} />
@@ -274,31 +255,31 @@ export default function BookingSummary({
             {formatDate(selectedDate)}
           </span>
         </div>
-        
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Clock size={16} style={{ color: '#6b7280' }} />
             <span style={{ fontSize: '14px', color: '#6b7280' }}>Khung giờ:</span>
           </div>
           <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-            {selectedSlots.length > 0 
+            {selectedSlots.length > 0
               ? (() => {
-                  const totalMinutes = selectedSlots.length * (timeSlotDuration || 60)
-                  const hours = Math.floor(totalMinutes / 60)
-                  const minutes = totalMinutes % 60
-                  
-                  if (hours === 0) {
-                    return `${minutes} phút`
-                  } else if (minutes === 0) {
-                    return `${hours} giờ`
-                  } else {
-                    return `${hours} giờ ${minutes} phút`
-                  }
-                })()
+                const totalMinutes = selectedSlots.length * (timeSlotDuration || 60)
+                const hours = Math.floor(totalMinutes / 60)
+                const minutes = totalMinutes % 60
+
+                if (hours === 0) {
+                  return `${minutes} phút`
+                } else if (minutes === 0) {
+                  return `${hours} giờ`
+                } else {
+                  return `${hours} giờ ${minutes} phút`
+                }
+              })()
               : 'Chưa chọn khung giờ'}
           </span>
         </div>
-        
+
         {/* Time Slots Detail */}
         {selectedSlots.length > 0 && (
           <div style={{ margin: '8px 0' }}>
@@ -309,11 +290,11 @@ export default function BookingSummary({
               // Parse slot key: format is "YYYY-MM-DD-HH:MM"
               const parts = slot.split('-')
               const actualTime = parts[3] // Get "HH:MM"
-              
+
               // Get slot data from timeSlotsData or use court price
               let slotPrice = courtPrice
               let endTime = ''
-              
+
               if (timeSlotsData && timeSlotsData.length > 0) {
                 const slotData = timeSlotsData.find(s => s.time === actualTime)
                 if (slotData) {
@@ -337,11 +318,11 @@ export default function BookingSummary({
                 const endMinutes = totalMinutes % 60
                 endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`
               }
-              
+
               return (
-                <div key={index} style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
+                <div key={index} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
                   marginBottom: '4px',
                   fontSize: '14px',
@@ -354,18 +335,18 @@ export default function BookingSummary({
                 </div>
               )
             })}
-            <div style={{ 
-              height: '1px', 
-              background: '#e5e7eb', 
-              margin: '8px 0' 
+            <div style={{
+              height: '1px',
+              background: '#e5e7eb',
+              margin: '8px 0'
             }}></div>
           </div>
         )}
-        
-        <div style={{ 
-          height: '1px', 
-          background: '#e5e7eb', 
-          margin: '8px 0' 
+
+        <div style={{
+          height: '1px',
+          background: '#e5e7eb',
+          margin: '8px 0'
         }}></div>
 
         {/* Promo Code Section */}
@@ -374,9 +355,9 @@ export default function BookingSummary({
             <Tag size={14} style={{ color: '#6b7280' }} />
             Mã khuyến mãi
           </div>
-          <div className="promo-code-container" style={{ 
-            display: 'flex', 
-            gap: isMobile ? '6px' : '8px' 
+          <div className="promo-code-container" style={{
+            display: 'flex',
+            gap: '8px'
           }}>
             <input
               type="text"
@@ -387,11 +368,11 @@ export default function BookingSummary({
               className="promo-code-input"
               style={{
                 flex: '1 1 auto',
-                minWidth: isVerySmallMobile ? '60px' : isSmallMobile ? '80px' : isMobile ? '100px' : '120px',
-                padding: isVerySmallMobile ? '6px 8px' : isSmallMobile ? '8px' : isMobile ? '8px 10px' : '10px 12px',
+                width: '100%',
+                padding: '10px 12px',
                 border: '1px solid #e5e7eb',
                 borderRadius: '6px',
-                fontSize: isVerySmallMobile ? '11px' : isSmallMobile ? '12px' : isMobile ? '13px' : '14px',
+                fontSize: '14px',
                 outline: 'none',
                 background: promoApplied ? '#f3f4f6' : '#fff',
                 transition: 'all 0.2s'
@@ -403,24 +384,24 @@ export default function BookingSummary({
               className="promo-code-button"
               style={{
                 flex: '0 0 auto',
-                padding: isVerySmallMobile ? '6px 8px' : isSmallMobile ? '8px' : isMobile ? '8px 12px' : '10px 16px',
+                padding: '10px 16px',
                 background: promoApplied || !promoCode.trim() || validating ? '#d1d5db' : '#10b981',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '6px',
-                fontSize: isVerySmallMobile ? '11px' : isSmallMobile ? '12px' : isMobile ? '13px' : '14px',
+                fontSize: '14px',
                 fontWeight: '500',
                 cursor: promoApplied || !promoCode.trim() || validating ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
                 transition: 'all 0.2s'
               }}
             >
-              {validating ? 'Đang kiểm tra...' : promoApplied ? 'Đã áp dụng' : 'Áp dụng'}
+              {validating ? '...' : promoApplied ? 'Đã áp dụng' : 'Áp dụng'}
             </button>
           </div>
           {promoApplied && appliedPromotion && (
-            <div style={{ 
-              marginTop: '8px', 
+            <div style={{
+              marginTop: '8px',
               padding: '8px 12px',
               background: '#e6f9f0',
               borderRadius: '6px',
@@ -433,7 +414,7 @@ export default function BookingSummary({
                 <div style={{ fontSize: '13px', color: '#059669' }}>
                   <div style={{ fontWeight: '600' }}>{appliedPromotion.name}</div>
                   <div style={{ fontSize: '12px', opacity: 0.8 }}>
-                    {appliedPromotion.discountType === 'percentage' 
+                    {appliedPromotion.discountType === 'percentage'
                       ? `Giảm ${appliedPromotion.discountValue}%`
                       : `Giảm ${appliedPromotion.discountValue.toLocaleString('vi-VN')} VNĐ`}
                   </div>
@@ -458,19 +439,19 @@ export default function BookingSummary({
           )}
         </div>
 
-        <div style={{ 
-          height: '1px', 
-          background: '#e5e7eb', 
-          margin: '12px 0' 
+        <div style={{
+          height: '1px',
+          background: '#e5e7eb',
+          margin: '12px 0'
         }}></div>
-        
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
           <span style={{ fontSize: '14px', color: '#6b7280' }}>Tạm tính:</span>
           <span style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
             {calculateTotal().toLocaleString('vi-VN')} VNĐ
           </span>
         </div>
-        
+
         {promoApplied && discountAmount > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '14px', color: '#059669' }}>Giảm giá:</span>
@@ -532,7 +513,7 @@ export default function BookingSummary({
               <CheckCircle size={16} />
               Xác nhận đặt sân
             </button>
-            
+
             <button
               onClick={() => {
                 if (venueId) {

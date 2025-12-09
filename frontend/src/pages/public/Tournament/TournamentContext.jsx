@@ -41,6 +41,7 @@ const TournamentProvider = ({ children }) => {
           address: league.address || '',
           facility: league.facility || null, // Include facility with owner
           courtId: league.courtId || null, // Include court with name
+          courtType: league.courtType || null, // Include courtType (loại sân đã chọn)
           approvalStatus: league.approvalStatus || null,
           participants: league.participants || 0,
           maxParticipants: league.maxParticipants || 0,

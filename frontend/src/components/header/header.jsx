@@ -10,7 +10,9 @@ import UserMenu from './UserMenu'
 import NavigationBar from './NavigationBar'
 import { notificationApi } from '../../api/notificationApi'
 import { toast } from 'react-toastify'
-import { Menu, X, CheckCircle, DollarSign, XCircle, Star, Wrench, Tag, Clock, Info, Gift, Ticket } from 'lucide-react'
+import { Menu, X, CheckCircle, DollarSign, XCircle, Star, Wrench, Tag, Clock, Info, Ticket } from 'lucide-react'
+
+import './Header.css'
 
 function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth()
@@ -53,7 +55,7 @@ function Header() {
           notificationApi.getNotifications({ page: 1, limit: 10 }),
           notificationApi.getUnreadCount(),
         ])
-        
+
         setNotifications(notificationsData.notifications || notificationsData || [])
         setUnreadNotifications(unreadCountData.unreadCount || 0)
       } catch (error) {
@@ -76,7 +78,7 @@ function Header() {
         if (data.notification) {
           setNotifications(prev => [data.notification, ...prev].slice(0, 10))
         }
-        
+
         // Update unread count
         if (data.unreadCount !== undefined) {
           setUnreadNotifications(data.unreadCount)
@@ -148,6 +150,11 @@ function Header() {
   }
 
   const handleNotificationClick = () => {
+    if (isMobile) {
+      navigate('/notifications')
+      closeUserMenu()
+      return
+    }
     toggleNotificationDropdown()
     closeUserMenu() // Close user menu if open
   }
@@ -169,7 +176,7 @@ function Header() {
         console.error('Error marking notification as read:', error)
       }
     }
-    
+
     // Navigate to relevant page based on notification type
     if (notification.metadata?.bookingId) {
       navigate(`/profile/bookings`)
@@ -211,10 +218,6 @@ function Header() {
   const handleFeedbackClick = () => {
     closeUserMenu()
     navigate('/feedback')
-  }
-
-  const handleRedeemPointsClick = () => {
-    navigate('/loyalty/redeem')
   }
 
   // Helper function to get notification icon
@@ -264,7 +267,7 @@ function Header() {
       <div className="container header-inner">
         <div className="header-left">
           {isMobile && (
-            <button 
+            <button
               className="mobile-menu-toggle"
               onClick={toggleMobileMenu}
               aria-label="Toggle menu"
@@ -272,15 +275,15 @@ function Header() {
               {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
             </button>
           )}
-          
+
           <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div className="brand">
-              <img 
-                src="/Logo.png" 
-                alt="Booking Sport Logo" 
+              <img
+                src="/Logo.png"
+                alt="Booking Sport Logo"
                 className="logo-image"
-                style={{ 
-                  height: isMobile ? "40px" : isTablet ? "48px" : "56px", 
+                style={{
+                  height: isMobile ? "40px" : isTablet ? "48px" : "56px",
                   width: "auto",
                   objectFit: "contain"
                 }}
@@ -289,18 +292,18 @@ function Header() {
             </div>
           </Link>
         </div>
-        
+
         {!isMobile && (
           <div className="desktop-nav-wrapper">
             <NavigationBar user={user} />
           </div>
         )}
-        
+
         <div className="auth-actions" style={{ gap: isMobile ? '8px' : isTablet ? '10px' : '12px' }}>
           {loading ? (
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
               gap: '8px',
               color: '#6b7280'
             }}>
@@ -316,22 +319,9 @@ function Header() {
             </div>
           ) : isAuthenticated ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : isTablet ? '10px' : '12px' }}>
-               {/* Đổi điểm Button */}
-               <button
-                 onClick={handleRedeemPointsClick}
-                 className="nav-item"
-                 style={{ 
-                   whiteSpace: 'nowrap',
-                   flexShrink: 0
-                 }}
-               >
-                 <Gift size={20} />
-                 {!isMobile && <span>Đổi điểm</span>}
-               </button>
-
               {/* Notification Button with Dropdown */}
               <div style={{ position: 'relative' }}>
-                <NotificationButton 
+                <NotificationButton
                   unreadCount={unreadNotifications}
                   isOpen={showNotificationDropdown}
                   onClick={handleNotificationClick}
@@ -382,10 +372,10 @@ function Header() {
               />
             </div>
           ) : (
-            <Link 
-              to="/login" 
+            <Link
+              to="/login"
               className="btn btn-outline"
-              style={{ 
+              style={{
                 padding: isMobile ? '8px 12px' : isTablet ? '9px 14px' : undefined,
                 fontSize: isMobile ? '14px' : isTablet ? '15px' : undefined
               }}
@@ -396,127 +386,30 @@ function Header() {
         </div>
       </div>
 
-      {/* Mobile Navigation Menu */}
+      {/* Mobile Navigation Sidebar */}
       {isMobile && showMobileMenu && (
         <div className="mobile-nav-overlay" onClick={closeMobileMenu}>
           <div className="mobile-nav-menu" onClick={(e) => e.stopPropagation()}>
-            <NavigationBar user={user} mobile onLinkClick={closeMobileMenu} />
+            <div className="sidebar-header">
+              <div className="sidebar-brand">
+                <img src="/Logo.png" alt="Logo" className="sidebar-logo" />
+                <span className="sidebar-brand-name">Booking Sport</span>
+              </div>
+              <button
+                className="sidebar-close-btn"
+                onClick={closeMobileMenu}
+                aria-label="Close menu"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="sidebar-content">
+              <NavigationBar user={user} mobile onLinkClick={closeMobileMenu} />
+            </div>
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
-        @keyframes pulse {
-          0%, 100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          50% {
-            transform: scale(1.1);
-            opacity: 0.9;
-          }
-        }
-
-        @keyframes slideDown {
-          0% {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        /* Mobile menu toggle - chỉ hiển thị khi isMobile = true (được điều khiển bởi JS) */
-        .mobile-menu-toggle {
-          background: none;
-          border: none;
-          cursor: pointer;
-          color: #111827;
-          padding: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .header-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          flex: 0 0 auto;
-          min-width: 0;
-          max-width: fit-content;
-        }
-        
-        .header-left .brand {
-          flex-shrink: 0;
-        }
-        
-        .desktop-nav-wrapper {
-          flex: 0 0 auto;
-          min-width: 0;
-        }
-
-        /* Mobile Navigation Overlay */
-        .mobile-nav-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          z-index: 9998;
-          animation: fadeIn 0.2s ease;
-        }
-
-        .mobile-nav-menu {
-          position: fixed;
-          top: 64px;
-          left: 0;
-          right: 0;
-          background: white;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-          z-index: 9999;
-          padding: 16px;
-          max-height: calc(100vh - 64px);
-          overflow-y: auto;
-          animation: slideDown 0.2s ease;
-        }
-
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-
-        /* Responsive styles - chỉ cho styling bổ sung, logic chính đã dùng useMobile hook */
-        @media (max-width: 768px) {
-          .header-inner {
-            gap: 8px !important;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .brand-name {
-            font-size: 14px;
-          }
-
-          .header-inner {
-            height: 56px !important;
-          }
-        }
-
-        @media (max-width: 400px) {
-          .brand-name {
-            display: none !important;
-          }
-        }
-      `}</style>
     </header>
   )
 }

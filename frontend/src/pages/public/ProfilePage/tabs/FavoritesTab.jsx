@@ -22,7 +22,7 @@ export default function FavoritesTab({ venues, loading, userLocation }) {
             Những sân bạn đã thêm vào danh sách yêu thích
           </p>
         </div>
-        
+
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
@@ -44,13 +44,13 @@ export default function FavoritesTab({ venues, loading, userLocation }) {
           Sân yêu thích
         </h3>
         <p style={{ margin: 0, fontSize: '14px', color: '#6b7280' }}>
-          {venues.length > 0 
+          {venues.length > 0
             ? `Bạn có ${venues.length} sân trong danh sách yêu thích`
             : 'Những sân bạn đã thêm vào danh sách yêu thích'
           }
         </p>
       </div>
-      
+
       {venues.length > 0 ? (
         <div style={{
           display: 'grid',
@@ -65,7 +65,7 @@ export default function FavoritesTab({ venues, loading, userLocation }) {
               image={venue.image}
               name={venue.name}
               address={venue.address}
-              rating={venue.rating}
+              rating={venue.rating ?? venue.averageRating ?? 0}
               totalReviews={venue.totalReviews || 0}
               open={venue.operatingHours}
               price={venue.price}
@@ -84,10 +84,10 @@ export default function FavoritesTab({ venues, loading, userLocation }) {
           padding: '64px 24px',
           color: '#6b7280'
         }}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            marginBottom: '24px' 
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            marginBottom: '24px'
           }}>
             <div style={{
               width: '80px',
@@ -101,16 +101,16 @@ export default function FavoritesTab({ venues, loading, userLocation }) {
               <Heart size={40} strokeWidth={1.5} color="#ef4444" />
             </div>
           </div>
-          <h4 style={{ 
-            marginBottom: '12px', 
-            fontSize: '20px', 
+          <h4 style={{
+            marginBottom: '12px',
+            fontSize: '20px',
             fontWeight: '600',
             color: '#1f2937'
           }}>
             Chưa có sân yêu thích
           </h4>
-          <p style={{ 
-            marginBottom: '24px', 
+          <p style={{
+            marginBottom: '24px',
             fontSize: '15px',
             color: '#6b7280',
             maxWidth: '400px',
@@ -118,8 +118,8 @@ export default function FavoritesTab({ venues, loading, userLocation }) {
           }}>
             Thêm các sân bạn thích vào danh sách yêu thích bằng cách nhấn vào biểu tượng trái tim trên card sân
           </p>
-          <Link 
-            to="/facilities" 
+          <Link
+            to="/facilities"
             style={{
               display: 'inline-block',
               padding: '12px 24px',

@@ -3,11 +3,13 @@ import { User, LogOut, Settings, ChevronDown, Calendar, Wallet, Trophy, MessageS
 import useClickOutside from '../../hook/use-click-outside'
 import { walletApi } from '../../api/walletApi'
 
-const UserMenu = ({ 
-  user, 
-  isOpen, 
-  onToggle, 
-  onProfileClick, 
+import './UserMenu.css'
+
+const UserMenu = ({
+  user,
+  isOpen,
+  onToggle,
+  onProfileClick,
   onLogout,
   onSettingsClick,
   onBookingHistoryClick,
@@ -37,7 +39,7 @@ const UserMenu = ({
   useEffect(() => {
     const fetchBalance = async () => {
       if (!user) return
-      
+
       try {
         setLoadingBalance(true)
         const result = await walletApi.getBalance()
@@ -66,71 +68,34 @@ const UserMenu = ({
   }, [user?.walletBalance, user?.balance])
 
   return (
-    <div ref={menuRef} style={{ position: 'relative' }}>
+    <div ref={menuRef} className="user-menu-container">
       <button
         onClick={onToggle}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: 'none',
-          border: 'none',
-          padding: '8px 12px',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          transition: 'background 0.2s'
-        }}
-        onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
-        onMouseLeave={(e) => e.target.style.background = 'none'}
+        className="user-menu-btn"
       >
         {user?.avatar ? (
           <img
             src={user.avatar}
             alt={user.name}
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              objectFit: 'cover'
-            }}
+            className="user-avatar-img"
           />
         ) : (
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontSize: '14px',
-            fontWeight: '600'
-          }}>
+          <div className="user-avatar-placeholder">
             {user?.name?.charAt(0)?.toUpperCase() || 'U'}
           </div>
         )}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
-          <span style={{ 
-            fontSize: '14px', 
-            fontWeight: '500',
-            color: '#374151',
-            lineHeight: '1.2'
-          }}>
+        <div className="user-info-container">
+          <span className="user-name">
             {user?.name || 'User'}
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div className="user-balance-row">
             <Wallet size={14} color="#10b981" />
-            <span style={{ 
-              fontSize: '13px', 
-              fontWeight: '600',
-              color: '#10b981'
-            }}>
+            <span className="user-balance-text">
               {loadingBalance ? '...' : balance.toLocaleString('vi-VN')} ₫
             </span>
           </div>
         </div>
-        <ChevronDown size={16} color="#6b7280" />
+        <ChevronDown size={16} color="#6b7280" className="user-chevron" />
       </button>
 
       {isOpen && (
@@ -155,7 +120,7 @@ const UserMenu = ({
               {user?.email}
             </div>
             {/* Hạng thành viên */}
-            <div style={{ 
+            <div style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -166,8 +131,8 @@ const UserMenu = ({
               width: 'fit-content'
             }}>
               <Trophy size={12} color={memberTier.color} />
-              <span style={{ 
-                fontSize: '11px', 
+              <span style={{
+                fontSize: '11px',
                 color: memberTier.color,
                 fontWeight: '600'
               }}>
@@ -175,33 +140,34 @@ const UserMenu = ({
               </span>
             </div>
             {(user?.role || user?.userType) && (
-              <div style={{ 
-                fontSize: '12px', 
+              <div style={{
+                fontSize: '12px',
                 color: '#3b82f6',
                 marginTop: '4px',
                 fontWeight: '500'
               }}>
-                {(user.role || user.userType) === 'admin' ? 'Quản trị viên' : 
-                 (user.role || user.userType) === 'owner' ? 'Chủ sân' : 'Người dùng'}
+                {(user.role || user.userType) === 'admin' ? 'Quản trị viên' :
+                  (user.role || user.userType) === 'owner' ? 'Chủ sân' : 'Người dùng'}
               </div>
             )}
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
               gap: '4px',
               marginTop: '6px'
             }}>
               <Wallet size={14} color="#10b981" />
-              <span style={{ 
-                fontSize: '13px', 
+              <span style={{
+                fontSize: '13px',
                 fontWeight: '600',
-                color: '#10b981'
+                color: '#10b981',
+                whiteSpace: 'nowrap'
               }}>
                 {loadingBalance ? '...' : balance.toLocaleString('vi-VN')} ₫
               </span>
             </div>
           </div>
-          
+
           <div style={{ padding: '8px' }}>
             <button
               onClick={onProfileClick}
@@ -225,7 +191,7 @@ const UserMenu = ({
               <User size={16} />
               Thông tin cá nhân
             </button>
-            
+
             <button
               onClick={onBookingHistoryClick}
               style={{
@@ -248,7 +214,7 @@ const UserMenu = ({
               <Calendar size={16} />
               Đặt sân của tôi
             </button>
-            
+
             <button
               onClick={onTopUpClick}
               style={{
@@ -271,7 +237,7 @@ const UserMenu = ({
               <Wallet size={16} />
               Nạp tiền
             </button>
-            
+
             {onTournamentManagementClick && (
               <button
                 onClick={onTournamentManagementClick}
@@ -296,7 +262,7 @@ const UserMenu = ({
                 Giải đấu của tôi
               </button>
             )}
-            
+
             <button
               onClick={onSettingsClick}
               style={{
@@ -319,7 +285,7 @@ const UserMenu = ({
               <Settings size={16} />
               Cài đặt
             </button>
-            
+
             <button
               onClick={onFeedbackClick}
               style={{
@@ -342,9 +308,9 @@ const UserMenu = ({
               <MessageSquare size={16} />
               Góp ý
             </button>
-            
+
             <hr style={{ margin: '8px 0', border: 'none', borderTop: '1px solid #e5e7eb' }} />
-            
+
             <button
               onClick={onLogout}
               style={{

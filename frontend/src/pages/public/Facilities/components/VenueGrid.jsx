@@ -23,7 +23,7 @@ export default function VenueGrid({ facilities, loading, onBookVenue, userLocati
           image={f.image}
           name={f.name}
           address={`${f.district}, ${f.city}`}
-          rating={f.rating}
+          rating={f.rating ?? f.averageRating ?? 0}
           totalReviews={f.totalReviews || 0}
           open={f.open}
           price={typeof f.price === 'number' ? `${f.price.toLocaleString()} VND/giờ` : f.price}

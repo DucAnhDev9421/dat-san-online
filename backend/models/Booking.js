@@ -171,6 +171,17 @@ const bookingSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+    // Tham chiếu đến giải đấu (nếu booking từ tournament)
+    league: {
+      type: Schema.Types.ObjectId,
+      ref: "League",
+      default: null,
+    },
+    // Thông tin match (nếu booking từ tournament match)
+    matchInfo: {
+      stage: String, // round1, round2, semi, final, etc.
+      matchNumber: Number,
+    },
   },
   {
     timestamps: true,

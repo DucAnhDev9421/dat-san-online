@@ -193,7 +193,25 @@ router.get("/", async (req, res, next) => {
     if (req.query.typeId) {
       // Validate ObjectId format
       if (mongoose.Types.ObjectId.isValid(req.query.typeId)) {
-        query.courtType = req.query.typeId;
+        try {
+          // Import CourtType để lấy tên loại sân (fallback matching)
+          const CourtType = (await import("../models/CourtType.js")).default;
+          const courtType = await CourtType.findById(req.query.typeId).lean();
+          
+          if (courtType) {
+            // Match theo courtType ID hoặc type name
+            query.$or = [
+              { courtType: new mongoose.Types.ObjectId(req.query.typeId) },
+              { type: courtType.name }
+            ];
+          } else {
+            // Fallback: chỉ match theo ID
+            query.courtType = new mongoose.Types.ObjectId(req.query.typeId);
+          }
+        } catch (error) {
+          // Nếu có lỗi, fallback về match theo ID
+          query.courtType = new mongoose.Types.ObjectId(req.query.typeId);
+        }
       } else {
         return res.status(400).json({
           success: false,

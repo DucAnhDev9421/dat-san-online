@@ -547,6 +547,70 @@ export const leagueApi = {
   },
 
   /**
+   * Auto schedule matches
+   * POST /api/leagues/:id/auto-schedule
+   * @param {String} leagueId - League ID
+   * @param {Object} options - Auto schedule options
+   * @param {String} options.startDate - Start date for scheduling
+   * @param {String} options.endDate - End date for scheduling
+   * @param {Number} options.matchDuration - Match duration in minutes (default: 90)
+   * @param {Number} options.breakTime - Break time between matches in minutes (default: 30)
+   * @param {String} options.preferredStartTime - Preferred start time (default: "08:00")
+   * @param {String} options.preferredEndTime - Preferred end time (default: "22:00")
+   * @returns {Promise} Auto schedule result
+   */
+  autoSchedule: async (leagueId, options = {}) => {
+    try {
+      const response = await api.post(`/leagues/${leagueId}/auto-schedule`, options);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Suggest optimal time for a match
+   * GET /api/leagues/:id/matches/:matchId/suggest-time
+   * @param {String} leagueId - League ID
+   * @param {String} matchId - Match ID (format: "stage_matchNumber" or just matchNumber)
+   * @param {Object} options - Suggest options
+   * @param {String} options.preferredDate - Preferred date (optional)
+   * @param {Number} options.matchDuration - Match duration in minutes (default: 90)
+   * @param {Number} options.breakTime - Break time between matches in minutes (default: 30)
+   * @returns {Promise} Suggested times
+   */
+  suggestMatchTime: async (leagueId, matchId, options = {}) => {
+    try {
+      const params = new URLSearchParams();
+      if (options.preferredDate) params.append('preferredDate', options.preferredDate);
+      if (options.matchDuration) params.append('matchDuration', options.matchDuration);
+      if (options.breakTime) params.append('breakTime', options.breakTime);
+      
+      const queryString = params.toString();
+      const url = `/leagues/${leagueId}/matches/${matchId}/suggest-time${queryString ? `?${queryString}` : ''}`;
+      const response = await api.get(url);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Confirm schedule - chốt lịch thi đấu (chuyển hold bookings thành confirmed)
+   * POST /api/leagues/:id/confirm-schedule
+   * @param {String} leagueId - League ID
+   * @returns {Promise} Confirm schedule result
+   */
+  confirmSchedule: async (leagueId) => {
+    try {
+      const response = await api.post(`/leagues/${leagueId}/confirm-schedule`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
    * Update match result (score1, score2)
    * PUT /api/leagues/:id/matches/result
    * Tự động tính winner và cập nhật vào vòng tiếp theo (single-elimination)
