@@ -4,13 +4,13 @@ import { loyaltyApi } from '../../../api/loyaltyApi'
 import { useAuth } from '../../../contexts/AuthContext'
 import { toast } from 'react-toastify'
 import ImageWithFallback from '../../../components/ui/ImageWithFallback'
-import { 
-  Gift, 
-  Star, 
-  CheckCircle, 
-  XCircle, 
-  Loader, 
-  Search, 
+import {
+  Gift,
+  Star,
+  CheckCircle,
+  XCircle,
+  Loader,
+  Search,
   Filter,
   TrendingUp,
   Award,
@@ -25,6 +25,7 @@ import {
   History,
   Copy
 } from 'lucide-react'
+import './RedeemPoints.css'
 
 const RedeemPoints = () => {
   const navigate = useNavigate()
@@ -93,10 +94,10 @@ const RedeemPoints = () => {
         // API trả về current_points (snake_case) hoặc có thể đã được convert thành currentPoints
         // Ưu tiên: current_points > currentPoints > loyaltyPoints từ user context
         setUserPoints(
-          response.data.current_points || 
-          response.data.currentPoints || 
-          user?.loyaltyPoints || 
-          user?.points || 
+          response.data.current_points ||
+          response.data.currentPoints ||
+          user?.loyaltyPoints ||
+          user?.points ||
           0
         )
       }
@@ -147,7 +148,7 @@ const RedeemPoints = () => {
     try {
       setRedeeming(selectedReward._id)
       const response = await loyaltyApi.redeemReward(selectedReward._id)
-      
+
       if (response.success) {
         // Update points - ưu tiên remaining_points, sau đó fetch lại từ API
         if (response.data?.remaining_points !== undefined) {
@@ -156,7 +157,7 @@ const RedeemPoints = () => {
           // Nếu không có remaining_points, fetch lại từ summary
           await fetchUserPoints()
         }
-        
+
         // Nếu là voucher, hiển thị modal với mã voucher
         if (selectedReward.type === 'VOUCHER' && response.data?.reward_detail?.code) {
           setVoucherCode(response.data.reward_detail.code)
@@ -168,7 +169,7 @@ const RedeemPoints = () => {
           })
           setIsRedeemDialogOpen(false)
         }
-        
+
         // Refresh data
         await fetchRewards()
         if (activeTab === 'history') {
@@ -177,7 +178,7 @@ const RedeemPoints = () => {
         if (activeTab === 'vouchers') {
           await fetchMyVouchers()
         }
-        
+
         setSelectedReward(null)
       }
     } catch (error) {
@@ -209,23 +210,23 @@ const RedeemPoints = () => {
 
   const calculateMemberTier = (points) => {
     if (points >= 10000) {
-      return { 
-        name: 'Vàng', 
+      return {
+        name: 'Vàng',
         color: '#f59e0b',
         nextTier: null,
         progress: 100
       }
     }
     if (points >= 5000) {
-      return { 
-        name: 'Bạc', 
+      return {
+        name: 'Bạc',
         color: '#6b7280',
         nextTier: 10000,
         progress: ((points - 5000) / 5000) * 100
       }
     }
-    return { 
-      name: 'Đồng', 
+    return {
+      name: 'Đồng',
       color: '#d97706',
       nextTier: 5000,
       progress: (points / 5000) * 100
@@ -234,7 +235,7 @@ const RedeemPoints = () => {
 
   const memberTier = calculateMemberTier(userPoints)
   const nextTierPoints = memberTier.nextTier || 10000
-  const pointsProgress = memberTier.nextTier 
+  const pointsProgress = memberTier.nextTier
     ? ((userPoints / memberTier.nextTier) * 100)
     : 100
 
@@ -260,15 +261,15 @@ const RedeemPoints = () => {
 
   const filteredRewards = useMemo(() => {
     let filtered = rewards.filter(reward => {
-      const matchesSearch = !searchQuery || 
+      const matchesSearch = !searchQuery ||
         reward.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (reward.description && reward.description.toLowerCase().includes(searchQuery.toLowerCase()))
-      
+
       const matchesCategory = selectedCategory === 'all' || reward.type === selectedCategory
-      
+
       return matchesSearch && matchesCategory && reward.isActive
     })
-    
+
     // Sort: affordable first, then by point cost
     return filtered.sort((a, b) => {
       const aAffordable = userPoints >= a.pointCost
@@ -350,11 +351,14 @@ const RedeemPoints = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header with Gradient */}
-      <header style={{
-        background: getTierGradient(memberTier.name),
-        color: '#fff'
-      }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <header
+        className="redeem-header"
+        style={{
+          background: getTierGradient(memberTier.name),
+          color: '#fff'
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 container">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             {/* User Points */}
             <div className="flex-1 w-full">
@@ -362,21 +366,13 @@ const RedeemPoints = () => {
                 <Coins size={24} />
                 <h1 className="text-white text-xl font-semibold">Điểm của bạn</h1>
               </div>
-              <div className="flex items-baseline gap-2 mb-4">
-                <span className="text-5xl font-bold">{userPoints.toLocaleString('vi-VN')}</span>
+              <div className="flex items-baseline gap-2 mb-4 redeem-points-display">
+                <span className="text-4xl md:text-5xl font-bold redeem-points-value">{userPoints.toLocaleString('vi-VN')}</span>
                 <span className="text-xl text-blue-100">điểm</span>
               </div>
-              
+
               {/* Hạng thành viên */}
-              <div style={{
-                background: 'rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '12px',
-                padding: '12px 16px',
-                marginBottom: '16px',
-                display: 'inline-block'
-              }}>
+              <div className="redeem-member-badge">
                 <div className="text-lg font-bold whitespace-nowrap">
                   Hạng thành viên: {memberTier.name}
                 </div>
@@ -384,22 +380,12 @@ const RedeemPoints = () => {
 
               {/* Thanh tiến độ */}
               {memberTier.nextTier && (
-                <div style={{
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  backdropFilter: 'blur(10px)',
-                  borderRadius: '12px',
-                  padding: '16px'
-                }}>
+                <div className="redeem-progress-container">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-blue-100">Tiến độ tới hạng tiếp theo</span>
                     <span className="text-sm font-semibold">{nextTierPoints - userPoints} điểm nữa</span>
                   </div>
-                  <div style={{
-                    height: '8px',
-                    background: 'rgba(255, 255, 255, 0.3)',
-                    borderRadius: '4px',
-                    overflow: 'hidden'
-                  }}>
+                  <div className="redeem-progress-bar-bg">
                     <div style={{
                       height: '100%',
                       background: '#fff',
@@ -418,15 +404,14 @@ const RedeemPoints = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tabs */}
-        <div className="mb-6">
-          <div className="flex gap-2 border-b border-gray-200">
+        <div className="mb-6 redeem-tabs-container">
+          <div className="flex gap-2 border-b border-gray-200 min-w-max">
             <button
               onClick={() => handleTabChange('rewards')}
-              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
-                activeTab === 'rewards'
+              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === 'rewards'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               <Gift size={18} />
               Quà tặng
@@ -438,11 +423,10 @@ const RedeemPoints = () => {
                   fetchRedeemHistory()
                 }
               }}
-              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
-                activeTab === 'history'
+              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === 'history'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               <History size={18} />
               Lịch sử
@@ -454,11 +438,10 @@ const RedeemPoints = () => {
                   fetchMyVouchers()
                 }
               }}
-              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
-                activeTab === 'vouchers'
+              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === 'vouchers'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               <Ticket size={18} />
               Voucher của tôi
@@ -504,11 +487,10 @@ const RedeemPoints = () => {
                   <button
                     key={cat.value}
                     onClick={() => setSelectedCategory(cat.value)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
-                      isActive
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${isActive
                         ? 'bg-blue-600 text-white'
                         : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                    }`}
+                      }`}
                   >
                     <Icon size={18} />
                     {cat.label}
@@ -582,16 +564,16 @@ const RedeemPoints = () => {
             {/* All Rewards */}
             <div>
               <h2 className="mb-4 text-xl font-bold text-gray-900">
-                {selectedCategory === 'all' 
-                  ? 'Tất cả quà tặng' 
+                {selectedCategory === 'all'
+                  ? 'Tất cả quà tặng'
                   : categories.find(c => c.value === selectedCategory)?.label}
               </h2>
               {filteredRewards.length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
                   <Gift size={64} className="mx-auto mb-4 text-gray-300" />
                   <h3 className="mb-2 text-xl font-semibold text-gray-900">
-                    {searchQuery || selectedCategory !== 'all' 
-                      ? 'Không tìm thấy quà tặng' 
+                    {searchQuery || selectedCategory !== 'all'
+                      ? 'Không tìm thấy quà tặng'
                       : 'Chưa có quà nào'}
                   </h3>
                   <p className="text-gray-600">
@@ -650,11 +632,10 @@ const RedeemPoints = () => {
                           <button
                             onClick={() => handleRedeemClick(reward)}
                             disabled={!canRedeem}
-                            className={`w-full py-2 rounded-lg font-medium transition-colors ${
-                              canRedeem
+                            className={`w-full py-2 rounded-lg font-medium transition-colors ${canRedeem
                                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                                 : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                            }`}
+                              }`}
                           >
                             {canRedeem ? 'Đổi quà' : 'Không đủ điểm'}
                           </button>
@@ -688,9 +669,9 @@ const RedeemPoints = () => {
                     return (
                       <div
                         key={item.id}
-                        className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                        className="redeem-history-item p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                       >
-                        <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                        <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 redeem-history-image">
                           {item.image ? (
                             <ImageWithFallback
                               src={item.image}
@@ -703,7 +684,7 @@ const RedeemPoints = () => {
                             </div>
                           )}
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 redeem-history-content">
                           <h4 className="mb-1 font-semibold text-gray-900 truncate">
                             {item.rewardName}
                           </h4>
@@ -716,6 +697,7 @@ const RedeemPoints = () => {
                           <p className="text-sm text-gray-500">{item.date}</p>
                         </div>
                         <div
+                          className="redeem-history-status"
                           style={{
                             background: status.bg,
                             color: status.color,
@@ -760,15 +742,14 @@ const RedeemPoints = () => {
                     const isExpired = new Date(voucher.endDate) < new Date()
                     const isUsed = voucher.usageCount >= voucher.maxUsage
                     const isValid = !isExpired && !isUsed
-                    
+
                     return (
                       <div
                         key={voucher._id}
-                        className={`p-4 border-2 rounded-lg transition-colors ${
-                          isValid
+                        className={`p-4 border-2 rounded-lg transition-colors ${isValid
                             ? 'border-green-200 bg-green-50 hover:bg-green-100'
                             : 'border-gray-200 bg-gray-50 opacity-60'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">

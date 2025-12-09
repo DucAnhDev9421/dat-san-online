@@ -11,10 +11,13 @@ import { toast } from "react-toastify"
 import useUserLocation from "../../hook/use-user-location"
 import "../../styles/Facilities.css"
 
+import useMobile from "../../hook/use-mobile"
+
 export default function Facilities() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { userLocation } = useUserLocation()
+  const isMobile = useMobile()
   const [query, setQuery] = useState("")
   const [sport, setSport] = useState("Tất cả")
   const [view, setView] = useState("grid")
@@ -31,6 +34,9 @@ export default function Facilities() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const limit = 20
+
+  // Force list view on mobile
+  const effectiveView = isMobile ? "list" : view
 
   // Map sport values from HomePage (English) to FilterBar format (Vietnamese)
   const mapSportFromUrl = (sportParam) => {
@@ -93,7 +99,7 @@ export default function Facilities() {
         // Try both normalized and exact match
         return normalizedName === normalizedParam || p.name === provinceParam
       })
-      
+
       if (province) {
         // Set with original name from API (not normalized)
         setSelectedProvince(province.name)
@@ -128,7 +134,7 @@ export default function Facilities() {
       try {
         setIsPageLoading(true)
         const result = await getProvinces()
-        
+
         if (result.success && result.data && result.data.length > 0) {
           setProvinces(result.data)
         } else {
@@ -172,22 +178,22 @@ export default function Facilities() {
     // Format operating hours
     const formatOperatingHours = (hours) => {
       if (!hours) return "06:00 - 22:00"
-      
+
       const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
       const today = days[new Date().getDay()]
       const todayHours = hours[today]
-      
+
       if (todayHours && todayHours.isOpen) {
         return `${todayHours.open} - ${todayHours.close}`
       }
-      
+
       // Fallback: return first available day
       for (const day of days) {
         if (hours[day] && hours[day].isOpen) {
           return `${hours[day].open} - ${hours[day].close}`
         }
       }
-      
+
       return '06:00 - 22:00'
     }
 
@@ -213,8 +219,8 @@ export default function Facilities() {
       rating: facility.averageRating || 0,
       totalReviews: facility.totalReviews || 0,
       status: facility.status === 'opening' ? 'Còn trống' : 'Đóng cửa',
-      image: facility.images && facility.images.length > 0 
-        ? facility.images[0].url 
+      image: facility.images && facility.images.length > 0
+        ? facility.images[0].url
         : null,
       _original: facility, // Keep original for navigation
       location: facility.location || null,
@@ -233,26 +239,26 @@ export default function Facilities() {
     if (isInitializing) return
 
     const params = new URLSearchParams()
-    
+
     // Map sport from Vietnamese to English format (for URL compatibility with HomePage)
     const sportUrl = mapSportToUrl(sport)
     if (sportUrl && sport !== "Tất cả") {
       params.set('sport', sportUrl)
     }
-    
+
     if (selectedProvince) {
       params.set('province', selectedProvince)
     }
-    
+
     if (selectedDistrict) {
       params.set('district', selectedDistrict)
     }
-    
+
     // Only update URL if params have changed
     const currentParams = new URLSearchParams(searchParams)
     const paramsString = params.toString()
     const currentParamsString = currentParams.toString()
-    
+
     if (paramsString !== currentParamsString) {
       // Update URL without causing a page reload
       setSearchParams(params, { replace: true })
@@ -264,11 +270,11 @@ export default function Facilities() {
     const fetchFacilities = async () => {
       try {
         setFacilitiesLoading(true)
-        
+
         // Minimum loading time to show skeleton (800ms)
         const minLoadingTime = 800
         const startTime = Date.now()
-        
+
         const params = {
           page,
           limit,
@@ -311,16 +317,16 @@ export default function Facilities() {
           facilityApi.getFacilities(params),
           new Promise(resolve => setTimeout(resolve, minLoadingTime))
         ])
-        
+
         // Calculate remaining time if API was faster than minLoadingTime
         const elapsedTime = Date.now() - startTime
         if (elapsedTime < minLoadingTime) {
           await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsedTime))
         }
-        
+
         if (result.success && result.data?.facilities) {
           const transformed = result.data.facilities.map(transformFacilityToVenue)
-          
+
           // Apply quick sort (only if not filtering by nearby, as backend already sorts by distance)
           let sorted = [...transformed]
           if (filterNearby && userLocation) {
@@ -338,7 +344,7 @@ export default function Facilities() {
               return bDate - aDate
             })
           }
-          
+
           setFacilities(sorted)
           setTotal(result.data.pagination?.total || 0)
         } else {
@@ -414,13 +420,14 @@ export default function Facilities() {
           maxDistance={maxDistance}
           onMaxDistanceChange={setMaxDistance}
           userLocation={userLocation}
+          isMobile={isMobile}
         />
 
         <div className="results-count">
           Tìm thấy {total || facilities.length} sân thể thao
         </div>
 
-        {view === "grid" ? (
+        {effectiveView === "grid" ? (
           <VenueGrid
             facilities={facilities}
             loading={facilitiesLoading || isPageLoading}
@@ -490,8 +497,8 @@ export default function Facilities() {
             >
               ← Trước
             </button>
-            <span style={{ 
-              color: '#6b7280', 
+            <span style={{
+              color: '#6b7280',
               fontWeight: 600,
               padding: '0 16px',
               minWidth: '120px',

@@ -10,7 +10,7 @@ export default function ProfileHeader({ userData, favoriteVenuesCount = 0 }) {
   const { refreshUserData } = useAuth()
   const [showEditModal, setShowEditModal] = useState(false)
   const [currentUserData, setCurrentUserData] = useState(userData)
-  
+
   // Cập nhật currentUserData khi userData thay đổi
   React.useEffect(() => {
     setCurrentUserData(userData)
@@ -24,151 +24,96 @@ export default function ProfileHeader({ userData, favoriteVenuesCount = 0 }) {
     try {
       // Handle avatar separately if it's a File object
       let avatarUrl = updatedData.avatar
-      
+
       if (updatedData.avatar instanceof File) {
         // Create object URL for preview (in real app, you'd upload to server)
         avatarUrl = URL.createObjectURL(updatedData.avatar)
         console.log('Avatar file selected:', updatedData.avatar.name)
       }
-      
+
       // Update local state
       setCurrentUserData(prev => ({
         ...prev,
         ...updatedData,
         avatar: avatarUrl
       }))
-      
+
       // Refresh user data from server to get latest info
       await refreshUserData()
-      
+
     } catch (error) {
       console.error('Error updating profile:', error)
     }
   }
 
   return (
+
     <>
-      <section className="profile-header" style={{
-        background: '#fff',
-        borderRadius: '12px',
-        padding: '32px',
-        marginBottom: '24px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-start' }}>
+      <section className="profile-card profile-header-card">
+        <div className="profile-header-flex">
           {/* Avatar */}
-          <div style={{ position: 'relative' }}>
-            <div style={{
-              width: '140px',
-              height: '140px',
-              borderRadius: '50%',
-              background: currentUserData.avatar ? `url(${currentUserData.avatar})` : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontSize: '48px',
-              fontWeight: '600',
-              border: '4px solid #fff',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-            }}>
+          <div className="profile-avatar-container">
+            <div
+              className="profile-avatar"
+              style={{
+                backgroundImage: currentUserData.avatar ? `url(${currentUserData.avatar})` : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+              }}
+            >
               {!currentUserData.avatar && currentUserData.name.charAt(0)}
             </div>
             {currentUserData.isVIP && (
-              <div style={{
-                position: 'absolute',
-                bottom: '0',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                color: '#fff',
-                padding: '4px 12px',
-                borderRadius: '20px',
-                fontSize: '11px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                boxShadow: '0 2px 8px rgba(245,158,11,0.4)',
-                whiteSpace: 'nowrap'
-              }}>
+              <div className="profile-vip-badge">
                 ⭐ Thành viên VIP
               </div>
             )}
           </div>
 
           {/* Info */}
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-              <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '700' }}>{currentUserData.name}</h1>
-              <button 
+          <div className="profile-info">
+            <div className="profile-name-row">
+              <h1 className="profile-name">{currentUserData.name}</h1>
+              <button
                 onClick={handleEditClick}
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '8px',
-                  padding: '8px 16px',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  color: '#475569',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = '#e2e8f0'
-                  e.target.style.borderColor = '#cbd5e1'
-                  e.target.style.color = '#334155'
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = '#f8fafc'
-                  e.target.style.borderColor = '#e2e8f0'
-                  e.target.style.color = '#475569'
-                }}
+                className="profile-edit-btn"
               >
                 <Edit3 size={16} />
                 Chỉnh sửa
               </button>
             </div>
-            
-            <p style={{ color: '#6b7280', fontSize: '14px', margin: '0 0 16px 0' }}>
+
+            <p className="profile-join-date">
               Thành viên từ tháng {new Date(currentUserData.joinDate).toLocaleDateString('vi-VN', { month: '2-digit', year: 'numeric' })}
             </p>
 
             {/* Contact Info */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#374151' }}>
+            <div className="profile-contact-grid">
+              <div className="profile-contact-item">
                 <Mail size={16} color="#6b7280" />
                 {currentUserData.email}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#374151' }}>
+              <div className="profile-contact-item">
                 <Phone size={16} color="#6b7280" />
                 {currentUserData.phone}
               </div>
             </div>
 
             {/* Stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
-              <StatCard 
+            <div className="profile-stats-grid">
+              <StatCard
                 icon={Calendar}
                 label="Tổng số lần đặt"
                 value={currentUserData.totalBookings}
                 bgColor="#eff6ff"
                 iconColor="#2563eb"
               />
-              <StatCard 
+              <StatCard
                 icon={Trophy}
                 label="Điểm tích lũy"
                 value={currentUserData.points.toLocaleString()}
                 bgColor="#fef3c7"
                 iconColor="#d97706"
               />
-              <StatCard 
+              <StatCard
                 icon={Heart}
                 label="Sân yêu thích"
                 value={favoriteVenuesCount}
@@ -181,7 +126,7 @@ export default function ProfileHeader({ userData, favoriteVenuesCount = 0 }) {
       </section>
 
       {/* Edit Profile Modal */}
-      <EditProfileModal 
+      <EditProfileModal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         userData={currentUserData}

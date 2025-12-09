@@ -1,22 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-toastify'
-import PromotionHero from './Promotion/components/PromotionHero'
-import PromotionGrid from './Promotion/components/PromotionGrid'
-import PromotionSidebar from './Promotion/components/PromotionSidebar'
 import InfoSection from './Promotion/components/InfoSection'
-import { promotionApi } from '../../api/promotionApi'
+import PromotionGrid from './Promotion/components/PromotionGrid'
+import PromotionHero from './Promotion/components/PromotionHero'
 import { copyToClipboard } from './Promotion/utils/helpers'
+import { promotionApi } from '../../api/promotionApi'
 import '../../styles/Promotion.css'
 
 const Promotion = () => {
   const [allPromotions, setAllPromotions] = useState([])
   const [loading, setLoading] = useState(true)
   const [copiedCode, setCopiedCode] = useState(null)
-  const [filters, setFilters] = useState({
-    voucher: false,
-    limitedTime: false,
-    specialCampaign: false,
-  })
+  const [activeFilter, setActiveFilter] = useState('all')
+
+  const filterOptions = [
+    { id: 'all', label: 'Tất cả' },
+    { id: 'voucher', label: 'Voucher giảm giá' },
+    { id: 'limitedTime', label: 'Sắp hết hạn' },
+    { id: 'specialCampaign', label: 'HOT & Mới nhất' },
+  ]
 
   // Transform promotion from API format to component format
   const transformPromotion = (promo) => {
@@ -32,7 +34,7 @@ const Promotion = () => {
       validUntil = 'Mãi mãi'
     }
 
-    const discount = promo.discountType === 'percentage' 
+    const discount = promo.discountType === 'percentage'
       ? `${promo.discountValue}%`
       : `${new Intl.NumberFormat('vi-VN').format(promo.discountValue)}₫`
 
@@ -118,36 +120,17 @@ const Promotion = () => {
     fetchPromotions()
   }, [])
 
-  // Calculate promotion counts by category
-  const promotionCounts = useMemo(() => {
-    return {
-      voucher: allPromotions.filter(p => p.isVoucher).length,
-      limitedTime: allPromotions.filter(p => p.isLimitedTime).length,
-      specialCampaign: allPromotions.filter(p => p.isSpecialCampaign).length,
-    }
-  }, [allPromotions])
-
-  // Filter promotions based on selected filters
+  // Filter promotions based on active filter
   const filteredPromotions = useMemo(() => {
-    if (!filters.voucher && !filters.limitedTime && !filters.specialCampaign) {
-      // If no filters selected, show all
-      return allPromotions
-    }
+    if (activeFilter === 'all') return allPromotions
 
     return allPromotions.filter(promo => {
-      if (filters.voucher && promo.isVoucher) return true
-      if (filters.limitedTime && promo.isLimitedTime) return true
-      if (filters.specialCampaign && promo.isSpecialCampaign) return true
+      if (activeFilter === 'voucher' && promo.isVoucher) return true
+      if (activeFilter === 'limitedTime' && promo.isLimitedTime) return true
+      if (activeFilter === 'specialCampaign' && promo.isSpecialCampaign) return true
       return false
     })
-  }, [allPromotions, filters])
-
-  const handleFilterChange = (filterType, checked) => {
-    setFilters(prev => ({
-      ...prev,
-      [filterType]: checked,
-    }))
-  }
+  }, [allPromotions, activeFilter])
 
   const handleCopy = (code) => {
     copyToClipboard(code)
@@ -171,16 +154,22 @@ const Promotion = () => {
             Đang tải khuyến mãi...
           </div>
         ) : (
-          <div className="promotion-content-layout">
-            {/* Sidebar */}
-            <PromotionSidebar
-              filters={filters}
-              onFilterChange={handleFilterChange}
-              promotionCounts={promotionCounts}
-            />
+          <>
+            {/* Top Filter Bar */}
+            <div className="promotion-filter-bar">
+              {filterOptions.map(option => (
+                <button
+                  key={option.id}
+                  className={`filter-pill ${activeFilter === option.id ? 'active' : ''}`}
+                  onClick={() => setActiveFilter(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
 
-            {/* Main Content */}
-            <div className="promotion-main-content">
+            {/* Main Grid */}
+            <div className="promotion-content">
               {filteredPromotions.length > 0 ? (
                 <PromotionGrid
                   promotions={filteredPromotions}
@@ -189,15 +178,13 @@ const Promotion = () => {
                   onApply={handleApply}
                 />
               ) : (
-                <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
-                  {Object.values(filters).some(f => f) 
-                    ? 'Không tìm thấy khuyến mãi nào phù hợp với bộ lọc đã chọn'
-                    : 'Hiện tại không có khuyến mãi nào'
-                  }
+                <div style={{ padding: 60, textAlign: 'center', color: '#6b7280' }}>
+                  <div style={{ marginBottom: 16, fontSize: 48 }}>🔍</div>
+                  Không tìm thấy khuyến mãi nào cho danh mục này
                 </div>
               )}
             </div>
-          </div>
+          </>
         )}
       </div>
 

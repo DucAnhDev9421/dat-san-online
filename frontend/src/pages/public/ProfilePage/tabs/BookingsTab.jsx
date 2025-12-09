@@ -23,7 +23,7 @@ export default function BookingsTab() {
   const [bookingReviews, setBookingReviews] = useState({}) // Map bookingId -> review
   const [refreshKey, setRefreshKey] = useState(0)
   const ticketRef = useRef(null)
-  
+
   // Pagination state
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(10)
@@ -154,48 +154,48 @@ export default function BookingsTab() {
       try {
         setLoading(true)
         const result = await bookingApi.getMyBookings({ page, limit })
-        
+
         if (result.success && result.data?.bookings) {
           // Update pagination info
           if (result.data.pagination) {
             setTotal(result.data.pagination.total)
             setTotalPages(result.data.pagination.pages || Math.ceil(result.data.pagination.total / limit))
           }
-          
+
           // Transform API bookings to component format
           const transformedBookings = result.data.bookings.map(booking => {
             // Format time slots
             const timeSlots = booking.timeSlots || []
-            const timeDisplay = timeSlots.length > 0 
+            const timeDisplay = timeSlots.length > 0
               ? timeSlots.join(', ')
               : 'N/A'
-            
+
             // Format price
-            const price = booking.totalAmount 
+            const price = booking.totalAmount
               ? new Intl.NumberFormat('vi-VN', {
-                  style: 'currency',
-                  currency: 'VND',
-                  minimumFractionDigits: 0
-                }).format(booking.totalAmount)
+                style: 'currency',
+                currency: 'VND',
+                minimumFractionDigits: 0
+              }).format(booking.totalAmount)
               : '0 VNĐ'
-            
+
             // Get facility image
             const imageUrl = booking.facility?.images?.[0]?.url || null
-            
+
             // Check if booking has ended (date + time slots)
             const now = new Date()
             const today = new Date(now)
             today.setHours(0, 0, 0, 0)
-            
+
             const bookingDate = new Date(booking.date)
             bookingDate.setHours(0, 0, 0, 0)
-            
+
             let hasBookingEnded = false
-            
+
             // If booking date is in the past, it has ended
             if (bookingDate < today) {
               hasBookingEnded = true
-            } 
+            }
             // If booking date is today, check if the last time slot has ended
             else if (bookingDate.getTime() === today.getTime()) {
               if (timeSlots.length > 0) {
@@ -203,11 +203,11 @@ export default function BookingsTab() {
                 const lastSlot = timeSlots[timeSlots.length - 1]
                 const [startTime, endTime] = lastSlot.split('-')
                 const [endHour, endMinute] = endTime.split(':').map(Number)
-                
+
                 // Create date object for booking end time
                 const bookingEndTime = new Date(bookingDate)
                 bookingEndTime.setHours(endHour, endMinute, 0, 0)
-                
+
                 // Check if current time has passed the end time
                 hasBookingEnded = now >= bookingEndTime
               } else {
@@ -219,7 +219,7 @@ export default function BookingsTab() {
             else {
               hasBookingEnded = false
             }
-            
+
             // Map status dựa trên paymentStatus và paymentMethod
             // Chỉ hiển thị "completed" khi:
             // 1. Thanh toán tiền mặt: status = "confirmed" VÀ paymentStatus = "paid"
@@ -227,18 +227,18 @@ export default function BookingsTab() {
             let status = booking.status
             const paymentStatus = booking.paymentStatus || 'pending'
             const paymentMethod = booking.paymentMethod || null
-            
+
             // Kiểm tra điều kiện để hiển thị "completed"
-            const canReview = 
+            const canReview =
               (paymentMethod === 'cash' && status === 'confirmed' && paymentStatus === 'paid') ||
               (paymentMethod !== 'cash' && paymentStatus === 'paid')
-            
+
             if (canReview) {
               status = 'completed'
             } else if (status === 'pending' || status === 'confirmed') {
               status = 'upcoming'
             }
-            
+
             return {
               id: booking._id || booking.id,
               bookingCode: booking.bookingCode,
@@ -257,7 +257,7 @@ export default function BookingsTab() {
               _original: booking // Store original for API calls
             }
           })
-          
+
           setBookings(transformedBookings)
         }
       } catch (error) {
@@ -267,7 +267,7 @@ export default function BookingsTab() {
         setLoading(false)
       }
     }
-    
+
     fetchBookings()
   }, [refreshKey, page, limit])
 
@@ -280,14 +280,14 @@ export default function BookingsTab() {
           const reviewsMap = {}
           result.reviews.forEach(review => {
             // Handle both populated and non-populated booking field
-            const bookingId = review.booking?._id 
+            const bookingId = review.booking?._id
               ? review.booking._id.toString()
               : review.booking?.id?.toString()
-              ? review.booking.id.toString()
-              : typeof review.booking === 'string' 
-              ? review.booking
-              : null
-            
+                ? review.booking.id.toString()
+                : typeof review.booking === 'string'
+                  ? review.booking
+                  : null
+
             if (bookingId) {
               reviewsMap[bookingId] = review
             }
@@ -313,7 +313,7 @@ export default function BookingsTab() {
       'completed': 'Đã hoàn thành',
       'upcoming': 'Sắp tới'
     }
-    
+
     const statusClasses = {
       'pending': 'status-upcoming',
       'pending_payment': 'status-upcoming',
@@ -324,10 +324,10 @@ export default function BookingsTab() {
       'completed': 'status-completed',
       'upcoming': 'status-upcoming'
     }
-    
+
     const label = statusLabels[status] || status
     const className = statusClasses[status] || 'status-upcoming'
-    
+
     return <span className={`status-badge ${className}`}>
       {label}
     </span>
@@ -339,28 +339,28 @@ export default function BookingsTab() {
         <h3>Lịch sử đặt sân</h3>
         <span className="total-bookings">Tổng cộng: {total} lần đặt</span>
       </div>
-      
+
       {loading ? (
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
           padding: '60px 20px',
           flexDirection: 'column',
           gap: '16px'
         }}>
-          <Loader 
-            size={32} 
-            style={{ 
+          <Loader
+            size={32}
+            style={{
               color: '#3b82f6',
               animation: 'spin 1s linear infinite'
-            }} 
+            }}
           />
           <p style={{ color: '#6b7280', fontSize: '14px' }}>Đang tải danh sách đặt sân...</p>
         </div>
       ) : bookings.length === 0 ? (
-        <div style={{ 
-          textAlign: 'center', 
+        <div style={{
+          textAlign: 'center',
           padding: '60px 20px',
           color: '#6b7280'
         }}>
@@ -371,157 +371,55 @@ export default function BookingsTab() {
         </div>
       ) : (
         <div className="bookings-list">
-        {bookings.map(booking => (
-          <div key={booking.id} className="booking-card" style={{ display: 'flex', gap: '16px', alignItems: 'stretch' }}>
-            {/* Thumbnail */}
-            <div style={{ width: '120px', minWidth: '120px', height: '90px', borderRadius: '8px', overflow: 'hidden', background: '#f3f4f6' }}>
-              {booking.imageUrl ? (
-                <img src={booking.imageUrl} alt={booking.venue} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '12px' }}>No image</div>
-              )}
-            </div>
-
-            {/* Content */}
-            <div style={{ display: 'flex', flex: 1, justifyContent: 'space-between', gap: '12px' }}>
-              <div className="booking-info">
-                <h4>{booking.venue}</h4>
-                <p className="booking-sport">{booking.sport}</p>
-                <p className="booking-datetime">
-                  {new Date(booking.date).toLocaleDateString('vi-VN')} - {booking.time}
-                </p>
-                {booking.location && (
-                  <p className="booking-location" style={{ color: '#6b7280' }}>{booking.location}</p>
+          {bookings.map(booking => (
+            <div key={booking.id} className="booking-card" style={{ display: 'flex', gap: '16px', alignItems: 'stretch' }}>
+              {/* Thumbnail */}
+              <div style={{ width: '120px', minWidth: '120px', height: '90px', borderRadius: '8px', overflow: 'hidden', background: '#f3f4f6' }}>
+                {booking.imageUrl ? (
+                  <img src={booking.imageUrl} alt={booking.venue} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '12px' }}>No image</div>
                 )}
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-                  <span className="booking-price" style={{ fontWeight: 600 }}>{booking.price}</span>
-                  {booking.paymentMethod && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 8px', background: '#eef2ff', color: '#4338ca', borderRadius: '999px' }}>
-                      {getPaymentIconSrc(booking.paymentMethod) ? (
-                        <img src={getPaymentIconSrc(booking.paymentMethod)} alt={booking.paymentMethod}
-                          style={{ width: '16px', height: '16px', objectFit: 'contain', borderRadius: '3px' }} />
-                      ) : (
-                        <span role="img" aria-label="cash">💵</span>
-                      )}
-                      <span style={{ fontSize: '12px' }}>{booking.paymentMethod}</span>
-                    </div>
-                  )}
-                </div>
               </div>
 
-              <div className="booking-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', minWidth: '160px', gap: '8px' }}>
-                <div>
-                  {getStatusBadge(booking.status)}
-                </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
-                  {/* Nút Chi tiết - không hiển thị cho đơn đã hủy */}
-                  {booking.status !== 'cancelled' && booking.status !== 'expired' && (
-                    <button 
-                      className="btn btn-outline small" 
-                      onClick={() => openDetailModal(booking)}
-                      style={{ 
-                        height: '32px',
-                        minWidth: '90px',
-                        padding: '0 12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        whiteSpace: 'nowrap',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      Chi tiết
-                    </button>
+              {/* Content */}
+              <div style={{ display: 'flex', flex: 1, justifyContent: 'space-between', gap: '12px' }}>
+                <div className="booking-info">
+                  <h4>{booking.venue}</h4>
+                  <p className="booking-sport">{booking.sport}</p>
+                  <p className="booking-datetime">
+                    {new Date(booking.date).toLocaleDateString('vi-VN')} - {booking.time}
+                  </p>
+                  {booking.location && (
+                    <p className="booking-location" style={{ color: '#6b7280' }}>{booking.location}</p>
                   )}
-                  {/* Only show cancel button if booking is upcoming/pending/pending_payment/hold/confirmed AND date hasn't passed */}
-                  {(booking.status === 'upcoming' || booking.status === 'pending' || booking.status === 'pending_payment' || booking.status === 'hold' || booking.status === 'confirmed') && !booking.isPastDate && (
-                    <button 
-                      className="btn btn-outline small" 
-                      onClick={() => openCancelModal(booking)}
-                      style={{ 
-                        height: '32px',
-                        minWidth: '90px',
-                        padding: '0 12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        whiteSpace: 'nowrap',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      Hủy đặt
-                    </button>
-                  )}
-                  {(() => {
-                    // Kiểm tra điều kiện để hiển thị nút đánh giá
-                    // 1. Thanh toán tiền mặt: status = "completed" (đã được set từ canReview) VÀ paymentStatus = "paid"
-                    // 2. Thanh toán online: status = "completed" VÀ paymentStatus = "paid"
-                    const canReview = booking.status === 'completed' && booking.paymentStatus === 'paid'
-                    const hasReview = bookingReviews[booking.id] || bookingReviews[booking._original?._id?.toString()]
-                    
-                    return canReview && !hasReview
-                  })() && (
-                    <button 
-                      className="btn small" 
-                      onClick={() => {
-                        setSelectedBooking(booking)
-                        setSelectedReview(null) // Đảm bảo không có review khi tạo mới
-                        setShowReviewModal(true)
-                      }}
-                      style={{ 
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        color: '#fff',
-                        border: 'none',
-                        height: '32px',
-                        minWidth: '90px',
-                        padding: '0 12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                        whiteSpace: 'nowrap',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <Star size={14} fill="#fff" />
-                      Đánh giá
-                    </button>
-                  )}
-                  {(() => {
-                    // Kiểm tra điều kiện để hiển thị badge "Đã đánh giá"
-                    const canReview = booking.status === 'completed' && booking.paymentStatus === 'paid'
-                    const hasReview = bookingReviews[booking.id] || bookingReviews[booking._original?._id?.toString()]
-                    
-                    return canReview && hasReview
-                  })() && (
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '8px'
-                    }}>
-                      <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        gap: '4px',
-                        padding: '0 10px',
-                        height: '32px',
-                        minWidth: '90px',
-                        background: '#f0f9ff',
-                        borderRadius: '8px',
-                        fontSize: '14px',
-                        color: '#3b82f6',
-                        border: '1px solid #bae6fd',
-                        whiteSpace: 'nowrap',
-                        boxSizing: 'border-box'
-                      }}>
-                        <Star size={14} fill="#fbbf24" color="#fbbf24" />
-                        <span>Đã đánh giá</span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                    <span className="booking-price" style={{ fontWeight: 600 }}>{booking.price}</span>
+                    {booking.paymentMethod && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 8px', background: '#eef2ff', color: '#4338ca', borderRadius: '999px' }}>
+                        {getPaymentIconSrc(booking.paymentMethod) ? (
+                          <img src={getPaymentIconSrc(booking.paymentMethod)} alt={booking.paymentMethod}
+                            style={{ width: '16px', height: '16px', objectFit: 'contain', borderRadius: '3px' }} />
+                        ) : (
+                          <span role="img" aria-label="cash">💵</span>
+                        )}
+                        <span style={{ fontSize: '12px' }}>{booking.paymentMethod}</span>
                       </div>
-                      <button 
-                        className="btn btn-outline small" 
-                        onClick={() => openEditReviewModal(booking)}
-                        style={{ 
+                    )}
+                  </div>
+                </div>
+
+                <div className="booking-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', minWidth: '160px', gap: '8px' }}>
+                  <div>
+                    {getStatusBadge(booking.status)}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    {/* Nút Chi tiết - không hiển thị cho đơn đã hủy */}
+                    {booking.status !== 'cancelled' && booking.status !== 'expired' && (
+                      <button
+                        className="btn btn-outline small"
+                        onClick={() => openDetailModal(booking)}
+                        style={{
                           height: '32px',
                           minWidth: '90px',
                           padding: '0 12px',
@@ -532,69 +430,154 @@ export default function BookingsTab() {
                           boxSizing: 'border-box'
                         }}
                       >
-                        Chỉnh sửa
+                        Chi tiết
                       </button>
-                    </div>
-                  )}
-                  {/* Nút Khiếu nại - chỉ hiển thị cho booking đã hoàn thành */}
-                  {booking.status === 'completed' && (
-                    <button 
-                      className="btn btn-outline small" 
-                      onClick={() => openReportModal(booking)}
-                      title="Khiếu nại"
-                      style={{ 
-                        height: '32px',
-                        width: '32px',
-                        padding: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#d97706',
-                        borderColor: '#fbbf24',
-                        flexShrink: 0,
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <AlertCircle size={16} />
-                    </button>
-                  )}
+                    )}
+                    {/* Only show cancel button if booking is upcoming/pending/pending_payment/hold/confirmed AND date hasn't passed */}
+                    {(booking.status === 'upcoming' || booking.status === 'pending' || booking.status === 'pending_payment' || booking.status === 'hold' || booking.status === 'confirmed') && !booking.isPastDate && (
+                      <button
+                        className="btn btn-outline small"
+                        onClick={() => openCancelModal(booking)}
+                        style={{
+                          height: '32px',
+                          minWidth: '90px',
+                          padding: '0 12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          whiteSpace: 'nowrap',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        Hủy đặt
+                      </button>
+                    )}
+                    {(() => {
+                      // Kiểm tra điều kiện để hiển thị nút đánh giá
+                      // 1. Thanh toán tiền mặt: status = "completed" (đã được set từ canReview) VÀ paymentStatus = "paid"
+                      // 2. Thanh toán online: status = "completed" VÀ paymentStatus = "paid"
+                      const canReview = booking.status === 'completed' && booking.paymentStatus === 'paid'
+                      const hasReview = bookingReviews[booking.id] || bookingReviews[booking._original?._id?.toString()]
+
+                      return canReview && !hasReview
+                    })() && (
+                        <button
+                          className="btn small"
+                          onClick={() => {
+                            setSelectedBooking(booking)
+                            setSelectedReview(null) // Đảm bảo không có review khi tạo mới
+                            setShowReviewModal(true)
+                          }}
+                          style={{
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            color: '#fff',
+                            border: 'none',
+                            height: '32px',
+                            minWidth: '90px',
+                            padding: '0 12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px',
+                            whiteSpace: 'nowrap',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          <Star size={14} fill="#fff" />
+                          Đánh giá
+                        </button>
+                      )}
+                    {(() => {
+                      // Kiểm tra điều kiện để hiển thị badge "Đã đánh giá"
+                      const canReview = booking.status === 'completed' && booking.paymentStatus === 'paid'
+                      const hasReview = bookingReviews[booking.id] || bookingReviews[booking._original?._id?.toString()]
+
+                      return canReview && hasReview
+                    })() && (
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px',
+                            padding: '0 10px',
+                            height: '32px',
+                            minWidth: '90px',
+                            background: '#f0f9ff',
+                            borderRadius: '8px',
+                            fontSize: '14px',
+                            color: '#3b82f6',
+                            border: '1px solid #bae6fd',
+                            whiteSpace: 'nowrap',
+                            boxSizing: 'border-box'
+                          }}>
+                            <Star size={14} fill="#fbbf24" color="#fbbf24" />
+                            <span>Đã đánh giá</span>
+                          </div>
+                          <button
+                            className="btn btn-outline small"
+                            onClick={() => openEditReviewModal(booking)}
+                            style={{
+                              height: '32px',
+                              minWidth: '90px',
+                              padding: '0 12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              whiteSpace: 'nowrap',
+                              boxSizing: 'border-box'
+                            }}
+                          >
+                            Chỉnh sửa
+                          </button>
+                        </div>
+                      )}
+                    {/* Nút Khiếu nại - chỉ hiển thị cho booking đã hoàn thành */}
+                    {booking.status === 'completed' && (
+                      <button
+                        className="btn btn-outline small"
+                        onClick={() => openReportModal(booking)}
+                        title="Khiếu nại"
+                        style={{
+                          height: '32px',
+                          width: '32px',
+                          padding: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#d97706',
+                          borderColor: '#fbbf24',
+                          flexShrink: 0,
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        <AlertCircle size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
         </div>
       )}
 
       {/* Pagination */}
       {!loading && bookings.length > 0 && totalPages > 1 && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: "24px",
-            padding: "16px 0",
-            borderTop: "1px solid #e5e7eb",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <label style={{ fontSize: 14, color: "#6b7280" }}>Hiển thị</label>
+        <div className="pagination-container">
+          <div className="pagination-info">
+            <label className="pagination-text">Hiển thị</label>
             <select
               value={limit}
               onChange={(e) => {
                 setLimit(Number(e.target.value))
                 setPage(1) // Reset to first page when changing page size
               }}
-              style={{
-                padding: "6px 12px",
-                border: "1px solid #e5e7eb",
-                borderRadius: 6,
-                fontSize: 14,
-                background: "#fff",
-                cursor: "pointer",
-                outline: "none",
-              }}
+              className="pagination-select"
             >
               {[5, 10, 20, 50].map((size) => (
                 <option key={size} value={size}>
@@ -602,90 +585,30 @@ export default function BookingsTab() {
                 </option>
               ))}
             </select>
-            <span style={{ fontSize: 14, color: "#6b7280" }}>kết quả</span>
-            <span style={{ fontSize: 14, color: "#6b7280" }}>
+            <span className="pagination-text">kết quả</span>
+            <span className="pagination-text">
               Hiển thị {(page - 1) * limit + 1} đến {Math.min(page * limit, total)} trong tổng số {total} bản ghi
             </span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="pagination-controls">
             <button
               disabled={page === 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              style={{
-                padding: "8px 12px",
-                border: "1px solid #e5e7eb",
-                borderRadius: 6,
-                background: page === 1 ? "#f3f4f6" : "#fff",
-                color: page === 1 ? "#9ca3af" : "#374151",
-                cursor: page === 1 ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 14,
-                fontWeight: 500,
-                transition: "all 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                if (page !== 1) {
-                  e.currentTarget.style.borderColor = "#3b82f6";
-                  e.currentTarget.style.color = "#3b82f6";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (page !== 1) {
-                  e.currentTarget.style.borderColor = "#e5e7eb";
-                  e.currentTarget.style.color = "#374151";
-                }
-              }}
+              className="pagination-btn"
             >
               <ChevronLeft size={16} />
               Trước
             </button>
 
-            <div
-              style={{
-                padding: "8px 16px",
-                border: "1px solid #e5e7eb",
-                borderRadius: 6,
-                background: "#fff",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "#374151",
-              }}
-            >
+            <div className="pagination-current">
               {page} / {totalPages}
             </div>
 
             <button
               disabled={page === totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              style={{
-                padding: "8px 12px",
-                border: "1px solid #e5e7eb",
-                borderRadius: 6,
-                background: page === totalPages ? "#f3f4f6" : "#fff",
-                color: page === totalPages ? "#9ca3af" : "#374151",
-                cursor: page === totalPages ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 14,
-                fontWeight: 500,
-                transition: "all 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                if (page !== totalPages) {
-                  e.currentTarget.style.borderColor = "#3b82f6";
-                  e.currentTarget.style.color = "#3b82f6";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (page !== totalPages) {
-                  e.currentTarget.style.borderColor = "#e5e7eb";
-                  e.currentTarget.style.color = "#374151";
-                }
-              }}
+              className="pagination-btn"
             >
               Sau
               <ChevronRight size={16} />
@@ -823,8 +746,8 @@ export default function BookingsTab() {
               </div>
             )}
             <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
-              <button 
-                className="btn btn-outline" 
+              <button
+                className="btn btn-outline"
                 onClick={handleDownloadTicket}
                 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
@@ -896,10 +819,10 @@ export default function BookingsTab() {
 
               {/* Right - QR Code */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ 
-                  background: '#ffffff', 
-                  padding: '16px', 
-                  border: '2px solid #e5e7eb', 
+                <div style={{
+                  background: '#ffffff',
+                  padding: '16px',
+                  border: '2px solid #e5e7eb',
                   borderRadius: '8px',
                   marginBottom: '12px'
                 }}>

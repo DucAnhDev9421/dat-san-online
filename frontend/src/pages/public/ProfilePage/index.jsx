@@ -5,11 +5,12 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { userApi } from '../../../api/userApi'
 import { bookingApi } from '../../../api/bookingApi'
 import ProfileHeader from './ProfileHeader'
+import './ProfilePage.css'
 
 function ProfilePage() {
   const { user } = useAuth()
   const location = useLocation()
-  
+
   // Lấy số lượng sân yêu thích từ API
   const [favoriteVenuesCount, setFavoriteVenuesCount] = React.useState(0)
   const [totalBookingsCount, setTotalBookingsCount] = React.useState(0)
@@ -59,16 +60,16 @@ function ProfilePage() {
       try {
         // Fetch với limit=1 để chỉ lấy pagination info
         const result = await bookingApi.getMyBookings({ page: 1, limit: 1 })
-        
+
         // Kiểm tra nhiều cấu trúc response có thể có
         let total = 0
-        
+
         // Kiểm tra result có tồn tại không
         if (!result) {
           setTotalBookingsCount(0)
           return
         }
-        
+
         // Kiểm tra result.data
         if (result.data) {
           // Cấu trúc 1: result.data.pagination.total (chuẩn từ backend)
@@ -95,7 +96,7 @@ function ProfilePage() {
           // Thử kiểm tra result trực tiếp
           total = result.pagination.total
         }
-        
+
         setTotalBookingsCount(total)
       } catch (error) {
         console.error('Error fetching bookings count:', error)
@@ -140,52 +141,37 @@ function ProfilePage() {
   }, [location.pathname])
 
   return (
-    <main className="profile-page" style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
-      padding: '24px 0'
-    }}>
+    <main className="profile-page">
       <div className="container">
         <ProfileHeader userData={userData} favoriteVenuesCount={favoriteVenuesCount} />
-        
+
         {/* Navigation Tabs */}
-        <section className="profile-tabs" style={{
-          background: '#fff',
-          borderRadius: '12px',
-          padding: '16px 24px',
-          marginBottom: '24px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          border: '1px solid #e5e7eb'
-        }}>
-          <div className="tabs">
-            <Link 
+        <section className="profile-card profile-tabs-container">
+          <div className="profile-tabs-list">
+            <Link
               to="/profile/bookings"
-              className={`tab ${activeTab === 'bookings' ? 'active' : ''}`}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}
+              className={`profile-tab ${activeTab === 'bookings' ? 'active' : ''}`}
             >
               <Calendar size={18} />
               Đặt sân của tôi
             </Link>
-            <Link 
+            <Link
               to="/profile/favorites"
-              className={`tab ${activeTab === 'favorites' ? 'active' : ''}`}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}
+              className={`profile-tab ${activeTab === 'favorites' ? 'active' : ''}`}
             >
               <Heart size={18} />
               Sân yêu thích
             </Link>
-            <Link 
+            <Link
               to="/profile/tournaments"
-              className={`tab ${activeTab === 'tournaments' ? 'active' : ''}`}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}
+              className={`profile-tab ${activeTab === 'tournaments' ? 'active' : ''}`}
             >
               <Trophy size={18} />
               Giải đấu của tôi
             </Link>
-            <Link 
+            <Link
               to="/profile/settings"
-              className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}
+              className={`profile-tab ${activeTab === 'settings' ? 'active' : ''}`}
             >
               <Settings size={18} />
               Cài đặt
@@ -194,13 +180,7 @@ function ProfilePage() {
         </section>
 
         {/* Tab Content */}
-        <section className="profile-content" style={{
-          background: '#fff',
-          borderRadius: '12px',
-          padding: '24px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          border: '1px solid #e5e7eb'
-        }}>
+        <section className="profile-card profile-content-container">
           <Outlet />
         </section>
       </div>
