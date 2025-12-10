@@ -210,11 +210,11 @@ const leagueSchema = new mongoose.Schema(
             "round1", "round2", "round3", "round4", 
             "round-robin", 
             "round-robin-round1", "round-robin-round2", "round-robin-round3", "round-robin-round4",
-            "round-robin-v1", "round-robin-v2", "round-robin-v3", "round-robin-v4", "round-robin-v5", "round-robin-v6",
-            "round-robin-round1-v1", "round-robin-round1-v2", "round-robin-round1-v3", "round-robin-round1-v4", "round-robin-round1-v5", "round-robin-round1-v6",
-            "round-robin-round2-v1", "round-robin-round2-v2", "round-robin-round2-v3", "round-robin-round2-v4", "round-robin-round2-v5", "round-robin-round2-v6",
-            "round-robin-round3-v1", "round-robin-round3-v2", "round-robin-round3-v3", "round-robin-round3-v4", "round-robin-round3-v5", "round-robin-round3-v6",
-            "round-robin-round4-v1", "round-robin-round4-v2", "round-robin-round4-v3", "round-robin-round4-v4", "round-robin-round4-v5", "round-robin-round4-v6",
+            "round-robin-v1", "round-robin-v2", "round-robin-v3", "round-robin-v4", "round-robin-v5", "round-robin-v6", "round-robin-v7", "round-robin-v8",
+            "round-robin-round1-v1", "round-robin-round1-v2", "round-robin-round1-v3", "round-robin-round1-v4", "round-robin-round1-v5", "round-robin-round1-v6", "round-robin-round1-v7", "round-robin-round1-v8",
+            "round-robin-round2-v1", "round-robin-round2-v2", "round-robin-round2-v3", "round-robin-round2-v4", "round-robin-round2-v5", "round-robin-round2-v6", "round-robin-round2-v7", "round-robin-round2-v8",
+            "round-robin-round3-v1", "round-robin-round3-v2", "round-robin-round3-v3", "round-robin-round3-v4", "round-robin-round3-v5", "round-robin-round3-v6", "round-robin-round3-v7", "round-robin-round3-v8",
+            "round-robin-round4-v1", "round-robin-round4-v2", "round-robin-round4-v3", "round-robin-round4-v4", "round-robin-round4-v5", "round-robin-round4-v6", "round-robin-round4-v7", "round-robin-round4-v8",
             "semi", "final"
           ],
         },
@@ -241,6 +241,15 @@ const leagueSchema = new mongoose.Schema(
           default: null,
         },
         score2: {
+          type: Number,
+          default: null,
+        },
+        // Kết quả đá luân lưu (khi trận đấu hòa)
+        penaltyScore1: {
+          type: Number,
+          default: null,
+        },
+        penaltyScore2: {
           type: Number,
           default: null,
         },

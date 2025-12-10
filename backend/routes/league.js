@@ -27,6 +27,7 @@ import {
 import { debit } from "../utils/walletService.js";
 import { createNotification } from "../utils/notificationService.js";
 import { emitToUser } from "../socket/index.js";
+import { isSlotLocked } from "../socket/bookingSocket.js";
 import asyncHandler from "express-async-handler";
 
 const router = express.Router();
@@ -3377,14 +3378,41 @@ router.get(
         return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
       };
 
-      const isCourtAvailable = async (courtId, date, startTime, endTime) => {
+      // Helper: Kiểm tra overlap giữa 2 khoảng thời gian
+      const hasTimeOverlap = (start1, end1, start2, end2) => {
+        const start1Min = timeToMinutes(start1);
+        const end1Min = timeToMinutes(end1);
+        const start2Min = timeToMinutes(start2);
+        const end2Min = timeToMinutes(end2);
+        
+        if (start1Min === null || end1Min === null || start2Min === null || end2Min === null) {
+          return false;
+        }
+        
+        // Có overlap nếu: start1 < end2 && start2 < end1
+        return !(end1Min <= start2Min || start1Min >= end2Min);
+      };
+
+      // Helper: Thu thập tất cả các time slots đã được sử dụng (bookings, matches, socket locks)
+      // Bỏ qua match hiện tại nếu được chỉ định
+      const getOccupiedTimeSlots = async (courtId, date, excludeMatch = null) => {
+        const occupiedSlots = [];
         const bookingDate = new Date(date);
         bookingDate.setHours(0, 0, 0, 0);
         const now = new Date();
         
+        // 1. Lấy bookings
+        const startOfDay = new Date(bookingDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(bookingDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        
         const existingBookings = await Booking.find({
           court: courtId,
-          date: bookingDate,
+          date: {
+            $gte: startOfDay,
+            $lte: endOfDay
+          },
           status: { $in: ["pending_payment", "hold", "confirmed"] },
           $or: [
             { holdUntil: { $exists: false } },
@@ -3393,93 +3421,27 @@ router.get(
           ],
         }).lean();
         
-        console.log(`[AUTO_SCHEDULE_AVAILABILITY] Kiểm tra sân ${courtId} ngày ${date.toISOString().split('T')[0]} từ ${startTime} đến ${endTime}:`, {
-          foundBookings: existingBookings.length,
-          bookings: existingBookings.map(b => ({
-            id: b._id,
-            status: b.status,
-            timeSlots: b.timeSlots,
-            league: b.league,
-            matchInfo: b.matchInfo,
-            holdUntil: b.holdUntil
-          }))
-        });
-        
-        // Check conflicts với bookings
         for (const booking of existingBookings) {
           for (const slot of (booking.timeSlots || [])) {
             const [slotStart, slotEnd] = slot.split('-');
-            const slotStartMinutes = timeToMinutes(slotStart);
-            const slotEndMinutes = timeToMinutes(slotEnd);
-            
-            if (matchStartMinutes !== null && matchEndMinutes !== null &&
-                slotStartMinutes !== null && slotEndMinutes !== null) {
-              if (!(matchEndMinutes <= slotStartMinutes || matchStartMinutes >= slotEndMinutes)) {
-                console.log(`[AUTO_SCHEDULE_AVAILABILITY] Sân ${courtId} KHÔNG khả dụng do conflict với booking ${booking._id}:`, {
-                  bookingStatus: booking.status,
-                  bookingSlot: slot,
-                  requestedTime: `${startTime}-${endTime}`,
-                  league: booking.league,
-                  matchInfo: booking.matchInfo
-                });
-                return false;
-              }
-            }
+            occupiedSlots.push({
+              type: 'booking',
+              start: slotStart,
+              end: slotEnd,
+              id: booking._id,
+              status: booking.status
+            });
           }
         }
         
-        console.log(`[AUTO_SCHEDULE_AVAILABILITY] Sân ${courtId} khả dụng (không có conflict với bookings)`);
-        
-        console.log(`[AVAILABILITY_CHECK] Kiểm tra sân ${courtId} ngày ${date.toISOString().split('T')[0]} từ ${startTime} đến ${endTime}:`, {
-          queryDateRange: {
-            start: startOfDay.toISOString(),
-            end: endOfDay.toISOString()
-          },
-          foundBookings: existingBookings.length,
-          bookings: existingBookings.map(b => ({
-            id: b._id,
-            status: b.status,
-            date: b.date,
-            timeSlots: b.timeSlots,
-            league: b.league,
-            matchInfo: b.matchInfo,
-            holdUntil: b.holdUntil,
-            court: b.court
-          }))
-        });
-
-        const matchStartMinutes = timeToMinutes(startTime);
-        const matchEndMinutes = timeToMinutes(endTime);
-        
-        for (const booking of existingBookings) {
-          for (const slot of (booking.timeSlots || [])) {
-            const [slotStart, slotEnd] = slot.split('-');
-            const slotStartMinutes = timeToMinutes(slotStart);
-            const slotEndMinutes = timeToMinutes(slotEnd);
-            
-            if (matchStartMinutes !== null && matchEndMinutes !== null &&
-                slotStartMinutes !== null && slotEndMinutes !== null) {
-              if (!(matchEndMinutes <= slotStartMinutes || matchStartMinutes >= slotEndMinutes)) {
-                console.log(`[AVAILABILITY_CHECK] Sân ${courtId} KHÔNG khả dụng do conflict với booking ${booking._id}:`, {
-                  bookingStatus: booking.status,
-                  bookingSlot: slot,
-                  requestedTime: `${startTime}-${endTime}`,
-                  league: booking.league,
-                  matchInfo: booking.matchInfo
-                });
-                return false;
-              }
-            }
-          }
-        }
-        
-        console.log(`[AVAILABILITY_CHECK] Sân ${courtId} khả dụng (không có conflict với bookings)`);
-
-        // Kiểm tra xung đột với các matches khác trong tournament
+        // 2. Lấy matches đã được sắp lịch trong tournament (cùng sân, cùng ngày)
+        // Bỏ qua match hiện tại nếu được chỉ định
         for (const otherMatch of league.matches) {
           // Bỏ qua chính match đang tìm suggestions
-          if (otherMatch._id && match._id && otherMatch._id.toString() === match._id.toString()) continue;
-          if (otherMatch.stage === match.stage && otherMatch.matchNumber === match.matchNumber) continue;
+          if (excludeMatch) {
+            if (otherMatch._id && excludeMatch._id && otherMatch._id.toString() === excludeMatch._id.toString()) continue;
+            if (otherMatch.stage === excludeMatch.stage && otherMatch.matchNumber === excludeMatch.matchNumber) continue;
+          }
           
           if (!otherMatch.date || !otherMatch.time || !otherMatch.courtId) continue;
           
@@ -3487,25 +3449,59 @@ router.get(
           otherDate.setHours(0, 0, 0, 0);
           const matchDate = new Date(date);
           matchDate.setHours(0, 0, 0, 0);
-          
-          // So sánh ngày (chỉ so sánh ngày, không so sánh giờ)
           const sameDate = otherDate.getTime() === matchDate.getTime();
           const sameCourt = otherMatch.courtId.toString() === courtId.toString();
           
           if (sameDate && sameCourt) {
             const otherEndTime = otherMatch.endTime || otherMatch.time;
-            const otherStartMinutes = timeToMinutes(otherMatch.time);
-            const otherEndMinutes = timeToMinutes(otherEndTime);
-            
-            if (matchStartMinutes !== null && matchEndMinutes !== null &&
-                otherStartMinutes !== null && otherEndMinutes !== null) {
-              if (!(matchEndMinutes <= otherStartMinutes || matchStartMinutes >= otherEndMinutes)) {
-                return false;
-              }
-            }
+            occupiedSlots.push({
+              type: 'match',
+              start: otherMatch.time,
+              end: otherEndTime,
+              stage: otherMatch.stage,
+              matchNumber: otherMatch.matchNumber
+            });
           }
         }
+        
+        return occupiedSlots;
+      };
 
+      const isCourtAvailable = async (courtId, date, startTime, endTime) => {
+        const bookingDate = new Date(date);
+        bookingDate.setHours(0, 0, 0, 0);
+        const dateStr = bookingDate.toISOString().split('T')[0];
+        
+        // Kiểm tra socket locks (realtime availability)
+        const timeSlotStr = `${startTime}-${endTime}`;
+        const lock = isSlotLocked(courtId.toString(), dateStr, timeSlotStr);
+        
+        if (lock) {
+          console.log(`[AUTO_SCHEDULE_AVAILABILITY] Sân ${courtId} KHÔNG khả dụng do đang bị lock realtime:`, {
+            lockUserId: lock.userId,
+            lockedAt: new Date(lock.lockedAt).toISOString(),
+            expiresAt: new Date(lock.expiresAt).toISOString(),
+            requestedTime: `${startTime}-${endTime}`
+          });
+          return false;
+        }
+        
+        // Thu thập tất cả các time slots đã được sử dụng (bỏ qua match hiện tại)
+        const occupiedSlots = await getOccupiedTimeSlots(courtId, date, match);
+        
+        // Kiểm tra overlap với tất cả các slots đã sử dụng
+        for (const occupiedSlot of occupiedSlots) {
+          if (hasTimeOverlap(startTime, endTime, occupiedSlot.start, occupiedSlot.end)) {
+            console.log(`[AUTO_SCHEDULE_AVAILABILITY] Sân ${courtId} KHÔNG khả dụng do overlap với ${occupiedSlot.type}:`, {
+              requestedTime: `${startTime}-${endTime}`,
+              occupiedTime: `${occupiedSlot.start}-${occupiedSlot.end}`,
+              type: occupiedSlot.type,
+              id: occupiedSlot.id || `${occupiedSlot.stage}-${occupiedSlot.matchNumber}`
+            });
+            return false;
+          }
+        }
+        
         return true;
       };
 
@@ -3765,11 +3761,17 @@ router.post(
       const { 
         startDate, 
         endDate, 
-        matchDuration = 90, // Thời lượng mỗi trận (phút), mặc định 90 phút
-        breakTime = 30, // Khoảng cách giữa các trận (phút), mặc định 30 phút
-        preferredStartTime = "08:00", // Giờ bắt đầu ưu tiên
-        preferredEndTime = "22:00" // Giờ kết thúc ưu tiên
+        matchDuration = 90, // Thời lượng thi đấu chính thức mỗi trận (phút), mặc định 90 phút
+        breakTime = 30, // Thời gian nghỉ giữa hiệp/giữa các trận (phút), mặc định 30 phút
+        totalMatchTime, // Tổng thời gian trận đấu (matchDuration + breakTime), nếu không có sẽ tính tự động
+        matchesPerDay, // Số lượng trận đấu mỗi ngày (tùy chọn)
+        matchesPerRound, // Số lượng trận đấu mỗi vòng (tùy chọn)
+        preferredStartTime = "08:00", // Giờ bắt đầu khung giờ hoạt động
+        preferredEndTime = "22:00" // Giờ kết thúc khung giờ hoạt động
       } = req.body;
+
+      // Tính tổng thời gian trận đấu (bao gồm thời gian thi đấu chính thức + thời gian nghỉ)
+      const totalTimePerMatch = totalMatchTime || (matchDuration + breakTime);
 
       const league = await League.findById(leagueId)
         .populate("facility")
@@ -3829,7 +3831,7 @@ router.post(
         }
       }
 
-      const courts = await Court.find(courtQuery).lean();
+      const courts = await Court.find(courtQuery).populate('facility').lean();
 
       if (courts.length === 0) {
         return res.status(400).json({
@@ -3837,6 +3839,9 @@ router.post(
           message: "Cơ sở không có sân nào. Vui lòng thêm sân trước.",
         });
       }
+
+      // Lấy timeSlotDuration từ facility (khung giờ cố định của sân)
+      const slotDuration = facility.timeSlotDuration || 60; // Mặc định 60 phút
 
       // Lấy tất cả matches chưa có lịch hoặc có thể override
       const matches = league.matches || [];
@@ -3871,19 +3876,66 @@ router.post(
         return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
       };
 
-      // Helper: Kiểm tra sân có sẵn tại thời điểm cụ thể
-      const isCourtAvailable = async (courtId, date, startTime, endTime) => {
+      // Helper: Kiểm tra xem khung giờ trận đấu có khớp với timeSlotDuration không
+      // Trận đấu phải bắt đầu và kết thúc đúng với các khung giờ cố định của sân
+      const isTimeSlotAligned = (startTime, endTime, slotDuration) => {
+        const startMinutes = timeToMinutes(startTime);
+        const endMinutes = timeToMinutes(endTime);
+        if (startMinutes === null || endMinutes === null) return false;
+
+        // Kiểm tra startTime có khớp với khung giờ cố định không
+        // StartTime phải là bội số của slotDuration tính từ 00:00
+        const startMinutesFromMidnight = startMinutes;
+        if (startMinutesFromMidnight % slotDuration !== 0) {
+          return false; // Không khớp với khung giờ cố định
+        }
+
+        // Kiểm tra endTime có khớp với khung giờ cố định không
+        const endMinutesFromMidnight = endMinutes;
+        if (endMinutesFromMidnight % slotDuration !== 0) {
+          return false; // Không khớp với khung giờ cố định
+        }
+
+        // Kiểm tra duration có là bội số của slotDuration không
+        const duration = endMinutes - startMinutes;
+        if (duration % slotDuration !== 0) {
+          return false; // Thời lượng không khớp với khung giờ cố định
+        }
+
+        return true;
+      };
+
+      // Helper: Kiểm tra overlap giữa 2 khoảng thời gian
+      // Trả về true nếu có overlap, false nếu không
+      const hasTimeOverlap = (start1, end1, start2, end2) => {
+        const start1Min = timeToMinutes(start1);
+        const end1Min = timeToMinutes(end1);
+        const start2Min = timeToMinutes(start2);
+        const end2Min = timeToMinutes(end2);
+        
+        if (start1Min === null || end1Min === null || start2Min === null || end2Min === null) {
+          return false;
+        }
+        
+        // Có overlap nếu: start1 < end2 && start2 < end1
+        // Tức là: không phải (end1 <= start2 || start1 >= end2)
+        return !(end1Min <= start2Min || start1Min >= end2Min);
+      };
+
+      // Helper: Thu thập tất cả các time slots đã được sử dụng (bookings, matches, socket locks)
+      const getOccupiedTimeSlots = async (courtId, date) => {
+        const occupiedSlots = [];
         const bookingDate = new Date(date);
         bookingDate.setHours(0, 0, 0, 0);
         const now = new Date();
+        const dateStr = bookingDate.toISOString().split('T')[0];
         
-        // Tạo date range để query (từ 00:00:00 đến 23:59:59 của ngày)
+        // 1. Lấy bookings
         const startOfDay = new Date(bookingDate);
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(bookingDate);
         endOfDay.setHours(23, 59, 59, 999);
         
-        // Kiểm tra booking hiện có
         const existingBookings = await Booking.find({
           court: courtId,
           date: {
@@ -3898,53 +3950,98 @@ router.post(
           ],
         }).lean();
         
-        console.log(`[AUTO_SCHEDULE_AVAILABILITY] Kiểm tra sân ${courtId} ngày ${date.toISOString().split('T')[0]} từ ${startTime} đến ${endTime}:`, {
-          queryDateRange: {
-            start: startOfDay.toISOString(),
-            end: endOfDay.toISOString()
-          },
-          foundBookings: existingBookings.length,
-          bookings: existingBookings.map(b => ({
-            id: b._id,
-            status: b.status,
-            date: b.date,
-            timeSlots: b.timeSlots,
-            league: b.league,
-            matchInfo: b.matchInfo,
-            holdUntil: b.holdUntil,
-            court: b.court
-          }))
-        });
-
-        // Tạo time slots cho trận đấu
-        const matchStartMinutes = timeToMinutes(startTime);
-        const matchEndMinutes = timeToMinutes(endTime);
-        
-        // Kiểm tra xem có booking nào trùng với thời gian này không
         for (const booking of existingBookings) {
           for (const slot of (booking.timeSlots || [])) {
             const [slotStart, slotEnd] = slot.split('-');
-            const slotStartMinutes = timeToMinutes(slotStart);
-            const slotEndMinutes = timeToMinutes(slotEnd);
-            
-            // Kiểm tra overlap
-            if (matchStartMinutes !== null && matchEndMinutes !== null &&
-                slotStartMinutes !== null && slotEndMinutes !== null) {
-              if (!(matchEndMinutes <= slotStartMinutes || matchStartMinutes >= slotEndMinutes)) {
-                console.log(`[AUTO_SCHEDULE_AVAILABILITY] Sân ${courtId} KHÔNG khả dụng do conflict với booking ${booking._id}:`, {
-                  bookingStatus: booking.status,
-                  bookingSlot: slot,
-                  requestedTime: `${startTime}-${endTime}`,
-                  league: booking.league,
-                  matchInfo: booking.matchInfo
-                });
-                return false; // Có overlap
-              }
-            }
+            occupiedSlots.push({
+              type: 'booking',
+              start: slotStart,
+              end: slotEnd,
+              id: booking._id,
+              status: booking.status
+            });
           }
         }
         
-        console.log(`[AUTO_SCHEDULE_AVAILABILITY] Sân ${courtId} khả dụng (không có conflict với bookings)`);
+        // 2. Lấy matches đã được sắp lịch trong tournament (cùng sân, cùng ngày)
+        for (const otherMatch of league.matches) {
+          if (!otherMatch.date || !otherMatch.time || !otherMatch.courtId) continue;
+          
+          const otherDate = new Date(otherMatch.date);
+          otherDate.setHours(0, 0, 0, 0);
+          const matchDate = new Date(date);
+          matchDate.setHours(0, 0, 0, 0);
+          const sameDate = otherDate.getTime() === matchDate.getTime();
+          const sameCourt = otherMatch.courtId.toString() === courtId.toString();
+          
+          if (sameDate && sameCourt) {
+            const otherEndTime = otherMatch.endTime || otherMatch.time;
+            occupiedSlots.push({
+              type: 'match',
+              start: otherMatch.time,
+              end: otherEndTime,
+              stage: otherMatch.stage,
+              matchNumber: otherMatch.matchNumber
+            });
+          }
+        }
+        
+        // 3. Kiểm tra socket locks (realtime)
+        // Lấy tất cả các khung giờ có thể bị lock
+        // Vì socket locks chỉ có thể lock một slot cụ thể, ta sẽ kiểm tra khi cần
+        
+        return occupiedSlots;
+      };
+
+      // Helper: Kiểm tra sân có sẵn tại thời điểm cụ thể
+      // Sử dụng kỹ thuật Overlap Checking
+      const isCourtAvailable = async (courtId, date, startTime, endTime) => {
+        // Kiểm tra xem khung giờ có khớp với timeSlotDuration không
+        if (!isTimeSlotAligned(startTime, endTime, slotDuration)) {
+          console.log(`[AUTO_SCHEDULE_AVAILABILITY] Sân ${courtId} KHÔNG khả dụng do khung giờ không khớp với timeSlotDuration:`, {
+            requestedTime: `${startTime}-${endTime}`,
+            slotDuration: slotDuration,
+            message: `Khung giờ phải khớp với các khung giờ cố định ${slotDuration} phút (ví dụ: 8:00-9:00, 9:00-10:00)`
+          });
+          return false;
+        }
+        
+        const bookingDate = new Date(date);
+        bookingDate.setHours(0, 0, 0, 0);
+        const dateStr = bookingDate.toISOString().split('T')[0];
+        
+        // Kiểm tra socket locks (realtime availability)
+        const timeSlotStr = `${startTime}-${endTime}`;
+        const lock = isSlotLocked(courtId.toString(), dateStr, timeSlotStr);
+        
+        if (lock) {
+          console.log(`[AUTO_SCHEDULE_AVAILABILITY] Sân ${courtId} KHÔNG khả dụng do đang bị lock realtime:`, {
+            lockUserId: lock.userId,
+            lockedAt: new Date(lock.lockedAt).toISOString(),
+            expiresAt: new Date(lock.expiresAt).toISOString(),
+            requestedTime: `${startTime}-${endTime}`
+          });
+          return false;
+        }
+        
+        // Thu thập tất cả các time slots đã được sử dụng
+        const occupiedSlots = await getOccupiedTimeSlots(courtId, date);
+        
+        // Kiểm tra overlap với tất cả các slots đã sử dụng
+        for (const occupiedSlot of occupiedSlots) {
+          if (hasTimeOverlap(startTime, endTime, occupiedSlot.start, occupiedSlot.end)) {
+            console.log(`[AUTO_SCHEDULE_AVAILABILITY] Sân ${courtId} KHÔNG khả dụng do overlap với ${occupiedSlot.type}:`, {
+              requestedTime: `${startTime}-${endTime}`,
+              occupiedTime: `${occupiedSlot.start}-${occupiedSlot.end}`,
+              type: occupiedSlot.type,
+              id: occupiedSlot.id || `${occupiedSlot.stage}-${occupiedSlot.matchNumber}`,
+              status: occupiedSlot.status
+            });
+            return false;
+          }
+        }
+        
+        console.log(`[AUTO_SCHEDULE_AVAILABILITY] Sân ${courtId} khả dụng (không có overlap với ${occupiedSlots.length} slots đã sử dụng)`);
         return true;
       };
 
@@ -3964,6 +4061,67 @@ router.post(
         };
       };
 
+      // Helper: Kiểm tra xem ngày đó còn khung giờ trống không (cho ít nhất một sân)
+      // Kiểm tra toàn bộ khung giờ trong ngày với step = slotDuration để khớp với khung giờ cố định
+      const hasAvailableSlotsForDay = async (date) => {
+        const operatingHours = getOperatingHours(date);
+        if (!operatingHours) {
+          return false; // Facility không mở
+        }
+
+        const openMinutes = timeToMinutes(operatingHours.open);
+        const closeMinutes = timeToMinutes(operatingHours.close);
+        const preferredStartMinutes = timeToMinutes(preferredStartTime);
+        const preferredEndMinutes = timeToMinutes(preferredEndTime);
+
+        // Tính khoảng thời gian có thể sử dụng
+        let availableStart = Math.max(openMinutes, preferredStartMinutes);
+        let availableEnd = Math.min(closeMinutes, preferredEndMinutes);
+
+        // Điều chỉnh availableStart để khớp với timeSlotDuration
+        availableStart = Math.ceil(availableStart / slotDuration) * slotDuration;
+
+        // Tính số khung giờ cần thiết cho trận đấu (dựa trên totalMatchTime)
+        const requiredSlots = Math.ceil(totalTimePerMatch / slotDuration);
+        const matchDurationInSlots = Math.ceil(matchDuration / slotDuration);
+        const requiredDuration = requiredSlots * slotDuration;
+
+        if (availableEnd - availableStart < requiredDuration) {
+          return false; // Không đủ thời gian cho một trận đấu
+        }
+
+        // Kiểm tra toàn bộ khung giờ trong ngày với step = slotDuration
+        // Đảm bảo chỉ kiểm tra các khung giờ khớp với timeSlotDuration
+        let currentTime = availableStart;
+
+        // Kiểm tra từng sân và từng khung giờ
+        while (currentTime + requiredDuration <= availableEnd) {
+          const startTime = minutesToTime(currentTime);
+          // EndTime dựa trên matchDuration (không bao gồm breakTime trong endTime)
+          const endTime = minutesToTime(currentTime + (matchDurationInSlots * slotDuration));
+
+          // Thử tất cả các sân cho khung giờ này
+          for (const court of courts) {
+            const available = await isCourtAvailable(
+              court._id,
+              date,
+              startTime,
+              endTime
+            );
+            if (available) {
+              // Tìm thấy ít nhất một slot trống, ngày này còn chỗ
+              return true;
+            }
+          }
+
+          // Chuyển sang khung giờ tiếp theo (tăng lên 1 slotDuration)
+          currentTime += slotDuration;
+        }
+
+        // Đã kiểm tra toàn bộ khung giờ, không tìm thấy slot trống nào
+        return false;
+      };
+
       // Sắp xếp matches theo stage và matchNumber
       // Lọc bỏ matches có BYE (không cần sắp lịch cho trận BYE)
       const sortedMatches = matches
@@ -3981,33 +4139,129 @@ router.post(
           return (a.matchNumber || 0) - (b.matchNumber || 0);
         });
 
+      // Nhóm matches theo stage để phân bổ theo vòng
+      const matchesByStage = {};
+      for (const match of sortedMatches) {
+        if (!matchesByStage[match.stage]) {
+          matchesByStage[match.stage] = [];
+        }
+        matchesByStage[match.stage].push(match);
+      }
+
+      // Tính số khung giờ cần thiết cho một trận đấu (dựa trên totalMatchTime)
+      const requiredSlotsPerMatch = Math.ceil(totalTimePerMatch / slotDuration);
+      const matchDurationInSlots = Math.ceil(matchDuration / slotDuration);
+
+      // Tính số trận đấu tối đa mỗi ngày dựa trên khung giờ hoạt động
+      const preferredStartMinutes = timeToMinutes(preferredStartTime);
+      const preferredEndMinutes = timeToMinutes(preferredEndTime);
+      const availableMinutesPerDay = preferredEndMinutes - preferredStartMinutes;
+      const maxMatchesPerDayByTime = Math.floor(availableMinutesPerDay / (requiredSlotsPerMatch * slotDuration));
+
+      // Xác định số trận đấu mỗi ngày
+      let targetMatchesPerDay = matchesPerDay;
+      if (!targetMatchesPerDay) {
+        // Nếu không có matchesPerDay, tính dựa trên matchesPerRound hoặc mặc định
+        if (matchesPerRound) {
+          // Tính số ngày cần thiết cho mỗi vòng
+          const maxMatchesInRound = Math.max(...Object.values(matchesByStage).map(m => m.length));
+          const daysNeededPerRound = Math.ceil(maxMatchesInRound / matchesPerRound);
+          // Phân bổ đều
+          targetMatchesPerDay = Math.ceil(maxMatchesInRound / daysNeededPerRound);
+        } else {
+          // Mặc định: sử dụng giới hạn dựa trên thời gian
+          targetMatchesPerDay = Math.max(1, Math.min(maxMatchesPerDayByTime, Math.ceil(sortedMatches.length / 7)));
+        }
+      }
+
+      // Đảm bảo không vượt quá giới hạn thời gian
+      targetMatchesPerDay = Math.min(targetMatchesPerDay, maxMatchesPerDayByTime);
+
+      console.log(`[AUTO_SCHEDULE] Cấu hình:`, {
+        totalMatches: sortedMatches.length,
+        targetMatchesPerDay,
+        maxMatchesPerDayByTime,
+        totalTimePerMatch,
+        matchDuration,
+        breakTime,
+        requiredSlotsPerMatch,
+        slotDuration
+      });
+
       const scheduledMatches = [];
       const failedMatches = [];
 
-      // Lặp qua từng ngày trong khoảng thời gian
+      // Phân bổ trận đấu vào các ngày
       let currentDate = new Date(scheduleStartDate);
+      let matchesScheduledToday = 0;
       let currentCourtIndex = 0;
       let currentTimeMinutes = timeToMinutes(preferredStartTime);
+      // Điều chỉnh currentTimeMinutes để khớp với timeSlotDuration
+      currentTimeMinutes = Math.floor(currentTimeMinutes / slotDuration) * slotDuration;
+
+      // Hàm helper: Chuyển sang ngày tiếp theo
+      const moveToNextDay = () => {
+        currentDate.setDate(currentDate.getDate() + 1);
+        matchesScheduledToday = 0;
+        currentTimeMinutes = timeToMinutes(preferredStartTime);
+        currentTimeMinutes = Math.floor(currentTimeMinutes / slotDuration) * slotDuration;
+        currentCourtIndex = 0;
+      };
+
+      // Hàm helper: Kiểm tra xem có thể sắp thêm trận trong ngày không
+      const canScheduleMoreToday = () => {
+        if (matchesScheduledToday >= targetMatchesPerDay) {
+          return false;
+        }
+        const operatingHours = getOperatingHours(currentDate);
+        if (!operatingHours) return false;
+        const openMinutes = timeToMinutes(operatingHours.open);
+        const closeMinutes = timeToMinutes(operatingHours.close);
+        const preferredEndMinutes = timeToMinutes(preferredEndTime);
+        const maxEndMinutes = Math.min(closeMinutes, preferredEndMinutes);
+        
+        // Kiểm tra xem còn đủ thời gian cho ít nhất 1 trận nữa không
+        const nextMatchStart = currentTimeMinutes;
+        const nextMatchEnd = nextMatchStart + (requiredSlotsPerMatch * slotDuration);
+        return nextMatchEnd <= maxEndMinutes;
+      };
 
       for (const match of sortedMatches) {
         let scheduled = false;
         let attempts = 0;
-        const maxAttempts = courts.length * 14; // Thử tối đa qua tất cả sân và 14 ngày
-        let tempDate = new Date(currentDate);
-        let tempTimeMinutes = currentTimeMinutes;
+        const maxAttempts = courts.length * 30; // Tăng số lần thử để tìm slot phù hợp
+
+        // Kiểm tra xem có thể sắp thêm trận trong ngày hiện tại không
+        if (!canScheduleMoreToday()) {
+          moveToNextDay();
+        }
 
         while (!scheduled && attempts < maxAttempts) {
           // Kiểm tra xem đã vượt quá ngày kết thúc chưa
-          if (tempDate > scheduleEndDate) {
+          if (currentDate > scheduleEndDate) {
             break; // Đã hết thời gian
           }
 
-          const operatingHours = getOperatingHours(tempDate);
+          // Kiểm tra xem đã đạt số trận tối đa trong ngày chưa
+          if (matchesScheduledToday >= targetMatchesPerDay) {
+            moveToNextDay();
+            continue;
+          }
+
+          const operatingHours = getOperatingHours(currentDate);
           
           if (!operatingHours) {
             // Facility không mở, chuyển sang ngày tiếp theo
-            tempDate.setDate(tempDate.getDate() + 1);
-            tempTimeMinutes = timeToMinutes(preferredStartTime);
+            moveToNextDay();
+            attempts++;
+            continue;
+          }
+
+          // Kiểm tra xem ngày đó còn khung giờ trống không
+          const hasSlots = await hasAvailableSlotsForDay(currentDate);
+          if (!hasSlots) {
+            console.log(`[AUTO_SCHEDULE] Ngày ${currentDate.toISOString().split('T')[0]} đã kín, chuyển sang ngày tiếp theo`);
+            moveToNextDay();
             attempts++;
             continue;
           }
@@ -4017,24 +4271,26 @@ router.post(
           const preferredStartMinutes = timeToMinutes(preferredStartTime);
           const preferredEndMinutes = timeToMinutes(preferredEndTime);
 
-          // Đảm bảo tempTimeMinutes trong khoảng hoạt động
-          if (tempTimeMinutes < openMinutes) {
-            tempTimeMinutes = Math.max(openMinutes, preferredStartMinutes);
+          // Đảm bảo currentTimeMinutes trong khoảng hoạt động và khớp với timeSlotDuration
+          if (currentTimeMinutes < openMinutes) {
+            currentTimeMinutes = Math.max(openMinutes, preferredStartMinutes);
           }
-          if (tempTimeMinutes > closeMinutes) {
-            tempDate.setDate(tempDate.getDate() + 1);
-            tempTimeMinutes = timeToMinutes(preferredStartTime);
-            attempts++;
-            continue;
-          }
-
-          // Tính thời gian kết thúc
-          const endTimeMinutes = tempTimeMinutes + matchDuration;
           
-          if (endTimeMinutes > closeMinutes || endTimeMinutes > preferredEndMinutes) {
+          // Điều chỉnh currentTimeMinutes để khớp với timeSlotDuration
+          currentTimeMinutes = Math.floor(currentTimeMinutes / slotDuration) * slotDuration;
+          
+          // Đảm bảo currentTimeMinutes không nhỏ hơn openMinutes sau khi làm tròn
+          if (currentTimeMinutes < openMinutes) {
+            currentTimeMinutes = Math.ceil(openMinutes / slotDuration) * slotDuration;
+          }
+          
+          // Tính thời gian kết thúc dựa trên totalMatchTime (matchDuration + breakTime)
+          const endTimeMinutes = currentTimeMinutes + (requiredSlotsPerMatch * slotDuration);
+          const maxEndMinutes = Math.min(closeMinutes, preferredEndMinutes);
+          
+          if (currentTimeMinutes > maxEndMinutes || endTimeMinutes > maxEndMinutes) {
             // Không đủ thời gian trong ngày, chuyển sang ngày tiếp theo
-            tempDate.setDate(tempDate.getDate() + 1);
-            tempTimeMinutes = timeToMinutes(preferredStartTime);
+            moveToNextDay();
             attempts++;
             continue;
           }
@@ -4044,12 +4300,13 @@ router.post(
           for (let i = 0; i < courts.length; i++) {
             const courtIndex = (currentCourtIndex + i) % courts.length;
             const court = courts[courtIndex];
-            const startTime = minutesToTime(tempTimeMinutes);
-            const endTime = minutesToTime(endTimeMinutes);
+            const startTime = minutesToTime(currentTimeMinutes);
+            // EndTime dựa trên matchDuration (không bao gồm breakTime trong endTime)
+            const endTime = minutesToTime(currentTimeMinutes + (matchDurationInSlots * slotDuration));
 
             const available = await isCourtAvailable(
               court._id,
-              tempDate,
+              currentDate,
               startTime,
               endTime
             );
@@ -4061,7 +4318,7 @@ router.post(
               );
 
               if (matchIndex !== -1) {
-                league.matches[matchIndex].date = new Date(tempDate);
+                league.matches[matchIndex].date = new Date(currentDate);
                 league.matches[matchIndex].time = startTime;
                 league.matches[matchIndex].endTime = endTime;
                 league.matches[matchIndex].courtId = court._id;
@@ -4069,17 +4326,19 @@ router.post(
                 scheduledMatches.push({
                   stage: match.stage,
                   matchNumber: match.matchNumber,
-                  date: new Date(tempDate),
+                  date: new Date(currentDate),
                   time: startTime,
                   endTime: endTime,
                   courtId: court._id,
                   courtName: court.name
                 });
 
-                // Cập nhật thời gian cho trận tiếp theo (thêm breakTime)
-                currentDate = new Date(tempDate);
+                // Cập nhật thời gian cho trận tiếp theo (sử dụng totalMatchTime)
                 currentTimeMinutes = endTimeMinutes + breakTime;
+                // Điều chỉnh để khớp với timeSlotDuration (làm tròn lên)
+                currentTimeMinutes = Math.ceil(currentTimeMinutes / slotDuration) * slotDuration;
                 currentCourtIndex = (courtIndex + 1) % courts.length;
+                matchesScheduledToday++;
                 scheduled = true;
                 foundAvailable = true;
                 break;
@@ -4088,11 +4347,16 @@ router.post(
           }
 
           if (!foundAvailable) {
-            // Không tìm được sân, tăng thời gian lên 30 phút
-            tempTimeMinutes += 30;
-            if (tempTimeMinutes > closeMinutes || tempTimeMinutes > preferredEndMinutes) {
-              tempDate.setDate(tempDate.getDate() + 1);
-              tempTimeMinutes = timeToMinutes(preferredStartTime);
+            // Không tìm được sân, tăng thời gian lên 1 khung giờ (slotDuration)
+            currentTimeMinutes += slotDuration;
+            const maxEndMinutes = Math.min(
+              timeToMinutes(operatingHours.close), 
+              timeToMinutes(preferredEndTime)
+            );
+            
+            if (currentTimeMinutes + (requiredSlotsPerMatch * slotDuration) > maxEndMinutes) {
+              // Không còn đủ thời gian trong ngày, chuyển sang ngày tiếp theo
+              moveToNextDay();
             }
             attempts++;
           }
@@ -4115,9 +4379,19 @@ router.post(
         failedCount: failedMatches.length,
       });
 
+      // Tạo message phù hợp
+      let message;
+      if (failedMatches.length === 0) {
+        message = `Đã tự động sắp xếp ${scheduledMatches.length}/${sortedMatches.length} trận đấu thành công`;
+      } else if (scheduledMatches.length === 0) {
+        message = `Không thể sắp xếp lịch đấu trong khoảng thời gian đã chọn. Vui lòng thử đổi ngày bắt đầu và ngày kết thúc khác.`;
+      } else {
+        message = `Đã tự động sắp xếp ${scheduledMatches.length}/${sortedMatches.length} trận đấu. ${failedMatches.length} trận không thể sắp xếp. Vui lòng thử đổi ngày bắt đầu và ngày kết thúc để sắp xếp các trận còn lại.`;
+      }
+
       res.json({
         success: true,
-        message: `Đã tự động sắp xếp ${scheduledMatches.length}/${sortedMatches.length} trận đấu`,
+        message: message,
         data: {
           scheduled: scheduledMatches,
           failed: failedMatches,
@@ -4143,7 +4417,7 @@ router.put(
   async (req, res, next) => {
     try {
       const leagueId = req.params.id;
-      const { stage, matchNumber, score1, score2 } = req.body;
+      const { stage, matchNumber, score1, score2, penaltyScore1, penaltyScore2 } = req.body;
 
       if (stage === undefined || matchNumber === undefined) {
         return res.status(400).json({
@@ -4187,13 +4461,28 @@ router.put(
       const match = league.matches[matchIndex];
       const oldScore1 = match.score1;
       const oldScore2 = match.score2;
-      const oldWinnerId = oldScore1 !== null && oldScore2 !== null
-        ? (oldScore1 > oldScore2 ? match.team1Id : (oldScore1 < oldScore2 ? match.team2Id : null))
-        : null;
+      const oldPenaltyScore1 = match.penaltyScore1;
+      const oldPenaltyScore2 = match.penaltyScore2;
+      
+      // Tính oldWinnerId (bao gồm cả penalty nếu hòa)
+      let oldWinnerId = null;
+      if (oldScore1 !== null && oldScore2 !== null) {
+        if (oldScore1 > oldScore2) {
+          oldWinnerId = match.team1Id;
+        } else if (oldScore1 < oldScore2) {
+          oldWinnerId = match.team2Id;
+        } else if (oldPenaltyScore1 !== null && oldPenaltyScore2 !== null) {
+          // Hòa, xét đá luân lưu
+          oldWinnerId = oldPenaltyScore1 > oldPenaltyScore2 ? match.team1Id : 
+                       oldPenaltyScore1 < oldPenaltyScore2 ? match.team2Id : null;
+        }
+      }
 
       // Cập nhật kết quả
       match.score1 = score1 !== null && score1 !== undefined ? parseInt(score1) : null;
       match.score2 = score2 !== null && score2 !== undefined ? parseInt(score2) : null;
+      match.penaltyScore1 = penaltyScore1 !== undefined && penaltyScore1 !== null ? parseInt(penaltyScore1) : null;
+      match.penaltyScore2 = penaltyScore2 !== undefined && penaltyScore2 !== null ? parseInt(penaltyScore2) : null;
 
       // Kiểm tra format giải đấu
       const isRoundRobin = league.format === 'Vòng tròn' || league.format === 'round-robin' || stage === 'round-robin';
@@ -4289,8 +4578,24 @@ router.put(
             winnerId = match.team1Id !== "BYE" ? match.team1Id : match.team2Id;
           } else {
             // Trận đấu bình thường, tính winner dựa trên điểm số
-            winnerId = match.score1 > match.score2 ? match.team1Id : 
-                       match.score1 < match.score2 ? match.team2Id : null;
+            if (match.score1 > match.score2) {
+              winnerId = match.team1Id;
+            } else if (match.score1 < match.score2) {
+              winnerId = match.team2Id;
+            } else {
+              // Hòa, xét đá luân lưu
+              if (match.penaltyScore1 !== null && match.penaltyScore2 !== null) {
+                if (match.penaltyScore1 > match.penaltyScore2) {
+                  winnerId = match.team1Id;
+                } else if (match.penaltyScore1 < match.penaltyScore2) {
+                  winnerId = match.team2Id;
+                } else {
+                  winnerId = null; // Vẫn hòa sau đá luân lưu (trường hợp hiếm)
+                }
+              } else {
+                winnerId = null; // Hòa nhưng chưa có kết quả đá luân lưu
+              }
+            }
           }
 
           if (winnerId && winnerId !== "BYE" && match.nextMatchId) {
@@ -4370,8 +4675,24 @@ router.put(
             winnerId = match.team1Id !== "BYE" ? match.team1Id : match.team2Id;
           } else {
             // Trận đấu bình thường, tính winner dựa trên điểm số
-            winnerId = match.score1 > match.score2 ? match.team1Id : 
-                       match.score1 < match.score2 ? match.team2Id : null;
+            if (match.score1 > match.score2) {
+              winnerId = match.team1Id;
+            } else if (match.score1 < match.score2) {
+              winnerId = match.team2Id;
+            } else {
+              // Hòa, xét đá luân lưu
+              if (match.penaltyScore1 !== null && match.penaltyScore2 !== null) {
+                if (match.penaltyScore1 > match.penaltyScore2) {
+                  winnerId = match.team1Id;
+                } else if (match.penaltyScore1 < match.penaltyScore2) {
+                  winnerId = match.team2Id;
+                } else {
+                  winnerId = null; // Vẫn hòa sau đá luân lưu (trường hợp hiếm)
+                }
+              } else {
+                winnerId = null; // Hòa nhưng chưa có kết quả đá luân lưu
+              }
+            }
           }
 
           // Nếu có đội thắng (không phải hòa), chuyển status thành "completed" và lưu đội vô địch

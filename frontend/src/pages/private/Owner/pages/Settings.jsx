@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Save, RefreshCw, Loader } from "lucide-react";
+import { Save, RefreshCw, Loader, CreditCard } from "lucide-react";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { facilityApi } from "../../../../api/facilityApi";
+import { userApi } from "../../../../api/userApi";
 import { toast } from "react-toastify";
 
 const Settings = () => {
@@ -35,6 +36,31 @@ const Settings = () => {
   });
 
   const [activeTab, setActiveTab] = useState("general");
+  const [bankAccount, setBankAccount] = useState({
+    accountNumber: "",
+    accountName: "",
+    bankCode: "",
+    bankName: "",
+  });
+  const [bankAccountLoading, setBankAccountLoading] = useState(false);
+  
+  // Bank list
+  const banks = [
+    { code: "VCB", name: "Vietcombank" },
+    { code: "TCB", name: "Techcombank" },
+    { code: "VTB", name: "Vietinbank" },
+    { code: "ACB", name: "ACB" },
+    { code: "TPB", name: "TPBank" },
+    { code: "VPB", name: "VPBank" },
+    { code: "MSB", name: "Maritime Bank" },
+    { code: "HDB", name: "HDBank" },
+    { code: "VIB", name: "VIB" },
+    { code: "SHB", name: "SHB" },
+    { code: "EIB", name: "Eximbank" },
+    { code: "BID", name: "BIDV" },
+    { code: "MBB", name: "MBBank" },
+    { code: "STB", name: "Sacombank" },
+  ];
 
   // Fetch facility data
   useEffect(() => {
@@ -103,6 +129,25 @@ const Settings = () => {
     };
 
     fetchFacility();
+  }, [user]);
+
+  // Fetch bank account
+  useEffect(() => {
+    const fetchBankAccount = async () => {
+      if (!user?._id || user.role !== "owner") return;
+      try {
+        setBankAccountLoading(true);
+        const result = await userApi.getBankAccount();
+        if (result.success && result.data.bankAccount) {
+          setBankAccount(result.data.bankAccount);
+        }
+      } catch (error) {
+        console.error("Error fetching bank account:", error);
+      } finally {
+        setBankAccountLoading(false);
+      }
+    };
+    fetchBankAccount();
   }, [user]);
 
   const handleInputChange = (field, value) => {
@@ -780,6 +825,165 @@ const Settings = () => {
     </div>
   );
 
+  const handleBankAccountChange = (field, value) => {
+    setBankAccount(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSaveBankAccount = async () => {
+    if (!bankAccount.accountNumber || !bankAccount.accountName || !bankAccount.bankCode) {
+      toast.error("Vui lòng điền đầy đủ thông tin");
+      return;
+    }
+
+    try {
+      setBankAccountLoading(true);
+      const result = await userApi.updateBankAccount({
+        accountNumber: bankAccount.accountNumber,
+        accountName: bankAccount.accountName,
+        bankCode: bankAccount.bankCode,
+        bankName: bankAccount.bankName || banks.find(b => b.code === bankAccount.bankCode)?.name || bankAccount.bankCode,
+      });
+
+      if (result.success) {
+        toast.success("Lưu thông tin tài khoản ngân hàng thành công");
+        // Update user context if needed
+      }
+    } catch (error) {
+      toast.error(error.message || "Không thể lưu thông tin tài khoản ngân hàng");
+    } finally {
+      setBankAccountLoading(false);
+    }
+  };
+
+  const renderBankAccountSettings = () => (
+    <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 6px 20px rgba(0,0,0,.06)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+        <CreditCard size={24} color="#10b981" />
+        <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Tài khoản ngân hàng</h3>
+      </div>
+      <div style={{ marginBottom: 20, padding: 16, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
+        <div style={{ fontSize: 14, color: "#166534", lineHeight: 1.6 }}>
+          <strong>Lưu ý:</strong> Thông tin tài khoản ngân hàng sẽ được sử dụng để rút tiền. 
+          Vui lòng đảm bảo thông tin chính xác để tránh lỗi khi rút tiền.
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: 20 }}>
+        <div>
+          <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+            Ngân hàng <span style={{ color: "#ef4444" }}>*</span>
+          </label>
+          <select
+            value={bankAccount.bankCode}
+            onChange={(e) => {
+              const selectedBank = banks.find(b => b.code === e.target.value);
+              handleBankAccountChange("bankCode", e.target.value);
+              handleBankAccountChange("bankName", selectedBank?.name || "");
+            }}
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+              fontSize: 16,
+              outline: "none",
+              background: "#fff",
+            }}
+          >
+            <option value="">Chọn ngân hàng</option>
+            {banks.map((bank) => (
+              <option key={bank.code} value={bank.code}>
+                {bank.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+            Số tài khoản <span style={{ color: "#ef4444" }}>*</span>
+          </label>
+          <input
+            type="text"
+            value={bankAccount.accountNumber}
+            onChange={(e) => handleBankAccountChange("accountNumber", e.target.value)}
+            placeholder="Nhập số tài khoản"
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+              fontSize: 16,
+              outline: "none",
+              fontFamily: "monospace",
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+            Tên chủ tài khoản <span style={{ color: "#ef4444" }}>*</span>
+          </label>
+          <input
+            type="text"
+            value={bankAccount.accountName}
+            onChange={(e) => handleBankAccountChange("accountName", e.target.value)}
+            placeholder="Nhập tên chủ tài khoản (viết hoa, không dấu)"
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+              fontSize: 16,
+              outline: "none",
+            }}
+          />
+          <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+            Ví dụ: NGUYEN VAN A
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 8 }}>
+          <button
+            onClick={handleSaveBankAccount}
+            disabled={bankAccountLoading || !bankAccount.accountNumber || !bankAccount.accountName || !bankAccount.bankCode}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "12px 24px",
+              borderRadius: 8,
+              border: "none",
+              background: bankAccountLoading || !bankAccount.accountNumber || !bankAccount.accountName || !bankAccount.bankCode
+                ? "#9ca3af"
+                : "#10b981",
+              color: "#fff",
+              fontWeight: 600,
+              cursor: bankAccountLoading || !bankAccount.accountNumber || !bankAccount.accountName || !bankAccount.bankCode
+                ? "not-allowed"
+                : "pointer",
+            }}
+          >
+            {bankAccountLoading ? (
+              <>
+                <Loader size={16} style={{ animation: "spin 1s linear infinite" }} />
+                Đang lưu...
+              </>
+            ) : (
+              <>
+                <Save size={16} />
+                Lưu thông tin
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
@@ -836,6 +1040,7 @@ const Settings = () => {
         {[
           { id: "general", label: "Cài đặt chung" },
           { id: "notifications", label: "Thông báo" },
+          { id: "bankAccount", label: "Tài khoản ngân hàng" },
           { id: "system", label: "Hệ thống" },
         ].map((tab) => (
           <button
@@ -858,6 +1063,7 @@ const Settings = () => {
 
       {activeTab === "general" && renderGeneralSettings()}
       {activeTab === "notifications" && renderNotificationSettings()}
+      {activeTab === "bankAccount" && renderBankAccountSettings()}
       {activeTab === "system" && renderSystemSettings()}
       
       <style>{`

@@ -302,6 +302,39 @@ export const userApi = {
     } catch (error) {
       throw handleApiError(error);
     }
+  },
+
+  /**
+   * Get bank account information (Owner only)
+   * GET /api/users/bank-account
+   * @returns {Promise<{success: boolean, data: {bankAccount: Object}}>}
+   */
+  getBankAccount: async () => {
+    try {
+      const response = await api.get('/users/bank-account');
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Update bank account information (Owner only)
+   * PUT /api/users/bank-account
+   * @param {Object} bankAccount - Bank account information
+   * @param {string} bankAccount.accountNumber - Account number
+   * @param {string} bankAccount.accountName - Account holder name
+   * @param {string} bankAccount.bankCode - Bank code (VCB, TCB, etc.)
+   * @param {string} [bankAccount.bankName] - Bank name
+   * @returns {Promise<{success: boolean, data: Object}>}
+   */
+  updateBankAccount: async (bankAccount) => {
+    try {
+      const response = await api.put('/users/bank-account', bankAccount);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
   }
 };
 

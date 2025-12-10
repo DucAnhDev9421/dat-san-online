@@ -1,11 +1,11 @@
 import { PayOS } from "@payos/node";
 import { config } from "../config/config.js";
 
-// Khởi tạo đối tượng PayOS (Không cần .default)
+// Khởi tạo đối tượng PayOS cho kênh thanh toán (Payment)
 const payOS = new PayOS(
-  config.payos.clientId,
-  config.payos.apiKey,
-  config.payos.checksumKey
+  config.payos.payment.clientId,
+  config.payos.payment.apiKey,
+  config.payos.payment.checksumKey
 );
 
 /**

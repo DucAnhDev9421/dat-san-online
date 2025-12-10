@@ -1,5 +1,6 @@
 import React from 'react'
 import { Calendar, MapPin, Users, Clock, Eye } from 'lucide-react'
+import { getStatusBadge } from '../../../../utils/tournamentHelpers'
 
 const TournamentCard = ({ tournament, onRegister, onViewDetails, listView = false }) => {
   const formatDate = (dateString) => {
@@ -9,32 +10,6 @@ const TournamentCard = ({ tournament, onRegister, onViewDetails, listView = fals
       month: '2-digit',
       year: 'numeric'
     })
-  }
-
-  const getStatusBadge = (status) => {
-    const badges = {
-      upcoming: { 
-        text: 'Đang đăng ký', 
-        className: 'inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 inset-ring inset-ring-blue-700/10' 
-      },
-      starting: { 
-        text: 'Sắp diễn ra', 
-        className: 'inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-700 inset-ring inset-ring-yellow-600/20' 
-      },
-      ongoing: { 
-        text: 'Đang diễn ra', 
-        className: 'inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 inset-ring inset-ring-green-600/20' 
-      },
-      completed: { 
-        text: 'Đã kết thúc', 
-        className: 'inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 inset-ring inset-ring-gray-500/10' 
-      },
-      cancelled: { 
-        text: 'Đã hủy', 
-        className: 'inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 inset-ring inset-ring-red-600/20' 
-      }
-    }
-    return badges[status] || badges.upcoming
   }
 
   const getFormatLabel = (format) => {

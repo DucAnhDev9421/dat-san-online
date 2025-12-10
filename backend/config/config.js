@@ -70,9 +70,22 @@ export const config = {
 
   // Payos Configuration
   payos: {
-    clientId: process.env.PAYOS_CLIENT_ID || "YOUR_PAYOS_CLIENT_ID",
-    apiKey: process.env.PAYOS_API_KEY || "YOUR_PAYOS_API_KEY",
-    checksumKey: process.env.PAYOS_CHECKSUM_KEY || "YOUR_PAYOS_CHECKSUM_KEY",
+    // Kênh thanh toán (Payment)
+    payment: {
+      clientId: process.env.PAYOS_PAYMENT_CLIENT_ID || process.env.PAYOS_CLIENT_ID || "YOUR_PAYOS_PAYMENT_CLIENT_ID",
+      apiKey: process.env.PAYOS_PAYMENT_API_KEY || process.env.PAYOS_API_KEY || "YOUR_PAYOS_PAYMENT_API_KEY",
+      checksumKey: process.env.PAYOS_PAYMENT_CHECKSUM_KEY || process.env.PAYOS_CHECKSUM_KEY || "YOUR_PAYOS_PAYMENT_CHECKSUM_KEY",
+    },
+    // Kênh chi tiền (Payout)
+    payout: {
+      clientId: process.env.PAYOS_PAYOUT_CLIENT_ID || process.env.PAYOS_CLIENT_ID || "YOUR_PAYOS_PAYOUT_CLIENT_ID",
+      apiKey: process.env.PAYOS_PAYOUT_API_KEY || process.env.PAYOS_API_KEY || "YOUR_PAYOS_PAYOUT_API_KEY",
+      checksumKey: process.env.PAYOS_PAYOUT_CHECKSUM_KEY || process.env.PAYOS_CHECKSUM_KEY || "YOUR_PAYOS_PAYOUT_CHECKSUM_KEY",
+    },
+    // Giữ lại để backward compatibility (nếu có code cũ dùng)
+    clientId: process.env.PAYOS_PAYMENT_CLIENT_ID || process.env.PAYOS_CLIENT_ID || "YOUR_PAYOS_CLIENT_ID",
+    apiKey: process.env.PAYOS_PAYMENT_API_KEY || process.env.PAYOS_API_KEY || "YOUR_PAYOS_API_KEY",
+    checksumKey: process.env.PAYOS_PAYMENT_CHECKSUM_KEY || process.env.PAYOS_CHECKSUM_KEY || "YOUR_PAYOS_CHECKSUM_KEY",
   },
 
   // Rate Limiting

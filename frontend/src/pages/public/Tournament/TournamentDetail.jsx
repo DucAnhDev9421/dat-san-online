@@ -5,7 +5,7 @@ import { TournamentProvider, useTournament } from './TournamentContext'
 import { useAuth } from '../../../contexts/AuthContext'
 import TournamentRoutes from './TournamentRoutes'
 import ChampionCelebration from '../../../components/tournament/ChampionCelebration'
-import { hasChampion } from '../../../utils/tournamentHelpers'
+import { hasChampion, getStatusBadge } from '../../../utils/tournamentHelpers'
 import '../../../styles/TournamentDetail.css'
 
 const TournamentDetailContent = () => {
@@ -16,17 +16,46 @@ const TournamentDetailContent = () => {
   const { user } = useAuth()
   const [showChampionCelebration, setShowChampionCelebration] = useState(false)
 
-  const getStatusBadge = (status) => {
-    const badges = {
-      upcoming: { className: 'badge badge-yellow', text: 'Sắp diễn ra' },
-      ongoing: { className: 'badge badge-green', text: 'Đang diễn ra' },
-      completed: { className: 'badge badge-gray', text: 'Đã kết thúc' },
-      cancelled: { className: 'badge badge-red', text: 'Đã hủy' }
+  // Helper: Tìm trận đấu đầu tiên (có date và time sớm nhất)
+  const getFirstMatchDateTime = () => {
+    if (!tournament?.matches || tournament.matches.length === 0) {
+      return null;
     }
-    return badges[status] || badges.upcoming
-  }
 
-  // Tính toán status dựa trên endDate nếu cần
+    // Lọc các matches có date và time
+    const matchesWithSchedule = tournament.matches.filter(
+      m => m.date && m.time && m.time.trim() !== ''
+    );
+
+    if (matchesWithSchedule.length === 0) {
+      return null;
+    }
+
+    // Tìm match có date và time sớm nhất
+    let earliestDateTime = null;
+
+    matchesWithSchedule.forEach(match => {
+      try {
+        const matchDate = new Date(match.date);
+        const [hours, minutes] = match.time.split(':').map(Number);
+        
+        if (!isNaN(hours) && !isNaN(minutes)) {
+          const matchDateTime = new Date(matchDate);
+          matchDateTime.setHours(hours, minutes, 0, 0);
+
+          if (!earliestDateTime || matchDateTime < earliestDateTime) {
+            earliestDateTime = matchDateTime;
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing match date/time:', error);
+      }
+    });
+
+    return earliestDateTime;
+  };
+
+  // Tính toán status dựa trên thời gian trận đấu đầu tiên (giống TournamentCard)
   const getComputedStatus = () => {
     if (!tournament?.endDate) return tournament?.status || 'upcoming'
     
@@ -44,12 +73,20 @@ const TournamentDetailContent = () => {
       return 'completed';
     }
     
-    // Nếu startDate đã qua nhưng endDate chưa qua, là ongoing
-    if (startDate && startDate <= now && endDate >= now) {
+    // Tìm thời gian trận đấu đầu tiên
+    const firstMatchDateTime = getFirstMatchDateTime();
+    
+    // Nếu có trận đấu đầu tiên và đã tới thời gian thi đấu, là ongoing
+    if (firstMatchDateTime && firstMatchDateTime <= now && endDate >= now) {
       return 'ongoing';
     }
     
-    // Còn lại là upcoming (hoặc giữ nguyên status từ DB nếu hợp lệ)
+    // Nếu đã tới startDate nhưng chưa tới thời gian trận đầu tiên, là starting (sắp diễn ra)
+    if (startDate && startDate <= now && (!firstMatchDateTime || firstMatchDateTime > now)) {
+      return 'starting';
+    }
+    
+    // Còn lại là upcoming (chưa tới startDate)
     return tournament.status || 'upcoming';
   };
 
@@ -164,6 +201,12 @@ const TournamentDetailContent = () => {
                   <span className="relative flex h-2 w-2 mr-1.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-600 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600"></span>
+                  </span>
+                )}
+                {computedStatus === 'starting' && (
+                  <span className="relative flex h-2 w-2 mr-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
                   </span>
                 )}
                 {statusBadge.text}

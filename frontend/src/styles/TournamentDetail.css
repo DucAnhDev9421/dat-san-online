@@ -398,6 +398,19 @@
   margin: 0 auto;
 }
 
+/* Hover effects cho bracket */
+.bracket-container svg path {
+  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+
+.bracket-container svg rect {
+  transition: fill 0.2s ease;
+}
+
+.bracket-container svg text {
+  transition: fill 0.2s ease, font-weight 0.2s ease;
+}
+
 .seed-header {
   background: #10b981;
   color: white;
@@ -2889,4 +2902,344 @@
 
 .btn-crop-save:hover {
   background: #059669;
+}
+
+/* Match Results Tab Redesign */
+.match-results-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Stage Selector */
+.stage-selector {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+.stage-selector::-webkit-scrollbar {
+  display: none;
+  /* Chrome, Safari */
+}
+
+.stage-btn {
+  padding: 10px 20px;
+  border-radius: 9999px;
+  /* Pill shape */
+  border: 1px solid #e5e7eb;
+  background-color: white;
+  color: #4b5563;
+  /* Gray-600 */
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.stage-btn:hover {
+  background-color: #f9fafb;
+  /* Gray-50 */
+  border-color: #d1d5db;
+  transform: translateY(-1px);
+}
+
+.stage-btn.active {
+  background-color: #3b82f6;
+  /* Blue-500 */
+  border-color: #3b82f6;
+  color: white;
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+}
+
+/* Match Section */
+.match-results-box {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.match-results-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #f3f4f6;
+  background-color: #f8fafc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.match-results-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  /* Slate-800 */
+  margin: 0;
+}
+
+.match-list {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Empty State */
+.match-results-empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.empty-icon {
+  width: 48px;
+  height: 48px;
+  color: #cbd5e1;
+}
+
+/* Match Card */
+.match-result-card {
+  display: grid;
+  grid-template-columns: 80px 1fr 120px;
+  /* ID | Teams | Actions */
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.match-result-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.match-result-card.completed {
+  border-left: 4px solid #10b981;
+  /* Green border for completed matches */
+}
+
+/* Match Info (Left) */
+.match-info-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.match-number-badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.match-time-badge {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* Teams & Scores (Center) */
+.match-teams-col {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.match-team {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+  /* For ellipsis */
+}
+
+.match-team.team-right {
+  justify-content: flex-end;
+  text-align: right;
+  flex-direction: row-reverse;
+  /* Logo on right */
+}
+
+.match-team-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background-color: #f1f5f9;
+}
+
+.match-team-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.match-score-inputs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.score-input {
+  width: 48px;
+  height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  transition: all 0.2s;
+}
+
+.score-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.score-separator {
+  font-size: 20px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+/* Actions (Right) */
+.match-actions-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.btn-match-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btn-save-result {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.btn-save-result:hover:not(:disabled) {
+  background-color: #2563eb;
+  transform: translateY(-1px);
+}
+
+.btn-save-result:disabled {
+  background-color: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.btn-clear-result {
+  background-color: #fee2e2;
+  color: #ef4444;
+}
+
+.btn-clear-result:hover:not(:disabled) {
+  background-color: #fecaca;
+  color: #dc2626;
+}
+
+/* Mobile Responsiveness for Match Card */
+@media (max-width: 768px) {
+  .match-result-card {
+    grid-template-columns: 1fr;
+    /* Stack everything */
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .match-info-col {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .match-teams-col {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .match-team {
+    width: 100%;
+    justify-content: space-between;
+    /* Space logo and name */
+  }
+
+  .match-team.team-right {
+    flex-direction: row;
+    /* Keep normal direction but align differently */
+    text-align: left;
+    justify-content: space-between;
+  }
+
+  .match-score-inputs {
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .score-input {
+    width: 60px;
+    height: 48px;
+  }
+
+  .match-actions-col {
+    flex-direction: row;
+    gap: 12px;
+  }
+}
+
+.match-team-logo.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #64748b;
+  font-size: 14px;
 }

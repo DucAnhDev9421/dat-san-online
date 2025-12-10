@@ -21,6 +21,7 @@ import QRCode from "qrcode";
 
 // === IMPORTS TỪ STASH (CHO TÍNH NĂNG VÍ & REWARD) ===
 import { debit } from "../utils/walletService.js";
+import { creditOwnerBalance } from "../utils/ownerBalanceService.js";
 import Payment from "../models/Payment.js";
 import { isSlotLocked } from "../socket/bookingSocket.js";
 import asyncHandler from "express-async-handler";
@@ -1629,6 +1630,41 @@ router.post(
     });
 
     processBookingRewards(booking);
+
+    // 7. Cộng tiền cho owner (sau khi thanh toán bằng ví thành công)
+    try {
+      await booking.populate("facility", "owner");
+      if (booking.facility?.owner) {
+        // Xử lý ownerId (có thể là ObjectId hoặc object đã populate)
+        let ownerId = booking.facility.owner;
+        if (ownerId._id) {
+          ownerId = ownerId._id;
+        } else if (typeof ownerId === 'object' && ownerId.toString) {
+          ownerId = ownerId.toString();
+        }
+        
+        // Lấy platformFee từ SystemConfig (hoặc dùng giá trị mặc định nếu có lỗi)
+        const { getPlatformFee } = await import("../utils/systemConfigService.js");
+        let platformFee = 0.1; // Fallback mặc định
+        try {
+          platformFee = await getPlatformFee();
+        } catch (e) {
+          console.warn("Không thể lấy platformFee từ SystemConfig, dùng giá trị mặc định 10%:", e);
+        }
+        
+        await creditOwnerBalance(
+          ownerId,
+          booking.totalAmount
+          // Không truyền platformFee, sẽ lấy từ SystemConfig trong creditOwnerBalance
+        );
+        
+        console.log(`✅ [WALLET] Đã cộng ${(booking.totalAmount * (1 - platformFee)).toLocaleString("vi-VN")} VNĐ cho owner ${ownerId} (từ booking ${booking.totalAmount.toLocaleString("vi-VN")} VNĐ, phí ${(platformFee * 100).toFixed(0)}%)`);
+      } else {
+        console.warn(`⚠️ [WALLET] Booking ${booking._id} không có facility hoặc owner`);
+      }
+    } catch (e) {
+      console.error("Lỗi cộng tiền cho owner (wallet):", e);
+    }
 
     res.json({
       success: true,

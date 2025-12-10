@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Save, FileUp, X, Zap, AlertTriangle, Lightbulb, Clock } from 'lucide-react'
+import { Save, FileUp, X, Zap, AlertTriangle } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { useParams } from 'react-router-dom'
 import { leagueApi } from '../../../../../api/leagueApi'
@@ -19,19 +19,16 @@ const ScheduleManagementTab = ({ tournament }) => {
   const [autoScheduleOptions, setAutoScheduleOptions] = useState({
     startDate: '',
     endDate: '',
-    matchDuration: 90,
-    breakTime: 30,
-    preferredStartTime: '08:00',
-    preferredEndTime: '22:00'
+    matchDuration: 90, // Thời gian thi đấu chính thức (phút)
+    breakTime: 30, // Thời gian nghỉ giữa hiệp/giữa các trận (phút)
+    totalMatchTime: null, // Tổng thời gian trận đấu (matchDuration + breakTime), null = tự động tính
+    matchesPerDay: null, // Số lượng trận đấu mỗi ngày (null = tự động)
+    matchesPerRound: null, // Số lượng trận đấu mỗi vòng (null = tự động)
+    preferredStartTime: '08:00', // Khung giờ hoạt động - Giờ bắt đầu
+    preferredEndTime: '22:00' // Khung giờ hoạt động - Giờ kết thúc
   })
   const [conflicts, setConflicts] = useState([])
   const [warnings, setWarnings] = useState([])
-  const [suggestions, setSuggestions] = useState({}) // { matchId: [...suggestions] }
-  const [loadingSuggestions, setLoadingSuggestions] = useState({}) // { matchId: true/false }
-  const [showSuggestions, setShowSuggestions] = useState({}) // { matchId: true/false }
-  const [showDatePickerModal, setShowDatePickerModal] = useState(false)
-  const [selectedMatchForSuggestion, setSelectedMatchForSuggestion] = useState(null) // { matchId, stage }
-  const [selectedDateForSuggestion, setSelectedDateForSuggestion] = useState('')
   const [confirmingSchedule, setConfirmingSchedule] = useState(false)
   
   const isRoundRobin = tournament?.format === 'Vòng tròn' || tournament?.format === 'round-robin'
@@ -408,239 +405,6 @@ const ScheduleManagementTab = ({ tournament }) => {
     }
   }
 
-  const handleSuggestTime = (matchId, stage) => {
-    // Mở date picker modal
-    setSelectedMatchForSuggestion({ matchId, stage })
-    setSelectedDateForSuggestion('')
-    setShowDatePickerModal(true)
-  }
-
-  const handleConfirmDateForSuggestion = async () => {
-    if (!selectedDateForSuggestion || !selectedMatchForSuggestion) {
-      toast.error('Vui lòng chọn ngày')
-      return
-    }
-
-    const { matchId, stage } = selectedMatchForSuggestion
-    
-    try {
-      setLoadingSuggestions(prev => ({ ...prev, [matchId]: true }))
-      setShowDatePickerModal(false)
-      
-      const matchIdForApi = `${stage}_${matchId}`
-      
-      const result = await leagueApi.suggestMatchTime(id, matchIdForApi, {
-        preferredDate: selectedDateForSuggestion,
-        matchDuration: autoScheduleOptions.matchDuration,
-        breakTime: autoScheduleOptions.breakTime
-      })
-      
-      if (result.success && result.data?.suggestions) {
-        // Helper để so sánh thời gian
-        const timeToMinutes = (timeStr) => {
-          if (!timeStr) return null
-          const [hours, minutes] = timeStr.split(':').map(Number)
-          return hours * 60 + minutes
-        }
-
-        // Filter bỏ các suggestions đã được sử dụng bởi các matches khác
-        const filteredSuggestions = result.data.suggestions.filter(suggestion => {
-          // Kiểm tra với scheduleData (chưa lưu)
-          const isUsedInScheduleData = scheduleData.some(item => {
-            // Bỏ qua chính match đang xem
-            if (item.matchId === matchId) return false
-            
-            // Kiểm tra nếu có date, time, courtId trùng
-            if (!item.date || !item.time || !item.courtId) return false
-            
-            // So sánh date
-            const itemDate = new Date(item.date).toISOString().split('T')[0]
-            const suggestionDate = new Date(suggestion.date).toISOString().split('T')[0]
-            if (itemDate !== suggestionDate) return false
-            
-            // So sánh courtId
-            const itemCourtId = item.courtId.toString()
-            const suggestionCourtId = suggestion.courtId.toString()
-            if (itemCourtId !== suggestionCourtId) return false
-            
-            // So sánh thời gian (có overlap)
-            const itemTime = item.time
-            const itemEndTime = item.endTime || item.time
-            const suggestionTime = suggestion.time
-            const suggestionEndTime = suggestion.endTime || suggestion.time
-            
-            const itemStartMin = timeToMinutes(itemTime)
-            const itemEndMin = timeToMinutes(itemEndTime)
-            const suggestionStartMin = timeToMinutes(suggestionTime)
-            const suggestionEndMin = timeToMinutes(suggestionEndTime)
-            
-            if (itemStartMin === null || itemEndMin === null || 
-                suggestionStartMin === null || suggestionEndMin === null) {
-              return false
-            }
-            
-            // Kiểm tra overlap
-            return !(itemEndMin <= suggestionStartMin || itemStartMin >= suggestionEndMin)
-          })
-
-          // Kiểm tra với tournament.matches (đã lưu)
-          const isUsedInTournament = tournament?.matches?.some(match => {
-            // Bỏ qua match đang xem
-            const currentScheduleItem = scheduleData.find(item => item.matchId === matchId)
-            if (currentScheduleItem && 
-                match.stage === currentScheduleItem.stage && 
-                match.matchNumber === parseInt(matchId)) {
-              return false
-            }
-            
-            // Kiểm tra nếu có date, time, courtId
-            if (!match.date || !match.time || !match.courtId) return false
-            
-            // So sánh date
-            const matchDate = new Date(match.date).toISOString().split('T')[0]
-            const suggestionDate = new Date(suggestion.date).toISOString().split('T')[0]
-            if (matchDate !== suggestionDate) return false
-            
-            // So sánh courtId
-            const matchCourtId = typeof match.courtId === 'object' 
-              ? (match.courtId._id || match.courtId.id || match.courtId).toString()
-              : match.courtId.toString()
-            const suggestionCourtId = suggestion.courtId.toString()
-            if (matchCourtId !== suggestionCourtId) return false
-            
-            // So sánh thời gian (có overlap)
-            const matchTime = match.time
-            const matchEndTime = match.endTime || match.time
-            const suggestionTime = suggestion.time
-            const suggestionEndTime = suggestion.endTime || suggestion.time
-            
-            const matchStartMin = timeToMinutes(matchTime)
-            const matchEndMin = timeToMinutes(matchEndTime)
-            const suggestionStartMin = timeToMinutes(suggestionTime)
-            const suggestionEndMin = timeToMinutes(suggestionEndTime)
-            
-            if (matchStartMin === null || matchEndMin === null || 
-                suggestionStartMin === null || suggestionEndMin === null) {
-              return false
-            }
-            
-            // Kiểm tra overlap
-            return !(matchEndMin <= suggestionStartMin || matchStartMin >= suggestionEndMin)
-          })
-          
-          return !isUsedInScheduleData && !isUsedInTournament
-        })
-
-        if (filteredSuggestions.length === 0) {
-          toast.info('Không tìm thấy thời gian trống phù hợp. Tất cả các gợi ý đã được sử dụng hoặc có xung đột.')
-        } else {
-          setSuggestions(prev => ({
-            ...prev,
-            [matchId]: filteredSuggestions
-          }))
-          setShowSuggestions(prev => ({
-            ...prev,
-            [matchId]: !prev[matchId]
-          }))
-          const filteredCount = result.data.suggestions.length - filteredSuggestions.length
-          const message = filteredCount > 0
-            ? `Tìm thấy ${filteredSuggestions.length} gợi ý thời gian (đã ẩn ${filteredCount} gợi ý đã được sử dụng)`
-            : `Tìm thấy ${filteredSuggestions.length} gợi ý thời gian`
-          toast.success(message)
-        }
-      } else {
-        toast.warning('Không tìm thấy gợi ý thời gian')
-      }
-    } catch (error) {
-      console.error('Error getting suggestions:', error)
-      const errorMessage = error.response?.data?.message || error.message || 'Không thể lấy gợi ý thời gian'
-      toast.error(errorMessage)
-    } finally {
-      setLoadingSuggestions(prev => ({ ...prev, [matchId]: false }))
-      setSelectedMatchForSuggestion(null)
-      setSelectedDateForSuggestion('')
-    }
-  }
-
-  const handleApplySuggestion = async (matchId, suggestion) => {
-    // Lưu giá trị cũ để revert nếu có lỗi
-    const originalScheduleItem = scheduleData.find(item => item.matchId === matchId)
-    if (!originalScheduleItem) {
-      toast.error('Không tìm thấy trận đấu')
-      return
-    }
-
-    try {
-      // Cập nhật scheduleData trước (optimistic update)
-      const updatedScheduleData = scheduleData.map(item => {
-        if (item.matchId === matchId) {
-          return {
-            ...item,
-            date: new Date(suggestion.date).toISOString().split('T')[0],
-            time: suggestion.time,
-            endTime: suggestion.endTime,
-            courtId: suggestion.courtId
-          }
-        }
-        return item
-      })
-      setScheduleData(updatedScheduleData)
-
-      // Tự động lưu ngay
-      setSavingSchedule(true)
-      setConflicts([])
-      setWarnings([])
-
-      // Chuyển đổi sang format API - chỉ gửi match được chọn
-      const scheduleToSave = {
-        stage: originalScheduleItem.stage,
-        matchNumber: parseInt(originalScheduleItem.matchId) || originalScheduleItem.matchId,
-        date: new Date(suggestion.date).toISOString().split('T')[0],
-        time: suggestion.time,
-        endTime: suggestion.endTime,
-        courtId: suggestion.courtId
-      }
-
-      const result = await leagueApi.updateMatchSchedule(id, [scheduleToSave])
-
-      if (result.success) {
-        // Xử lý warnings nếu có
-        if (result.warnings && result.warnings.length > 0) {
-          setWarnings(result.warnings)
-          toast.warning(`Đã lưu lịch đấu thành công. Có ${result.warnings.length} cảnh báo.`)
-        } else {
-          toast.success('Đã áp dụng và lưu gợi ý thời gian thành công')
-        }
-        setShowSuggestions(prev => ({ ...prev, [matchId]: false }))
-        // Xóa suggestions của match này vì đã được áp dụng
-        setSuggestions(prev => {
-          const newSuggestions = { ...prev }
-          delete newSuggestions[matchId]
-          return newSuggestions
-        })
-        refreshTournament()
-      }
-    } catch (error) {
-      console.error('Error applying suggestion:', error)
-      
-      // Revert lại scheduleData cho match này
-      setScheduleData(prev => prev.map(item => 
-        item.matchId === matchId ? originalScheduleItem : item
-      ))
-
-      // Xử lý conflicts từ error response
-      const errorData = error.response?.data || error
-      if (errorData.conflicts && Array.isArray(errorData.conflicts)) {
-        setConflicts(errorData.conflicts)
-        setWarnings(errorData.warnings || [])
-        toast.error(`Phát hiện ${errorData.conflicts.length} xung đột lịch đấu. Vui lòng chọn gợi ý khác.`)
-      } else {
-        toast.error(errorData.message || error.message || 'Không thể lưu lịch đấu')
-      }
-    } finally {
-      setSavingSchedule(false)
-    }
-  }
 
   const handleConfirmSchedule = async () => {
     try {
@@ -671,7 +435,8 @@ const ScheduleManagementTab = ({ tournament }) => {
       setAutoScheduleOptions(prev => ({
         ...prev,
         startDate: tournament.startDate ? new Date(tournament.startDate).toISOString().split('T')[0] : '',
-        endDate: tournament.endDate ? new Date(tournament.endDate).toISOString().split('T')[0] : ''
+        endDate: tournament.endDate ? new Date(tournament.endDate).toISOString().split('T')[0] : '',
+        totalMatchTime: prev.totalMatchTime || (prev.matchDuration + prev.breakTime)
       }))
     }
   }, [tournament])
@@ -687,22 +452,64 @@ const ScheduleManagementTab = ({ tournament }) => {
       return
     }
 
+    if (new Date(autoScheduleOptions.startDate) > new Date(autoScheduleOptions.endDate)) {
+      toast.error('Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc')
+      return
+    }
+
+    if (autoScheduleOptions.preferredStartTime >= autoScheduleOptions.preferredEndTime) {
+      toast.error('Giờ bắt đầu phải nhỏ hơn giờ kết thúc')
+      return
+    }
+
     try {
       setAutoScheduling(true)
-      const result = await leagueApi.autoSchedule(id, autoScheduleOptions)
+      
+      // Chuẩn bị dữ liệu gửi lên, tính totalMatchTime nếu chưa có
+      const requestData = {
+        ...autoScheduleOptions,
+        totalMatchTime: autoScheduleOptions.totalMatchTime || 
+          (autoScheduleOptions.matchDuration + autoScheduleOptions.breakTime),
+        // Chỉ gửi matchesPerDay hoặc matchesPerRound nếu có giá trị
+        ...(autoScheduleOptions.matchesPerDay ? { matchesPerDay: autoScheduleOptions.matchesPerDay } : {}),
+        ...(autoScheduleOptions.matchesPerRound ? { matchesPerRound: autoScheduleOptions.matchesPerRound } : {})
+      }
+      
+      const result = await leagueApi.autoSchedule(id, requestData)
       
       if (result.success) {
         const { scheduled, failed } = result.data
-        const message = failed.length > 0
-          ? `Đã tự động sắp xếp ${scheduled.length} trận đấu. ${failed.length} trận không thể sắp xếp.`
-          : `Đã tự động sắp xếp ${scheduled.length} trận đấu thành công`
-        toast.success(message)
-        setShowAutoScheduleModal(false)
+        if (failed.length > 0) {
+          // Có trận đấu không thể sắp xếp
+          if (scheduled.length === 0) {
+            // Không sắp xếp được trận nào
+            toast.error(
+              `Không thể sắp xếp lịch đấu trong khoảng thời gian đã chọn. Vui lòng thử đổi ngày bắt đầu và ngày kết thúc khác.`,
+              { duration: 5000 }
+            )
+          } else {
+            // Sắp xếp được một phần
+            toast.warning(
+              `Đã tự động sắp xếp ${scheduled.length} trận đấu. ${failed.length} trận không thể sắp xếp. Vui lòng thử đổi ngày bắt đầu và ngày kết thúc để sắp xếp các trận còn lại.`,
+              { duration: 6000 }
+            )
+          }
+        } else {
+          // Sắp xếp thành công tất cả
+          toast.success(`Đã tự động sắp xếp ${scheduled.length} trận đấu thành công`)
+          setShowAutoScheduleModal(false)
+        }
         refreshTournament()
       }
     } catch (error) {
       console.error('Error auto scheduling:', error)
-      toast.error(error.message || 'Không thể tự động sắp xếp lịch đấu')
+      const errorMessage = error.message || 'Không thể tự động sắp xếp lịch đấu'
+      // Nếu có thông báo từ backend về việc không sắp xếp được, thêm gợi ý đổi ngày
+      if (errorMessage.includes('Không thể sắp xếp') || errorMessage.includes('không thể sắp xếp')) {
+        toast.error(`${errorMessage} Vui lòng thử đổi ngày bắt đầu và ngày kết thúc khác.`, { duration: 6000 })
+      } else {
+        toast.error(errorMessage)
+      }
     } finally {
       setAutoScheduling(false)
     }
@@ -770,93 +577,6 @@ const ScheduleManagementTab = ({ tournament }) => {
         </div>
       </div>
 
-      {/* Date Picker Modal for Suggestions */}
-      {showDatePickerModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }} onClick={() => setShowDatePickerModal(false)}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '24px',
-            maxWidth: '400px',
-            width: '90%',
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-          }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginBottom: '20px', fontSize: '18px', fontWeight: '600' }}>
-              Chọn ngày thi đấu
-            </h3>
-            
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
-                Ngày thi đấu *
-              </label>
-              <input
-                type="date"
-                value={selectedDateForSuggestion}
-                onChange={(e) => setSelectedDateForSuggestion(e.target.value)}
-                min={tournament?.startDate ? new Date(tournament.startDate).toISOString().split('T')[0] : undefined}
-                max={tournament?.endDate ? new Date(tournament.endDate).toISOString().split('T')[0] : undefined}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => {
-                  setShowDatePickerModal(false)
-                  setSelectedMatchForSuggestion(null)
-                  setSelectedDateForSuggestion('')
-                }}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#e5e7eb',
-                  color: '#374151',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500'
-                }}
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleConfirmDateForSuggestion}
-                disabled={!selectedDateForSuggestion}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: selectedDateForSuggestion ? '#3b82f6' : '#9ca3af',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: selectedDateForSuggestion ? 'pointer' : 'not-allowed',
-                  fontSize: '14px',
-                  fontWeight: '500'
-                }}
-              >
-                Tìm gợi ý
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Auto Schedule Modal */}
       {showAutoScheduleModal && (
         <div style={{
@@ -923,12 +643,19 @@ const ScheduleManagementTab = ({ tournament }) => {
 
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
-                  Thời lượng mỗi trận (phút)
+                  Thời gian thi đấu chính thức (phút) *
                 </label>
                 <input
                   type="number"
                   value={autoScheduleOptions.matchDuration}
-                  onChange={(e) => setAutoScheduleOptions(prev => ({ ...prev, matchDuration: parseInt(e.target.value) || 90 }))}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 90
+                    setAutoScheduleOptions(prev => ({ 
+                      ...prev, 
+                      matchDuration: value,
+                      totalMatchTime: value + prev.breakTime
+                    }))
+                  }}
                   min="30"
                   max="180"
                   style={{
@@ -939,16 +666,26 @@ const ScheduleManagementTab = ({ tournament }) => {
                     fontSize: '14px'
                   }}
                 />
+                <p style={{ marginTop: '4px', fontSize: '12px', color: '#6b7280' }}>
+                  Thời gian thi đấu chính thức của mỗi trận
+                </p>
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
-                  Khoảng cách giữa các trận (phút)
+                  Thời gian nghỉ giữa hiệp/giữa các trận (phút) *
                 </label>
                 <input
                   type="number"
                   value={autoScheduleOptions.breakTime}
-                  onChange={(e) => setAutoScheduleOptions(prev => ({ ...prev, breakTime: parseInt(e.target.value) || 30 }))}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 30
+                    setAutoScheduleOptions(prev => ({ 
+                      ...prev, 
+                      breakTime: value,
+                      totalMatchTime: prev.matchDuration + value
+                    }))
+                  }}
                   min="0"
                   max="120"
                   style={{
@@ -959,11 +696,83 @@ const ScheduleManagementTab = ({ tournament }) => {
                     fontSize: '14px'
                   }}
                 />
+                <p style={{ marginTop: '4px', fontSize: '12px', color: '#6b7280' }}>
+                  Thời gian nghỉ giữa hiệp và khoảng cách giữa các trận
+                </p>
+              </div>
+
+              <div style={{
+                padding: '12px',
+                backgroundColor: '#f0f9ff',
+                borderRadius: '6px',
+                border: '1px solid #bae6fd'
+              }}>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: '500', color: '#0369a1', marginBottom: '4px' }}>
+                  Tổng thời gian mỗi trận đấu
+                </p>
+                <p style={{ margin: 0, fontSize: '14px', color: '#0c4a6e' }}>
+                  {autoScheduleOptions.matchDuration + autoScheduleOptions.breakTime} phút
+                  <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>
+                    ({autoScheduleOptions.matchDuration} phút thi đấu + {autoScheduleOptions.breakTime} phút nghỉ)
+                  </span>
+                </p>
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
-                  Giờ bắt đầu ưu tiên
+                  Số lượng trận đấu mỗi ngày
+                </label>
+                <input
+                  type="number"
+                  value={autoScheduleOptions.matchesPerDay || ''}
+                  onChange={(e) => setAutoScheduleOptions(prev => ({ 
+                    ...prev, 
+                    matchesPerDay: e.target.value ? parseInt(e.target.value) : null 
+                  }))}
+                  min="1"
+                  placeholder="Tự động"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                />
+                <p style={{ marginTop: '4px', fontSize: '12px', color: '#6b7280' }}>
+                  Để trống để hệ thống tự động tính toán
+                </p>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+                  Số lượng trận đấu mỗi vòng
+                </label>
+                <input
+                  type="number"
+                  value={autoScheduleOptions.matchesPerRound || ''}
+                  onChange={(e) => setAutoScheduleOptions(prev => ({ 
+                    ...prev, 
+                    matchesPerRound: e.target.value ? parseInt(e.target.value) : null 
+                  }))}
+                  min="1"
+                  placeholder="Tự động"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                />
+                <p style={{ marginTop: '4px', fontSize: '12px', color: '#6b7280' }}>
+                  Để trống để hệ thống tự động tính toán
+                </p>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+                  Khung giờ hoạt động - Giờ bắt đầu *
                 </label>
                 <input
                   type="time"
@@ -977,11 +786,14 @@ const ScheduleManagementTab = ({ tournament }) => {
                     fontSize: '14px'
                   }}
                 />
+                <p style={{ marginTop: '4px', fontSize: '12px', color: '#6b7280' }}>
+                  Khoảng thời gian trong ngày được phép tổ chức thi đấu
+                </p>
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
-                  Giờ kết thúc ưu tiên
+                  Khung giờ hoạt động - Giờ kết thúc *
                 </label>
                 <input
                   type="time"
@@ -995,6 +807,9 @@ const ScheduleManagementTab = ({ tournament }) => {
                     fontSize: '14px'
                   }}
                 />
+                <p style={{ marginTop: '4px', fontSize: '12px', color: '#6b7280' }}>
+                  Khoảng thời gian trong ngày được phép tổ chức thi đấu
+                </p>
               </div>
             </div>
 
@@ -1188,36 +1003,6 @@ const ScheduleManagementTab = ({ tournament }) => {
                               {team2Name}
                             </span>
                           </div>
-
-                          {/* Nút gợi ý thời gian */}
-                          {!isTeam1Bye && !isTeam2Bye && tournament?.facility && (
-                            <button
-                              onClick={() => handleSuggestTime(scheduleItem.matchId, scheduleItem.stage)}
-                              disabled={loadingSuggestions[scheduleItem.matchId]}
-                              style={{
-                                padding: '6px 12px',
-                                backgroundColor: '#3b82f6',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                cursor: loadingSuggestions[scheduleItem.matchId] ? 'not-allowed' : 'pointer',
-                                fontSize: '12px',
-                                fontWeight: '500',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                opacity: loadingSuggestions[scheduleItem.matchId] ? 0.6 : 1
-                              }}
-                              title="Gợi ý thời gian tối ưu"
-                            >
-                              {loadingSuggestions[scheduleItem.matchId] ? (
-                                <Clock size={14} />
-                              ) : (
-                                <Lightbulb size={14} />
-                              )}
-                              {loadingSuggestions[scheduleItem.matchId] ? 'Đang tìm...' : 'Gợi ý'}
-                            </button>
-                          )}
                         </div>
                         
                         <div className="schedule-match-inputs">
@@ -1316,82 +1101,6 @@ const ScheduleManagementTab = ({ tournament }) => {
                           </div>
                         )}
                       </div>
-
-                      {/* Hiển thị suggestions */}
-                      {showSuggestions[scheduleItem.matchId] && suggestions[scheduleItem.matchId] && (
-                        <div style={{
-                          marginTop: '8px',
-                          padding: '12px',
-                          backgroundColor: '#f0f9ff',
-                          border: '1px solid #bae6fd',
-                          borderRadius: '6px'
-                        }}>
-                          <div style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'space-between',
-                            marginBottom: '8px'
-                          }}>
-                            <span style={{ fontSize: '14px', fontWeight: '600', color: '#0369a1' }}>
-                              Gợi ý thời gian ({suggestions[scheduleItem.matchId].length})
-                            </span>
-                            <button
-                              onClick={() => setShowSuggestions(prev => ({ ...prev, [scheduleItem.matchId]: false }))}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: '#0369a1',
-                                fontSize: '18px',
-                                padding: 0
-                              }}
-                            >
-                              ×
-                            </button>
-                          </div>
-                          <div style={{ 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            gap: '6px',
-                            maxHeight: '400px',
-                            overflowY: 'auto',
-                            paddingRight: '4px'
-                          }}>
-                            {suggestions[scheduleItem.matchId].map((suggestion, idx) => (
-                              <button
-                                key={idx}
-                                onClick={() => handleApplySuggestion(scheduleItem.matchId, suggestion)}
-                                style={{
-                                  padding: '8px 12px',
-                                  backgroundColor: 'white',
-                                  border: '1px solid #bae6fd',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  textAlign: 'left',
-                                  fontSize: '13px',
-                                  color: '#0369a1',
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.target.style.backgroundColor = '#e0f2fe'
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.target.style.backgroundColor = 'white'
-                                }}
-                              >
-                                <span>
-                                  {new Date(suggestion.date).toLocaleDateString('vi-VN')} • {suggestion.time} - {suggestion.endTime}
-                                </span>
-                                <span style={{ fontSize: '12px', color: '#64748b' }}>
-                                  {suggestion.courtName}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )
                 })}

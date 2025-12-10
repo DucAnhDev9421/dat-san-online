@@ -24,7 +24,7 @@ const CreateInternalTournament = () => {
     sport: '', // selected sport category
     courtType: '', // selected court type
     format: 'single-elimination', // tournament format
-    numParticipants: 2,
+    numParticipants: 4, // Mặc định 4 cho single-elimination (min)
     membersPerTeam: 2, // số lượng người mỗi đội
     startDate: '',
     endDate: '',
@@ -196,10 +196,31 @@ const CreateInternalTournament = () => {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : (type === 'number' ? parseInt(value) : value)
-    }))
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [name]: type === 'checkbox' ? checked : (type === 'number' ? (value === '' ? '' : parseInt(value) || 0) : value)
+      }
+      // Khi format thay đổi, điều chỉnh numParticipants nếu cần
+      if (name === 'format') {
+        if (value === 'single-elimination') {
+          // Đấu loại trực tiếp: 4-16 đội
+          if (prev.numParticipants < 4) {
+            newData.numParticipants = 4
+          } else if (prev.numParticipants > 16) {
+            newData.numParticipants = 16
+          }
+        } else if (value === 'round-robin') {
+          // Đấu vòng tròn: 2-6 đội
+          if (prev.numParticipants > 6) {
+            newData.numParticipants = 6
+          } else if (prev.numParticipants < 2) {
+            newData.numParticipants = 2
+          }
+        }
+      }
+      return newData
+    })
   }
 
   const handleImageUpload = (e) => {
@@ -261,9 +282,22 @@ const CreateInternalTournament = () => {
       toast.error('Ngày kết thúc phải sau ngày bắt đầu')
       return
     }
-    if (formData.numParticipants < 2) {
-      toast.error('Số đội tham gia phải ít nhất 2')
-      return
+    // Validation số đội theo format
+    if (formData.format === 'single-elimination') {
+      if (formData.numParticipants < 4 || formData.numParticipants > 16) {
+        toast.error('Đấu loại trực tiếp: Số đội phải từ 4 đến 16')
+        return
+      }
+    } else if (formData.format === 'round-robin') {
+      if (formData.numParticipants < 2 || formData.numParticipants > 6) {
+        toast.error('Đấu vòng tròn: Số đội phải từ 2 đến 6')
+        return
+      }
+    } else {
+      if (formData.numParticipants < 2) {
+        toast.error('Số đội tham gia phải ít nhất 2')
+        return
+      }
     }
     if (!formData.sport) {
       toast.error('Vui lòng chọn môn thể thao')
@@ -630,11 +664,31 @@ const CreateInternalTournament = () => {
                     type="number"
                     id="numParticipants"
                     name="numParticipants"
-                    value={formData.numParticipants}
+                    value={formData.numParticipants || ''}
                     onChange={handleInputChange}
-                    min="2"
+                    onBlur={(e) => {
+                      const value = e.target.value
+                      if (value === '' || isNaN(parseInt(value))) {
+                        const min = formData.format === 'single-elimination' ? 4 : 2
+                        setFormData(prev => ({ ...prev, numParticipants: min }))
+                      }
+                    }}
+                    min={formData.format === 'single-elimination' ? 4 : 2}
+                    max={formData.format === 'single-elimination' ? 16 : 6}
                     required
                   />
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: '#6b7280', 
+                    marginTop: '4px' 
+                  }}>
+                    {formData.format === 'single-elimination' 
+                      ? 'Đấu loại trực tiếp: 4-16 đội'
+                      : formData.format === 'round-robin'
+                      ? 'Đấu vòng tròn: 2-6 đội'
+                      : 'Tối thiểu 2 đội'
+                    }
+                  </div>
                 </div>
 
                 {/* Members Per Team */}
@@ -646,8 +700,14 @@ const CreateInternalTournament = () => {
                     type="number"
                     id="membersPerTeam"
                     name="membersPerTeam"
-                    value={formData.membersPerTeam}
+                    value={formData.membersPerTeam || ''}
                     onChange={handleInputChange}
+                    onBlur={(e) => {
+                      const value = e.target.value
+                      if (value === '' || isNaN(parseInt(value))) {
+                        setFormData(prev => ({ ...prev, membersPerTeam: 1 }))
+                      }
+                    }}
                     min="1"
                     placeholder="Nhập số thành viên"
                   />

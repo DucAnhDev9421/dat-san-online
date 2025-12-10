@@ -50,6 +50,8 @@ import partnerRoutes from "./routes/partner.js";
 import feedbackRoutes from "./routes/feedback.js";
 import chatRoutes from "./routes/chat.js";
 import serviceRoutes from "./routes/service.js";
+import withdrawalRoutes from "./routes/withdrawal.js";
+import systemConfigRoutes from "./routes/systemConfig.js";
 import { startReservationExpiryJob } from "./jobs/reservationExpiry.js";
 import { startBookingAutoCancelJob } from "./jobs/bookingAutoCancel.js";
 
@@ -157,6 +159,8 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/feedbacks", feedbackRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/services", serviceRoutes);
+app.use("/api/withdrawals", withdrawalRoutes);
+app.use("/api/system-config", systemConfigRoutes);
 // 404 handler
 app.use(notFound);
 

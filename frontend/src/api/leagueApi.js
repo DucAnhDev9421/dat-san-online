@@ -611,7 +611,7 @@ export const leagueApi = {
   },
 
   /**
-   * Update match result (score1, score2)
+   * Update match result (score1, score2, penaltyScore1, penaltyScore2)
    * PUT /api/leagues/:id/matches/result
    * Tự động tính winner và cập nhật vào vòng tiếp theo (single-elimination)
    * Cập nhật thống kê teams (wins, draws, losses) cho round-robin
@@ -620,15 +620,19 @@ export const leagueApi = {
    * @param {Number} matchNumber - Match number
    * @param {Number} score1 - Score of team 1
    * @param {Number} score2 - Score of team 2
+   * @param {Number} penaltyScore1 - Penalty score of team 1 (optional, for tie-breaker)
+   * @param {Number} penaltyScore2 - Penalty score of team 2 (optional, for tie-breaker)
    * @returns {Promise} Updated league object
    */
-  updateMatchResult: async (leagueId, stage, matchNumber, score1, score2) => {
+  updateMatchResult: async (leagueId, stage, matchNumber, score1, score2, penaltyScore1 = null, penaltyScore2 = null) => {
     try {
       const response = await api.put(`/leagues/${leagueId}/matches/result`, {
         stage,
         matchNumber,
         score1,
         score2,
+        penaltyScore1,
+        penaltyScore2,
       });
       return handleApiSuccess(response);
     } catch (error) {

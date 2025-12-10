@@ -6,13 +6,24 @@ dotenv.config();
 // !! CẤU HÌNH NODEMAILER !!
 // Bạn cần cấu hình transporter này với dịch vụ mail của bạn
 // (ví dụ: Gmail, SendGrid, Mailgun)
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD,
-  },
-});
+
+// Kiểm tra xem có credentials không
+const hasEmailCredentials = process.env.EMAIL_USER && process.env.EMAIL_APP_PASSWORD;
+
+let transporter = null;
+
+if (hasEmailCredentials) {
+  transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_APP_PASSWORD,
+    },
+  });
+} else {
+  console.warn("⚠️ [EMAIL] Chưa cấu hình EMAIL_USER hoặc EMAIL_APP_PASSWORD. Email sẽ không được gửi.");
+}
+
 // ---- HOẶC DÙNG DỊCH VỤ SMTP TEST (ví dụ: Mailtrap) ----
 // host: "sandbox.smtp.mailtrap.io",
 //port: 2525,
@@ -30,6 +41,12 @@ const transporter = nodemailer.createTransport({
  */
 export const sendEmail = async ({ to, subject, html }) => {
   try {
+    // Kiểm tra xem có transporter không
+    if (!transporter) {
+      console.warn(`⚠️ [EMAIL] Không thể gửi email tới ${to} - Chưa cấu hình email credentials`);
+      return;
+    }
+
     const mailOptions = {
       from: `"DAT-SAN-ONLINE" <${process.env.EMAIL_USER}>`,
       to,
@@ -49,7 +66,9 @@ export const sendEmail = async ({ to, subject, html }) => {
 
     console.log(`✅ Email sent successfully! Message ID: ${info.messageId}`);
   } catch (error) {
-    console.error("❌ Error sending email:", error);
+    // Log lỗi nhưng không throw - để không làm gián đoạn flow thanh toán
+    console.error("❌ Error sending email:", error.message || error);
+    // Không throw error để không làm gián đoạn các process khác (như cộng tiền cho owner)
   }
 };
 
