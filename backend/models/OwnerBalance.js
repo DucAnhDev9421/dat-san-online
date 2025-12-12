@@ -27,6 +27,12 @@ const ownerBalanceSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    // Tổng phí dịch vụ web đã thu được từ owner này
+    totalPlatformFee: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     // Phí platform (nếu có)
     platformFee: {
       type: Number,

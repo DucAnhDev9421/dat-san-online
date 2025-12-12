@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { X, XCircle, AlertTriangle } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { X, XCircle, AlertTriangle, DollarSign } from "lucide-react";
 import { bookingApi } from "../../../../api/bookingApi";
 import { toast } from "react-toastify";
 import useClickOutside from "../../../../hook/use-click-outside";
@@ -13,6 +13,77 @@ const CancelBookingModal = ({ isOpen, onClose, booking = {}, onCancel }) => {
 
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
+  const [refundInfo, setRefundInfo] = useState(null);
+
+  // Tính toán thông tin hoàn tiền
+  const refundCalculation = useMemo(() => {
+    if (!booking || !isOpen) return null;
+
+    // Lấy dữ liệu booking thực từ _original hoặc booking trực tiếp
+    const bookingData = booking._original || booking;
+    const paymentStatus = bookingData.paymentStatus || booking.pay;
+    const totalAmount = bookingData.totalAmount || booking.price || 0;
+    const date = bookingData.date || booking.date;
+    const timeSlots = bookingData.timeSlots || (booking.time ? booking.time.split(', ') : []);
+
+    // Chỉ tính hoàn tiền nếu đã thanh toán
+    if (paymentStatus !== "paid" && paymentStatus !== "Paid") {
+      return null;
+    }
+
+    if (!date || !timeSlots || timeSlots.length === 0) {
+      return null;
+    }
+
+    try {
+      // Tính thời gian vào sân
+      const bookingDate = new Date(date);
+      const firstTimeSlot = timeSlots[0];
+      const [startTime] = firstTimeSlot.split("-");
+      const [hours, minutes] = startTime.split(":").map(Number);
+      bookingDate.setHours(hours, minutes, 0, 0);
+
+      const now = new Date();
+      const hoursUntilBooking = (bookingDate - now) / (1000 * 60 * 60);
+
+      let refundAmount = 0;
+      let refundPercentage = 0;
+      let refundMessage = "";
+
+      if (hoursUntilBooking >= 24) {
+        // Hủy 24+ giờ trước: hoàn 100%
+        refundAmount = totalAmount;
+        refundPercentage = 100;
+        refundMessage = "Hủy trước 24 giờ: Hoàn 100%";
+      } else if (hoursUntilBooking >= 12) {
+        // Hủy 12-24 giờ trước: hoàn 50%
+        refundAmount = totalAmount * 0.5;
+        refundPercentage = 50;
+        refundMessage = "Hủy trước 12-24 giờ: Hoàn 50%";
+      } else if (hoursUntilBooking >= 0) {
+        // Hủy trước giờ vào sân (nhưng < 12 giờ): Owner hủy thì hoàn 100%
+        refundAmount = totalAmount;
+        refundPercentage = 100;
+        refundMessage = "Owner hủy: Hoàn 100%";
+      } else {
+        // Đã qua giờ vào sân: không hoàn tiền
+        refundAmount = 0;
+        refundPercentage = 0;
+        refundMessage = "Đã qua giờ vào sân: Không hoàn tiền";
+      }
+
+      return {
+        refundAmount,
+        refundPercentage,
+        refundMessage,
+        hoursUntilBooking: Math.max(0, hoursUntilBooking),
+        canRefund: refundAmount > 0,
+      };
+    } catch (error) {
+      console.error("Error calculating refund:", error);
+      return null;
+    }
+  }, [booking, isOpen]);
 
   if (!isOpen || !booking) return null;
 
@@ -39,16 +110,39 @@ const CancelBookingModal = ({ isOpen, onClose, booking = {}, onCancel }) => {
     }
 
     setLoading(true);
+    setRefundInfo(null);
     try {
       const result = await bookingApi.updateBookingStatus(bookingId, 'cancelled', reason);
       
       if (result.success) {
-        toast.success('Hủy đơn đặt sân thành công');
+        // Hiển thị thông tin hoàn tiền nếu có
+        if (result.data?.refundAmount > 0) {
+          setRefundInfo({
+            amount: result.data.refundAmount,
+            status: result.data.refundStatus || "completed",
+          });
+          toast.success(
+            `Hủy đơn đặt sân thành công. Đã hoàn tiền ${result.data.refundAmount.toLocaleString('vi-VN')} VNĐ vào ví khách hàng.`,
+            { autoClose: 5000 }
+          );
+        } else {
+          toast.success('Hủy đơn đặt sân thành công');
+        }
+        
         if (onCancel) {
           await onCancel(bookingId, reason);
         }
         setReason("");
-        if (onClose) onClose();
+        // Đợi một chút để user thấy thông tin hoàn tiền trước khi đóng
+        if (result.data?.refundAmount > 0) {
+          setTimeout(() => {
+            if (onClose) onClose();
+            setRefundInfo(null);
+          }, 2000);
+        } else {
+          if (onClose) onClose();
+          setRefundInfo(null);
+        }
       } else {
         toast.error(result.message || 'Không thể hủy đơn đặt sân');
       }
@@ -158,13 +252,79 @@ const CancelBookingModal = ({ isOpen, onClose, booking = {}, onCancel }) => {
           <div style={{ background: "#f9fafb", borderRadius: 8, padding: 16, marginBottom: 16 }}>
             <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>Thông tin đơn đặt:</div>
             <div style={{ fontSize: 14, color: "#111827", lineHeight: 1.8 }}>
-              <div><strong>Mã đặt:</strong> {booking.id}</div>
-              <div><strong>Khách hàng:</strong> {booking.customer}</div>
-              <div><strong>Sân:</strong> {booking.court}</div>
-              <div><strong>Ngày:</strong> {booking.date}</div>
-              <div><strong>Khung giờ:</strong> {booking.time}</div>
+              <div><strong>Mã đặt:</strong> {booking.id || booking._original?.bookingCode || booking._original?._id?.slice(-8)}</div>
+              <div><strong>Khách hàng:</strong> {booking.customer || booking._original?.user?.name || "N/A"}</div>
+              <div><strong>Sân:</strong> {booking.court || booking._original?.court?.name || "N/A"}</div>
+              <div><strong>Ngày:</strong> {booking.date || new Date(booking._original?.date).toLocaleDateString('vi-VN')}</div>
+              <div><strong>Khung giờ:</strong> {booking.time || (booking._original?.timeSlots?.join(', ') || "N/A")}</div>
+              <div><strong>Tổng tiền:</strong> {(booking.price || booking._original?.totalAmount || 0).toLocaleString('vi-VN')} VNĐ</div>
             </div>
           </div>
+
+          {/* Thông tin hoàn tiền */}
+          {refundCalculation && (
+            <div
+              style={{
+                background: refundCalculation.canRefund ? "#ecfdf5" : "#fef2f2",
+                borderRadius: 8,
+                padding: 16,
+                marginBottom: 16,
+                border: `1px solid ${refundCalculation.canRefund ? "#a7f3d0" : "#fecaca"}`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <DollarSign size={18} color={refundCalculation.canRefund ? "#059669" : "#ef4444"} />
+                <div style={{ fontSize: 14, fontWeight: 600, color: refundCalculation.canRefund ? "#059669" : "#ef4444" }}>
+                  Thông tin hoàn tiền
+                </div>
+              </div>
+              <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.6 }}>
+                <div style={{ marginBottom: 4 }}>
+                  <strong>Thời gian còn lại:</strong> {Math.floor(refundCalculation.hoursUntilBooking)} giờ {Math.floor((refundCalculation.hoursUntilBooking % 1) * 60)} phút
+                </div>
+                <div style={{ marginBottom: 4 }}>
+                  <strong>Chính sách:</strong> {refundCalculation.refundMessage}
+                </div>
+                {refundCalculation.canRefund ? (
+                  <div style={{ marginTop: 8, padding: 8, background: "#fff", borderRadius: 6 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#059669" }}>
+                      Số tiền hoàn: {refundCalculation.refundAmount.toLocaleString('vi-VN')} VNĐ ({refundCalculation.refundPercentage}%)
+                    </div>
+                    <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+                      Tiền sẽ được hoàn tự động vào ví của khách hàng sau khi hủy đơn.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: "#ef4444", marginTop: 4 }}>
+                    Không đủ điều kiện hoàn tiền.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Hiển thị kết quả hoàn tiền sau khi hủy */}
+          {refundInfo && (
+            <div
+              style={{
+                background: "#ecfdf5",
+                borderRadius: 8,
+                padding: 16,
+                marginBottom: 16,
+                border: "1px solid #a7f3d0",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <DollarSign size={18} color="#059669" />
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#059669" }}>
+                  Đã hoàn tiền thành công
+                </div>
+              </div>
+              <div style={{ fontSize: 14, color: "#374151" }}>
+                Đã hoàn <strong style={{ color: "#059669" }}>{refundInfo.amount.toLocaleString('vi-VN')} VNĐ</strong> vào ví của khách hàng.
+              </div>
+            </div>
+          )}
 
           <div style={{ marginBottom: 16 }}>
             <label

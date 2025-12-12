@@ -28,7 +28,6 @@ export default function BookingModal({
   const [bookingForm, setBookingForm] = useState({
     name: '',
     phone: '',
-    email: '',
     notes: ''
   })
 
@@ -64,7 +63,6 @@ export default function BookingModal({
     onSubmit({
       name: bookingForm.name.trim(),
       phone: bookingForm.phone.replace(/\s/g, ''),
-      email: bookingForm.email.trim() || undefined,
       notes: bookingForm.notes.trim() || undefined
     })
   }
@@ -292,27 +290,6 @@ export default function BookingModal({
               
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-                  Email
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={bookingForm.email}
-                  onChange={handleFormChange}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    outline: 'none'
-                  }}
-                  placeholder="Nhập email (không bắt buộc)"
-                />
-              </div>
-              
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
                   Ghi chú cho chủ sân
                 </label>
                 <textarea
@@ -345,7 +322,7 @@ export default function BookingModal({
             }}>
               <span style={{ color: '#059669' }}>✓</span>
               <span style={{ fontSize: '14px', color: '#059669' }}>
-                Thông tin đơn hàng sẽ được gửi đến số điện thoại và email bạn cung cấp.
+                Thông tin đơn hàng sẽ được gửi đến số điện thoại và email tài khoản của bạn.
               </span>
             </div>
             

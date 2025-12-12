@@ -2,44 +2,16 @@ import React, { useState, useEffect } from "react";
 import { Save, RefreshCw, Loader2 } from "lucide-react";
 import ResetSettingsModal from "../modals/ResetSettingsModal";
 import SettingsTabs from "../components/Settings/SettingsTabs";
-import GeneralSettings from "../components/Settings/GeneralSettings";
-import SMTPSettings from "../components/Settings/SMTPSettings";
 import ServiceFeeSettings from "../components/Settings/ServiceFeeSettings";
-import APIKeysSettings from "../components/Settings/APIKeysSettings";
 import PolicySettings from "../components/Settings/PolicySettings";
 import SupportSettings from "../components/Settings/SupportSettings";
 import { systemConfigApi } from "../../../../api/systemConfigApi";
 
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeTab, setActiveTab] = useState("serviceFee");
   const [settings, setSettings] = useState({
-    // General
-    siteName: "Dat San Online",
-    siteDescription: "Hệ thống đặt sân bóng đá trực tuyến",
-    logo: null,
-    favicon: null,
-    logoUrl: "https://via.placeholder.com/200x60",
-    faviconUrl: "https://via.placeholder.com/32x32",
-
-    // SMTP
-    smtpHost: "smtp.gmail.com",
-    smtpPort: 587,
-    smtpSecure: false,
-    smtpUser: "noreply@datsanonline.com",
-    smtpPassword: "",
-    smtpFromName: "Dat San Online",
-    smtpFromEmail: "noreply@datsanonline.com",
-
     // Service Fee
     serviceFeePercent: 10,
-
-    // API Keys
-    vnpayTmnCode: "",
-    vnpayHashSecret: "",
-    momoPartnerCode: "",
-    momoAccessKey: "",
-    momoSecretKey: "",
-    vietmapApiKey: "",
 
     // Policy & Terms
     termsOfService: "Điều khoản sử dụng...",
@@ -51,12 +23,6 @@ const Settings = () => {
     supportPhone: "1900123456",
     supportAddress: "123 Đường ABC, Quận 1, TP.HCM",
     supportHours: "Thứ 2 - Chủ nhật: 8:00 - 22:00",
-  });
-
-  const [showPasswords, setShowPasswords] = useState({
-    smtpPassword: false,
-    vnpayHashSecret: false,
-    momoSecretKey: false,
   });
 
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -93,26 +59,6 @@ const Settings = () => {
     }));
   };
 
-  const handleFileUpload = (field, file) => {
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSettings((prev) => ({
-          ...prev,
-          [field]: file,
-          [`${field}Url`]: reader.result,
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const togglePasswordVisibility = (field) => {
-    setShowPasswords((prev) => ({
-      ...prev,
-      [field]: !prev[field],
-    }));
-  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -154,26 +100,7 @@ const Settings = () => {
 
   const handleConfirmReset = () => {
     setSettings({
-      siteName: "Dat San Online",
-      siteDescription: "Hệ thống đặt sân bóng đá trực tuyến",
-      logo: null,
-      favicon: null,
-      logoUrl: "https://via.placeholder.com/200x60",
-      faviconUrl: "https://via.placeholder.com/32x32",
-      smtpHost: "smtp.gmail.com",
-      smtpPort: 587,
-      smtpSecure: false,
-      smtpUser: "noreply@datsanonline.com",
-      smtpPassword: "",
-      smtpFromName: "Dat San Online",
-      smtpFromEmail: "noreply@datsanonline.com",
       serviceFeePercent: 10,
-      vnpayTmnCode: "",
-      vnpayHashSecret: "",
-      momoPartnerCode: "",
-      momoAccessKey: "",
-      momoSecretKey: "",
-      vietmapApiKey: "",
       termsOfService: "Điều khoản sử dụng...",
       privacyPolicy: "Chính sách bảo mật...",
       refundPolicy: "Chính sách hoàn tiền...",
@@ -251,21 +178,6 @@ const Settings = () => {
 
       <SettingsTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {activeTab === "general" && (
-        <GeneralSettings
-          settings={settings}
-          onInputChange={handleInputChange}
-          onFileUpload={handleFileUpload}
-        />
-      )}
-      {activeTab === "smtp" && (
-        <SMTPSettings
-          settings={settings}
-          showPasswords={showPasswords}
-          onInputChange={handleInputChange}
-          onTogglePassword={togglePasswordVisibility}
-        />
-      )}
       {activeTab === "serviceFee" && (
         <>
           {isLoading ? (
@@ -315,14 +227,6 @@ const Settings = () => {
             </>
           )}
         </>
-      )}
-      {activeTab === "apiKeys" && (
-        <APIKeysSettings
-          settings={settings}
-          showPasswords={showPasswords}
-          onInputChange={handleInputChange}
-          onTogglePassword={togglePasswordVisibility}
-        />
       )}
       {activeTab === "policy" && (
         <PolicySettings settings={settings} onInputChange={handleInputChange} />

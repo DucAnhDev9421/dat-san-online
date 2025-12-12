@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Download } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { courtData } from "../data/mockData";
 import { bookingApi } from "../../../../api/bookingApi";
 import { facilityApi } from "../../../../api/facilityApi";
@@ -9,6 +9,7 @@ import { toast } from "react-toastify";
 import BookingDetailModal from "../modals/BookingDetailModal";
 import ConfirmBookingModal from "../modals/ConfirmBookingModal";
 import CancelBookingModal from "../modals/CancelBookingModal";
+import CreateWalkInBookingModal from "../modals/CreateWalkInBookingModal";
 import BookingFilters from "../components/Bookings/BookingFilters";
 import BookingTable from "../components/Bookings/BookingTable";
 
@@ -21,6 +22,7 @@ const Bookings = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [isWalkInOpen, setIsWalkInOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -253,6 +255,29 @@ const Bookings = () => {
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Đơn đặt sân</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button
+            onClick={() => {
+              if (!selectedFacilityId) {
+                toast.warning("Vui lòng chọn cơ sở trước");
+                return;
+              }
+              setIsWalkInOpen(true);
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              background: "#2563eb",
+              color: "#fff",
+              border: 0,
+              borderRadius: 10,
+              padding: "10px 14px",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            <Plus size={16} /> Đặt sân trực tiếp
+          </button>
+          <button
             onClick={() => alert("TODO: Xuất báo cáo đặt sân")}
             style={{
               display: "inline-flex",
@@ -437,6 +462,20 @@ const Bookings = () => {
           setIsCancelOpen(false);
           setSelectedBooking(null);
           // Trigger refresh
+          setRefreshKey((prev) => prev + 1);
+        }}
+      />
+
+      {/* Create Walk-in Booking modal */}
+      <CreateWalkInBookingModal
+        isOpen={isWalkInOpen}
+        onClose={() => {
+          setIsWalkInOpen(false);
+        }}
+        facilityId={selectedFacilityId}
+        onSuccess={async (booking) => {
+          // Refresh bookings after creating walk-in booking
+          setIsWalkInOpen(false);
           setRefreshKey((prev) => prev + 1);
         }}
       />

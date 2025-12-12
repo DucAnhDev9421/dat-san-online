@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { X, ShoppingCart, Coffee, Utensils, Club, Trash2 } from "lucide-react"; 
-import { serviceData, sportCategories } from "../data/mockData"; 
+import { X, ShoppingCart, Coffee, Utensils, Club, Trash2, Loader2 } from "lucide-react"; 
+import { serviceApi } from "../../../../api/serviceApi";
+import { categoryApi } from "../../../../api/categoryApi";
+import { toast } from "react-toastify";
 
 // Map icon
 const CATEGORY_ICONS = {
@@ -9,33 +11,130 @@ const CATEGORY_ICONS = {
   cat_rentals: <Club size={18} />,
 };
 
-
+// Map service type from database to category id
+const TYPE_TO_CATEGORY = {
+  DRINK: "cat_drinks",
+  FOOD: "cat_snacks",
+  EQUIPMENT: "cat_rentals",
+};
 
 const CourtServiceModal = ({ isOpen, onClose, court, onSave }) => {
-  const [activeCategory, setActiveCategory] = useState(serviceData[0].id);
+  const [serviceData, setServiceData] = useState([]);
+  const [sportCategories, setSportCategories] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("cat_drinks");
   const [cart, setCart] = useState([]);
-  
-  const [selectedSportKey, setSelectedSportKey] = useState(sportCategories[0].key);
+  const [selectedSportKey, setSelectedSportKey] = useState(null);
 
+  // Fetch services and sport categories
   useEffect(() => {
     if (isOpen) {
+      fetchServices();
+      fetchSportCategories();
       setCart([]);
-      setActiveCategory(serviceData[0].id);
-      setSelectedSportKey(sportCategories[0].key); 
+      setActiveCategory("cat_drinks");
+      setSelectedSportKey(null);
     }
   }, [isOpen]);
+
+  const fetchServices = async () => {
+    try {
+      setLoading(true);
+      const response = await serviceApi.getAllServices({ isActive: true });
+      if (response.success) {
+        const services = response.data || [];
+        // Group services by type
+        const groupedServices = groupServicesByType(services);
+        setServiceData(groupedServices);
+        
+        // Set first category as active if available
+        if (groupedServices.length > 0) {
+          setActiveCategory(groupedServices[0].id);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching services:", error);
+      toast.error("Không thể tải danh sách dịch vụ");
+      setServiceData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSportCategories = async () => {
+    try {
+      const response = await categoryApi.getSportCategories({ status: "active" });
+      if (response.success) {
+        const categories = response.data || [];
+        // Map to format expected by modal
+        const mappedCategories = categories.map((cat) => ({
+          key: cat._id || cat.id,
+          name: cat.name,
+          _id: cat._id || cat.id,
+        }));
+        setSportCategories(mappedCategories);
+        
+        // Set first sport as selected if available
+        if (mappedCategories.length > 0 && court?.sportCategory) {
+          // Try to match court's sport category
+          const courtSportId = court.sportCategory?._id || court.sportCategory;
+          const matchedSport = mappedCategories.find(
+            (s) => s._id === courtSportId || s.key === courtSportId
+          );
+          setSelectedSportKey(matchedSport ? matchedSport.key : mappedCategories[0].key);
+        } else if (mappedCategories.length > 0) {
+          setSelectedSportKey(mappedCategories[0].key);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching sport categories:", error);
+      setSportCategories([]);
+    }
+  };
+
+  const groupServicesByType = (services) => {
+    const grouped = {
+      cat_drinks: { id: "cat_drinks", name: "Nước uống", items: [] },
+      cat_snacks: { id: "cat_snacks", name: "Đồ ăn vặt", items: [] },
+      cat_rentals: { id: "cat_rentals", name: "Thuê đồ & Dụng cụ", items: [] },
+    };
+
+    services.forEach((service) => {
+      const categoryId = TYPE_TO_CATEGORY[service.type];
+      if (categoryId) {
+        const item = {
+          _id: service._id,
+          name: service.name,
+          price: service.price,
+          imageUrl: service.image || null,
+          description: service.description,
+          // For EQUIPMENT, store sportCategory info
+          sportCategory: service.sportCategory?._id || service.sportCategory || null,
+          sportCategoryName: service.sportCategory?.name || null,
+        };
+        grouped[categoryId].items.push(item);
+      }
+    });
+
+    // Return only categories that have items
+    return Object.values(grouped).filter((cat) => cat.items.length > 0);
+  };
 
   if (!isOpen || !court) return null;
 
   // --- LOGIC LỌC MỚI (DỰA TRÊN STATE 'selectedSportKey') ---
-
   const categoryItems = serviceData.find((cat) => cat.id === activeCategory)?.items || [];
   let currentItems = categoryItems;
 
-  if (activeCategory === 'cat_rentals') {
-    currentItems = categoryItems.filter(item => 
-      item.sportType === "all" ||          
-      item.sportType === selectedSportKey 
+  if (activeCategory === "cat_rentals" && selectedSportKey) {
+    // Filter equipment by selected sport category
+    // Show items that match the selected sport or have no sport category (all sports)
+    currentItems = categoryItems.filter(
+      (item) =>
+        !item.sportCategory || // No sport category = available for all sports
+        item.sportCategory === selectedSportKey || // Matches selected sport
+        item.sportCategory._id === selectedSportKey || // Handle populated object
+        String(item.sportCategory) === String(selectedSportKey) // String comparison
     );
   }
   // --- KẾT THÚC LOGIC LỌC ---
@@ -122,66 +221,94 @@ const CourtServiceModal = ({ isOpen, onClose, court, onSave }) => {
 
           {/* Cột 2: DANH SÁCH SẢN PHẨM */}
           <div className="flex-1 overflow-y-auto bg-white p-6">
-            <h3 className="mb-4 text-lg font-semibold text-gray-800">
-              {serviceData.find((c) => c.id === activeCategory)?.name}
-            </h3>
-            
-            {activeCategory === 'cat_rentals' && (
-              <div className="mb-5 flex flex-wrap gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                {sportCategories.map(sport => (
-                  <button
-                    key={sport.key}
-                    onClick={() => setSelectedSportKey(sport.key)}
-                    className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                      selectedSportKey === sport.key
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-white text-gray-700 hover:bg-blue-50'
-                    }`}
-                  >
-                    {sport.name}
-                  </button>
-                ))}
+            {loading ? (
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="animate-spin text-blue-600" size={32} />
+                <span className="ml-3 text-gray-600">Đang tải dịch vụ...</span>
               </div>
-            )}
-
-
-            {/* === ĐÂY LÀ DÒNG QUAN TRỌNG === */}
-            <div className="grid grid-cols-3 gap-4">
-              {currentItems.length > 0 ? (
-                currentItems.map((item) => (
-                  <div
-                    key={item._id}
-                    onClick={() => addToCart(item)}
-                    className="group cursor-pointer rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-blue-300 hover:shadow-md active:scale-95"
-                  >
-                    <div className="mb-3 h-24 w-full overflow-hidden rounded-lg bg-gray-100 group-hover:bg-blue-50">
-                      {item.imageUrl ? (
-                          <img 
-                              src={item.imageUrl} 
-                              alt={item.name} 
-                              className="h-full w-full object-cover transition-transform group-hover:scale-105" 
-                              onError={(e) => {e.target.style.display='none'; e.target.nextSibling.style.display='flex'}}
-                          />
-                      ) : null}
-                      <div className="flex h-full w-full items-center justify-center text-gray-400 group-hover:text-blue-500" style={{display: item.imageUrl ? 'none' : 'flex'}}>
-                          <ShoppingCart size={32} />
-                      </div>
-                    </div>
-                    
-                    <h4 className="font-semibold text-gray-800 group-hover:text-blue-700">
-                      {item.name}
-                    </h4>
-                    <p className="mt-1 font-bold text-blue-700">
-                      {item.price.toLocaleString("vi-VN")} đ
-                    </p>
+            ) : (
+              <>
+                <h3 className="mb-4 text-lg font-semibold text-gray-800">
+                  {serviceData.find((c) => c.id === activeCategory)?.name || "Dịch vụ"}
+                </h3>
+                
+                {activeCategory === "cat_rentals" && sportCategories.length > 0 && (
+                  <div className="mb-5 flex flex-wrap gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    {sportCategories.map((sport) => (
+                      <button
+                        key={sport.key || sport._id}
+                        onClick={() => setSelectedSportKey(sport.key || sport._id)}
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                          selectedSportKey === (sport.key || sport._id)
+                            ? "bg-blue-600 text-white"
+                            : "bg-white text-gray-700 hover:bg-blue-50"
+                        }`}
+                      >
+                        {sport.name}
+                      </button>
+                    ))}
                   </div>
-                ))
-              ) : (
-                <div className="col-span-full text-center text-gray-500 py-10">
-                  <p>Không có dụng cụ nào cho môn thể thao này.</p>
+                )}
+
+
+                {/* === ĐÂY LÀ DÒNG QUAN TRỌNG === */}
+                <div className="grid grid-cols-3 gap-4">
+                  {currentItems.length > 0 ? (
+                    currentItems.map((item) => (
+                      <div
+                        key={item._id}
+                        onClick={() => addToCart(item)}
+                        className="group cursor-pointer rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-blue-300 hover:shadow-md active:scale-95"
+                      >
+                        <div className="mb-3 h-24 w-full overflow-hidden rounded-lg bg-gray-100 group-hover:bg-blue-50">
+                          {item.imageUrl ? (
+                            <img
+                              src={item.imageUrl}
+                              alt={item.name}
+                              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                              onError={(e) => {
+                                e.target.style.display = "none";
+                                if (e.target.nextSibling) {
+                                  e.target.nextSibling.style.display = "flex";
+                                }
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className="flex h-full w-full items-center justify-center text-gray-400 group-hover:text-blue-500"
+                            style={{
+                              display: item.imageUrl ? "none" : "flex",
+                            }}
+                          >
+                            <ShoppingCart size={32} />
+                          </div>
+                        </div>
+
+                        <h4 className="font-semibold text-gray-800 group-hover:text-blue-700">
+                          {item.name}
+                        </h4>
+                        {item.description && (
+                          <p className="mt-1 text-xs text-gray-500 line-clamp-2">
+                            {item.description}
+                          </p>
+                        )}
+                        <p className="mt-1 font-bold text-blue-700">
+                          {item.price.toLocaleString("vi-VN")} đ
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-span-full text-center text-gray-500 py-10">
+                      <p>
+                        {activeCategory === "cat_rentals"
+                          ? "Không có dụng cụ nào cho môn thể thao này."
+                          : "Không có dịch vụ nào trong danh mục này."}
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
 
           {/* Cột 3: GIỎ HÀNG */}
@@ -203,14 +330,24 @@ const CourtServiceModal = ({ isOpen, onClose, court, onSave }) => {
                 <div className="space-y-4">
                   {cart.map((item) => (
                     <div key={item._id} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 hover:border-gray-300 transition-colors">
-                      <img 
-                        src={item.imageUrl} 
-                        alt={item.name} 
-                        className="h-12 w-12 flex-shrink-0 rounded-md object-cover"
-                        onError={(e) => {e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'}}
-                      />
-                      <div className="h-12 w-12 flex-shrink-0 rounded-md bg-gray-100 flex items-center justify-center text-gray-400" style={{display: 'none'}}>
-                          <ShoppingCart size={20} />
+                      {item.imageUrl && (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="h-12 w-12 flex-shrink-0 rounded-md object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            if (e.currentTarget.nextSibling) {
+                              e.currentTarget.nextSibling.style.display = "flex";
+                            }
+                          }}
+                        />
+                      )}
+                      <div
+                        className="h-12 w-12 flex-shrink-0 rounded-md bg-gray-100 flex items-center justify-center text-gray-400"
+                        style={{ display: item.imageUrl ? "none" : "flex" }}
+                      >
+                        <ShoppingCart size={20} />
                       </div>
 
                       <div className="flex-1 overflow-hidden min-w-0">

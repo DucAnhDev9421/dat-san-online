@@ -4,11 +4,12 @@ import BookingSequence from "./BookingSequence.js";
 
 const bookingSchema = new mongoose.Schema(
   {
-    // User đặt sân
+    // User đặt sân (optional - null cho walk-in booking)
     user: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: [true, "Người dùng là bắt buộc"],
+      required: false,
+      default: null,
     },
 
     // Sân được đặt
@@ -182,6 +183,23 @@ const bookingSchema = new mongoose.Schema(
       stage: String, // round1, round2, semi, final, etc.
       matchNumber: Number,
     },
+    // Thời gian bắt đầu thực tế (Date object - kết hợp date + time)
+    startTime: {
+      type: Date,
+      required: false,
+      default: null,
+    },
+    // Thời gian kết thúc dự kiến (Date object - luôn có nếu có startTime)
+    endTime: {
+      type: Date,
+      required: false,
+      default: null,
+    },
+    // Đánh dấu booking linh hoạt (không theo khung giờ cố định)
+    isFlexibleBooking: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -195,6 +213,9 @@ bookingSchema.index({ court: 1, date: 1 }); // Compound index cho court và date
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ paymentStatus: 1 });
 bookingSchema.index({ holdUntil: 1 }); // Index for expiry queries
+bookingSchema.index({ court: 1, date: 1, startTime: 1 }); // Index cho flexible booking queries
+bookingSchema.index({ court: 1, date: 1, endTime: 1 }); // Index cho flexible booking queries
+bookingSchema.index({ startTime: 1, endTime: 1 }); // Index cho overlap checking
 // Note: bookingCode index được tạo tự động bởi unique: true trong field definition
 // Note: date index không cần thiết vì đã có trong compound indexes ở trên
 
@@ -233,6 +254,46 @@ bookingSchema.virtual("duration").get(function () {
 bookingSchema.virtual("displayCode").get(function () {
   return this.bookingCode || this._id.toString().slice(-8).toUpperCase();
 });
+
+// Virtual: Lấy startTime từ timeSlots nếu chưa có
+bookingSchema.virtual("computedStartTime").get(function () {
+  if (this.startTime) return this.startTime;
+  
+  if (this.timeSlots && this.timeSlots.length > 0) {
+    const firstSlot = this.timeSlots[0];
+    const [startTimeStr] = firstSlot.split('-');
+    const [hours, minutes] = startTimeStr.split(':').map(Number);
+    const startDate = new Date(this.date);
+    startDate.setHours(hours, minutes, 0, 0);
+    return startDate;
+  }
+  return null;
+});
+
+// Virtual: Lấy endTime từ timeSlots nếu chưa có
+bookingSchema.virtual("computedEndTime").get(function () {
+  if (this.endTime) return this.endTime;
+  
+  if (this.timeSlots && this.timeSlots.length > 0) {
+    const lastSlot = this.timeSlots[this.timeSlots.length - 1];
+    const [, endTimeStr] = lastSlot.split('-');
+    const [hours, minutes] = endTimeStr.split(':').map(Number);
+    const endDate = new Date(this.date);
+    endDate.setHours(hours, minutes, 0, 0);
+    return endDate;
+  }
+  return null;
+});
+
+// Method: Lấy startTime thực tế (ưu tiên startTime, fallback computedStartTime)
+bookingSchema.methods.getStartTime = function () {
+  return this.startTime || this.computedStartTime;
+};
+
+// Method: Lấy endTime thực tế (ưu tiên endTime, fallback computedEndTime)
+bookingSchema.methods.getEndTime = function () {
+  return this.endTime || this.computedEndTime;
+};
 
 // Method để check xem booking có đang pending không
 bookingSchema.methods.isPending = function () {
@@ -282,27 +343,97 @@ bookingSchema.statics.findByFacility = function (facilityId, filters = {}) {
     .sort({ date: 1, createdAt: -1 });
 };
 
+// Static method để check overlap giữa 2 time ranges
+bookingSchema.statics.hasTimeOverlap = function (start1, end1, start2, end2) {
+  if (!start1 || !end1 || !start2 || !end2) return false;
+  
+  const s1 = start1 instanceof Date ? start1 : new Date(start1);
+  const e1 = end1 instanceof Date ? end1 : new Date(end1);
+  const s2 = start2 instanceof Date ? start2 : new Date(start2);
+  const e2 = end2 instanceof Date ? end2 : new Date(end2);
+  
+  // Overlap nếu: start1 < end2 && start2 < end1
+  return !(e1 <= s2 || s1 >= e2);
+};
+
 // Static method để check availability
 bookingSchema.statics.checkAvailability = async function (
   courtId,
   date,
-  timeSlots
+  timeSlots, // Optional - cho booking cố định
+  startTime = null, // Optional - Date object cho flexible booking
+  endTime = null   // Optional - Date object, LUÔN PHẢI CÓ nếu có startTime
 ) {
   const now = new Date();
+  const bookingDate = new Date(date);
+  bookingDate.setHours(0, 0, 0, 0);
+  
+  // Get all bookings for this court and date
+  const startOfDay = new Date(bookingDate);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(bookingDate);
+  endOfDay.setHours(23, 59, 59, 999);
+  
   const bookings = await this.find({
     court: courtId,
-    date: new Date(date),
+    date: {
+      $gte: startOfDay,
+      $lte: endOfDay
+    },
     status: { $in: ["pending_payment", "hold", "confirmed"] },
-    timeSlots: { $in: timeSlots },
-    // Exclude expired bookings (check holdUntil)
     $or: [
       { holdUntil: { $exists: false } },
       { holdUntil: { $gt: now } },
-      { status: "confirmed" }, // Confirmed bookings don't expire
+      { status: "confirmed" },
     ],
   });
 
-  return bookings.length === 0;
+  // Normalize request times
+  let reqStartTime, reqEndTime;
+  
+  if (startTime && endTime) {
+    // Flexible booking - sử dụng Date objects
+    reqStartTime = startTime instanceof Date ? startTime : new Date(startTime);
+    reqEndTime = endTime instanceof Date ? endTime : new Date(endTime);
+  } else if (timeSlots && timeSlots.length > 0) {
+    // Fixed booking - convert từ timeSlots
+    const firstSlot = timeSlots[0];
+    const lastSlot = timeSlots[timeSlots.length - 1];
+    const [startStr] = firstSlot.split('-');
+    const [, endStr] = lastSlot.split('-');
+    
+    const [startHour, startMin] = startStr.split(':').map(Number);
+    const [endHour, endMin] = endStr.split(':').map(Number);
+    
+    reqStartTime = new Date(bookingDate);
+    reqStartTime.setHours(startHour, startMin, 0, 0);
+    reqEndTime = new Date(bookingDate);
+    reqEndTime.setHours(endHour, endMin, 0, 0);
+  } else {
+    return false; // Không có thông tin thời gian
+  }
+
+  // Check overlap với từng booking
+  for (const booking of bookings) {
+    const bookStartTime = booking.getStartTime();
+    const bookEndTime = booking.getEndTime();
+    
+    if (!bookStartTime || !bookEndTime) continue;
+    
+    // Check overlap: start1 < end2 && start2 < end1
+    const hasOverlap = this.hasTimeOverlap(
+      reqStartTime,
+      reqEndTime,
+      bookStartTime,
+      bookEndTime
+    );
+    
+    if (hasOverlap) {
+      return false; // Có overlap
+    }
+  }
+
+  return true; // Không có overlap
 };
 
 export default mongoose.model("Booking", bookingSchema);

@@ -59,6 +59,73 @@ const checkFacilityOwnership = async (req, res, next) => {
 
 // === ĐĂNG KÝ ROUTE ===
 
+// === ADMIN ROUTES ===
+// Tất cả routes admin-only (không cần checkFacilityOwnership)
+
+// GET /api/analytics/admin/platform-fee
+router.get(
+  "/admin/platform-fee",
+  authenticateToken,
+  authorize("admin"),
+  analyticsController.getAdminPlatformFee
+);
+
+// GET /api/analytics/admin/dashboard
+router.get(
+  "/admin/dashboard",
+  authenticateToken,
+  authorize("admin"),
+  analyticsController.getAdminDashboard
+);
+
+// GET /api/analytics/admin/revenue?period=month&year=2025
+router.get(
+  "/admin/revenue",
+  authenticateToken,
+  authorize("admin"),
+  analyticsController.getAdminRevenue
+);
+
+// GET /api/analytics/admin/facility-stats
+router.get(
+  "/admin/facility-stats",
+  authenticateToken,
+  authorize("admin"),
+  analyticsController.getAdminFacilityStats
+);
+
+// GET /api/analytics/admin/peak-hours?startDate=xxx&endDate=xxx
+router.get(
+  "/admin/peak-hours",
+  authenticateToken,
+  authorize("admin"),
+  analyticsController.getAdminPeakHours
+);
+
+// GET /api/analytics/admin/top-facilities?startDate=xxx&endDate=xxx&limit=10
+router.get(
+  "/admin/top-facilities",
+  authenticateToken,
+  authorize("admin"),
+  analyticsController.getAdminTopFacilities
+);
+
+// GET /api/analytics/admin/top-owners?startDate=xxx&endDate=xxx&limit=10
+router.get(
+  "/admin/top-owners",
+  authenticateToken,
+  authorize("admin"),
+  analyticsController.getAdminTopOwners
+);
+
+// GET /api/analytics/admin/dashboard-overview?range=Today|7d|30d
+router.get(
+  "/admin/dashboard-overview",
+  authenticateToken,
+  authorize("admin"),
+  analyticsController.getAdminDashboardOverview
+);
+
 // Tất cả các route bên dưới đều yêu cầu:
 // 1. Đã đăng nhập (authenticateToken)
 // 2. Có vai trò "owner" hoặc "admin" (authorize)

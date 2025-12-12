@@ -1,7 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  BarChart,
-  Bar,
   LineChart,
   Line,
   XAxis,
@@ -19,16 +17,12 @@ import {
   Users2,
   BadgeDollarSign,
   UserCheck,
+  Loader2,
 } from "lucide-react";
-import { kpis, trendData, pieData, pieColors } from "../data/mockData";
+import { toast } from "react-toastify";
+import { analyticsApi } from "../../../../api/analyticsApi";
 
-const topFacilities = [
-  { name: "Truong Football", bookings: 156, revenue: 31200000 },
-  { name: "Sân Bóng Đá Minh Khai", bookings: 142, revenue: 25560000 },
-  { name: "Trung Tâm Thể Thao Quận 7", bookings: 128, revenue: 32000000 },
-  { name: "Sân Bóng Đá Tân Bình", bookings: 115, revenue: 25300000 },
-  { name: "Trung Tâm Thể Thao Bình Thạnh", bookings: 98, revenue: 22540000 },
-];
+const pieColors = ["#10b981", "#ef4444", "#6366f1"];
 
 const KpiCard = ({ title, value, icon }) => (
   <div
@@ -53,7 +47,57 @@ const KpiCard = ({ title, value, icon }) => (
 );
 
 const Dashboard = () => {
-  const [range, setRange] = useState("Today");
+  const [range, setRange] = useState("30d");
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState({
+    kpis: {
+      totalRevenue: 0,
+      totalBookings: 0,
+      occupancyRate: 0,
+      newUsers: 0,
+    },
+    trendData: [],
+    pieData: [],
+    topFacilities: [],
+  });
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [range]);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const response = await analyticsApi.getAdminDashboardOverview(range);
+      if (response.success) {
+        setDashboardData(response.data);
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      toast.error("Không thể tải dữ liệu bảng điều khiển");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat("vi-VN").format(price || 0);
+  };
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "400px",
+        }}
+      >
+        <Loader2 size={32} className="animate-spin" color="#10b981" />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -67,7 +111,7 @@ const Dashboard = () => {
       >
         <h1 style={{ fontSize: 24, fontWeight: 800 }}>Bảng điều khiển</h1>
         <div style={{ display: "flex", gap: 8 }}>
-          {["Today", "7d", "30d"].map((k) => (
+          {["30d", "7d", "Today"].map((k) => (
             <button
               key={k}
               onClick={() => setRange(k)}
@@ -98,22 +142,22 @@ const Dashboard = () => {
       >
         <KpiCard
           title="Tổng doanh thu"
-          value={`${(kpis.totalRevenue / 1e6).toFixed(0)}M VNĐ / tháng`}
+          value={`${formatPrice(dashboardData.kpis.totalRevenue)} VNĐ / tháng`}
           icon={<BadgeDollarSign size={20} color="#10b981" />}
         />
         <KpiCard
           title="Tổng số lượt đặt sân"
-          value={`${kpis.totalBookings.toLocaleString()} lượt`}
+          value={`${dashboardData.kpis.totalBookings.toLocaleString()} lượt`}
           icon={<CalendarDays size={20} color="#3b82f6" />}
         />
         <KpiCard
           title="Tỷ lệ lấp đầy"
-          value={`${kpis.occupancyRate}%`}
+          value={`${dashboardData.kpis.occupancyRate}%`}
           icon={<Users2 size={20} color="#6366f1" />}
         />
         <KpiCard
           title="Số người dùng mới"
-          value={`+${kpis.newUsers} trong tuần qua`}
+          value={`+${dashboardData.kpis.newUsers} trong tuần qua`}
           icon={<UserCheck size={20} color="#f59e0b" />}
         />
       </div>
@@ -132,16 +176,57 @@ const Dashboard = () => {
             Biểu đồ doanh thu theo tuần
           </div>
           <ResponsiveContainer width="100%" height={320}>
-            <LineChart data={trendData}>
+            <LineChart data={dashboardData.trendData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
               <YAxis yAxisId="left" />
               <YAxis yAxisId="right" orientation="right" />
               <Tooltip 
-                formatter={(value, name) => [
-                  name === 'bookings' ? `${value} lượt` : `${value}M VNĐ`,
-                  name === 'bookings' ? 'Số lượt đặt' : 'Doanh thu'
-                ]}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div
+                        style={{
+                          backgroundColor: "#fff",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "8px",
+                          padding: "12px",
+                          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                        }}
+                      >
+                        {payload.map((entry, index) => {
+                          const { name, value, dataKey } = entry;
+                          let displayValue = "";
+                          let displayLabel = "";
+
+                          if (dataKey === "revenue" || name === "Doanh thu (M VNĐ)") {
+                            displayValue = `${value}M VNĐ`;
+                            displayLabel = "Doanh thu";
+                          } else if (dataKey === "bookings" || name === "Số lượt đặt") {
+                            displayValue = `${value} lượt`;
+                            displayLabel = "Số lượt đặt";
+                          }
+
+                          return (
+                            <div
+                              key={index}
+                              style={{
+                                color: entry.color,
+                                marginBottom: index < payload.length - 1 ? "8px" : "0",
+                              }}
+                            >
+                              <div style={{ fontWeight: 600, marginBottom: "4px" }}>
+                                {displayLabel}
+                              </div>
+                              <div>{displayValue}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
               />
               <Legend />
               <Line yAxisId="left" type="monotone" dataKey="bookings" stroke="#3b82f6" name="Số lượt đặt" />
@@ -162,13 +247,13 @@ const Dashboard = () => {
           <ResponsiveContainer width="100%" height={320}>
             <PieChart>
               <Pie
-                data={pieData}
+                data={dashboardData.pieData}
                 dataKey="value"
                 nameKey="name"
                 outerRadius={100}
                 label
               >
-                {pieData.map((_, i) => (
+                {dashboardData.pieData.map((_, i) => (
                   <Cell key={i} fill={pieColors[i % pieColors.length]} />
                 ))}
               </Pie>
@@ -191,7 +276,7 @@ const Dashboard = () => {
           Sân hoạt động nhiều nhất
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-          {topFacilities.map((facility, index) => (
+          {dashboardData.topFacilities.map((facility, index) => (
             <div
               key={facility.name}
               style={{
@@ -224,7 +309,7 @@ const Dashboard = () => {
                 {facility.bookings} lượt đặt
               </div>
               <div style={{ fontSize: 12, color: "#059669", fontWeight: 600 }}>
-                {(facility.revenue / 1e6).toFixed(1)}M VNĐ
+                {facility.revenue ? `${formatPrice(facility.revenue)} VNĐ` : "0 VNĐ"}
               </div>
             </div>
           ))}

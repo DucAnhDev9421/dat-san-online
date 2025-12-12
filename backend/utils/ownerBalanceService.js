@@ -14,12 +14,17 @@ export const creditOwnerBalance = async (ownerId, amount, platformFee = null) =>
   if (platformFee === null) {
     platformFee = await getPlatformFee();
   }
+  
+  // Tính phí dịch vụ web thu được
+  const platformFeeAmount = amount * platformFee;
+  
   const ownerBalance = await OwnerBalance.findOneAndUpdate(
     { owner: ownerId },
     {
       $inc: {
         totalRevenue: amount,
         availableBalance: amount * (1 - platformFee), // Trừ phí platform
+        totalPlatformFee: platformFeeAmount, // Cộng dồn phí dịch vụ web
       },
     },
     { upsert: true, new: true }

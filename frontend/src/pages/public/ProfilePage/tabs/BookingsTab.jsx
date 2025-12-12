@@ -97,8 +97,28 @@ export default function BookingsTab() {
     try {
       const bookingId = selectedBooking._original?._id || selectedBooking._original?.id || selectedBooking.id
       // Truyền lý do hủy (label) vào API
-      await bookingApi.cancelBooking(bookingId, finalReason)
-      toast.success('Hủy đặt sân thành công')
+      const result = await bookingApi.cancelBooking(bookingId, finalReason)
+      
+      // Hiển thị thông tin hoàn tiền nếu có
+      if (result.success && result.data?.refundAmount > 0) {
+        const refundAmount = result.data.refundAmount
+        const refundStatus = result.data.refundStatus || "completed"
+        
+        if (refundStatus === "completed") {
+          toast.success(
+            `Hủy đặt sân thành công. Đã hoàn tiền ${refundAmount.toLocaleString('vi-VN')} VNĐ vào ví của bạn.`,
+            { autoClose: 5000 }
+          )
+        } else {
+          toast.success(
+            `Hủy đặt sân thành công. Sẽ hoàn tiền ${refundAmount.toLocaleString('vi-VN')} VNĐ vào ví của bạn.`,
+            { autoClose: 5000 }
+          )
+        }
+      } else {
+        toast.success('Hủy đặt sân thành công')
+      }
+      
       setRefreshKey(prev => prev + 1) // Refresh bookings
       setShowCancelModal(false)
       setSelectedBooking(null)

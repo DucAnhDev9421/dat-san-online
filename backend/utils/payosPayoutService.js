@@ -10,6 +10,32 @@ if (!process.env.UNDICI_CONNECT_TIMEOUT) {
   process.env.UNDICI_CONNECT_TIMEOUT = "30000"; // 30 giây
 }
 
+// Cache undici Agent để tái sử dụng
+let undiciAgentCache = null;
+
+/**
+ * Lấy hoặc tạo undici Agent với connect timeout
+ * @returns {Object|null} - Undici Agent hoặc null nếu không có
+ */
+const getUndiciAgent = async () => {
+  if (undiciAgentCache) {
+    return undiciAgentCache;
+  }
+  
+  try {
+    const { Agent } = await import('undici');
+    undiciAgentCache = new Agent({
+      connect: {
+        timeout: 30000, // 30 giây cho connect timeout
+      },
+    });
+    return undiciAgentCache;
+  } catch (error) {
+    // Nếu không có undici, sẽ dùng fetch mặc định
+    return null;
+  }
+};
+
 /**
  * Fetch với timeout
  * @param {string} url - URL để fetch
@@ -38,14 +64,17 @@ const fetchWithTimeout = async (url, options, timeout = 30000) => {
     }
     
     // Undici (Node.js fetch) có connectTimeout mặc định là 10s
-    // Cần set connectTimeout trong options để override
-    const fetchOptions = {
+    // Sử dụng undici Agent để set connectTimeout chính xác
+    let fetchOptions = {
       ...options,
       signal: finalSignal,
-      // Set connectTimeout cho undici (nếu hỗ trợ)
-      // connectTimeout phải <= timeout tổng
-      connectTimeout: Math.min(timeout, 30000), // Tối đa 30s cho connect
     };
+    
+    // Lấy undici Agent nếu có để set connectTimeout
+    const agent = await getUndiciAgent();
+    if (agent) {
+      fetchOptions.dispatcher = agent;
+    }
     
     // Gọi fetch với timeout
     const response = await fetch(url, fetchOptions);
@@ -59,7 +88,7 @@ const fetchWithTimeout = async (url, options, timeout = 30000) => {
     clearTimeout(timeoutId);
     
     // Xử lý lỗi timeout
-    if (error.name === 'AbortError' || error.code === 'UND_ERR_CONNECT_TIMEOUT' || error.name === 'TimeoutError') {
+    if (error.name === 'AbortError' || error.code === 'UND_ERR_CONNECT_TIMEOUT' || error.name === 'TimeoutError' || error.cause?.code === 'UND_ERR_CONNECT_TIMEOUT') {
       throw new Error(`Request timeout - PayOS API không phản hồi trong ${timeout}ms. Vui lòng thử lại sau.`);
     }
     
@@ -231,7 +260,7 @@ export const createSinglePayout = async ({
  */
 export const getPayoutInfo = async (payoutId) => {
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${PAYOS_API_BASE}/v1/payouts/${payoutId}`,
       {
         method: "GET",
@@ -239,8 +268,16 @@ export const getPayoutInfo = async (payoutId) => {
           "x-client-id": config.payos.payout.clientId,
           "x-api-key": config.payos.payout.apiKey,
         },
-      }
+      },
+      30000
     );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `PayOS API HTTP Error (Status: ${response.status}): ${text.substring(0, 200)}`
+      );
+    }
 
     const result = await response.json();
 
@@ -253,6 +290,117 @@ export const getPayoutInfo = async (payoutId) => {
     return result.data;
   } catch (error) {
     console.error("Lỗi khi lấy thông tin lệnh chi:", error);
+    throw error;
+  }
+};
+
+/**
+ * Lấy danh sách lệnh chi từ PayOS
+ * @param {Object} params - Tham số lọc
+ * @param {number} [params.limit=10] - Số lượng kết quả trên mỗi trang
+ * @param {number} [params.offset=0] - Vị trí bắt đầu
+ * @param {string} [params.referenceId] - Mã tham chiếu để lọc
+ * @param {string} [params.approvalState] - Trạng thái phê duyệt (SUCCEEDED, PENDING, FAILED, etc.)
+ * @param {string|string[]} [params.category] - Danh mục để lọc (có thể là string hoặc array)
+ * @param {string} [params.fromDate] - Lọc từ ngày (ISO 8601 format, ví dụ: 2024-01-15T10:30:00.000Z)
+ * @param {string} [params.toDate] - Lọc đến ngày (ISO 8601 format)
+ * @returns {Promise<object>} - Danh sách payouts và pagination
+ */
+export const getPayoutsList = async ({
+  limit = 10,
+  offset = 0,
+  referenceId,
+  approvalState,
+  category,
+  fromDate,
+  toDate,
+} = {}) => {
+  try {
+    // Xây dựng query parameters
+    const queryParams = new URLSearchParams();
+    if (limit) queryParams.append("limit", limit.toString());
+    if (offset) queryParams.append("offset", offset.toString());
+    if (referenceId) queryParams.append("referenceId", referenceId);
+    if (approvalState) queryParams.append("approvalState", approvalState);
+    if (category) {
+      // Nếu category là array, join bằng dấu phẩy
+      const categoryValue = Array.isArray(category) ? category.join(",") : category;
+      queryParams.append("category", categoryValue);
+    }
+    if (fromDate) queryParams.append("fromDate", fromDate);
+    if (toDate) queryParams.append("toDate", toDate);
+
+    const queryString = queryParams.toString();
+    const url = `${PAYOS_API_BASE}/v1/payouts${queryString ? `?${queryString}` : ""}`;
+
+    // Gọi API PayOS với timeout
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: "GET",
+        headers: {
+          "x-client-id": config.payos.payout.clientId,
+          "x-api-key": config.payos.payout.apiKey,
+        },
+      },
+      30000 // 30 giây timeout
+    );
+
+    // Kiểm tra HTTP status code
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(`❌ [PAYOS PAYOUT] HTTP Error ${response.status}:`, text);
+      
+      if (response.status === 429) {
+        throw new Error("PayOS API: Quá nhiều requests. Vui lòng thử lại sau.");
+      }
+      if (response.status === 403) {
+        throw new Error(
+          `IP_WHITELIST_ERROR: Địa chỉ IP server chưa được whitelist trong PayOS. Vui lòng liên hệ admin để thêm IP vào danh sách cho phép.`
+        );
+      }
+      throw new Error(
+        `PayOS API HTTP Error (Status: ${response.status}): ${text.substring(0, 200)}`
+      );
+    }
+
+    // Parse JSON response
+    let result;
+    try {
+      result = await response.json();
+    } catch (parseError) {
+      const text = await response.text();
+      console.error("❌ [PAYOS PAYOUT] JSON Parse Error:", text);
+      throw new Error(
+        `PayOS API trả về response không hợp lệ: ${text.substring(0, 200)}`
+      );
+    }
+
+    // Kiểm tra PayOS response code
+    if (result.code !== "00") {
+      if (result.code === "403" || response.status === 403) {
+        throw new Error(
+          `IP_WHITELIST_ERROR: Địa chỉ IP server chưa được whitelist trong PayOS. Vui lòng liên hệ admin để thêm IP vào danh sách cho phép. (Code: ${result.code})`
+        );
+      }
+      throw new Error(
+        `PayOS Error: ${result.desc || result.message} (Code: ${result.code})`
+      );
+    }
+
+    return {
+      success: true,
+      payouts: result.data?.payouts || [],
+      pagination: result.data?.pagination || {
+        total: 0,
+        limit: limit,
+        offset: offset,
+        count: 0,
+        hasMore: false,
+      },
+    };
+  } catch (error) {
+    console.error("Lỗi khi lấy danh sách lệnh chi PayOS:", error);
     throw error;
   }
 };

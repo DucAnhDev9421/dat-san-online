@@ -1,6 +1,6 @@
 import React from "react";
 
-const PaymentStats = ({ totalPlatformFee, totalAmount, formatPrice }) => {
+const PaymentStats = ({ totalPlatformFee, totalAmount, formatPrice, loading = false }) => {
   return (
     <div
       style={{
@@ -21,10 +21,10 @@ const PaymentStats = ({ totalPlatformFee, totalAmount, formatPrice }) => {
           marginBottom: 4,
         }}
       >
-        {formatPrice(totalPlatformFee)} VNĐ
+        {loading ? "Đang tải..." : `${formatPrice(totalPlatformFee)} VNĐ`}
       </div>
       <div style={{ fontSize: 13, opacity: 0.8 }}>
-        Từ tổng doanh thu {formatPrice(totalAmount)} VNĐ
+        {loading ? "Đang tải dữ liệu..." : `Từ tổng doanh thu ${formatPrice(totalAmount)} VNĐ`}
       </div>
     </div>
   );

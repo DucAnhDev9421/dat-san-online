@@ -1,9 +1,7 @@
-import React, { useState, useMemo } from "react";
-import { Download, Trophy } from "lucide-react";
-import { bookingData } from "../data/mockData";
-import { facilityData } from "../data/mockData";
-import { paymentData } from "../data/mockData";
-import { userData } from "../data/mockData";
+import React, { useState, useEffect } from "react";
+import { Download, Trophy, Loader2 } from "lucide-react";
+import { toast } from "react-toastify";
+import { analyticsApi } from "../../../../api/analyticsApi";
 import ReportStats from "../components/Reports/ReportStats";
 import ReportPeriodSelector from "../components/Reports/ReportPeriodSelector";
 import RevenueChart from "../components/Reports/RevenueChart";
@@ -14,192 +12,179 @@ import TopOwnersTable from "../components/Reports/TopOwnersTable";
 
 const Reports = () => {
   const [selectedPeriod, setSelectedPeriod] = useState("month");
-  const [selectedYear, setSelectedYear] = useState(2025);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  
+  // Dashboard stats
+  const [dashboardStats, setDashboardStats] = useState({
+    totalRevenue: 0,
+    revenueGrowth: 0,
+    totalBookings: 0,
+    activeFacilities: 0,
+    pausedFacilities: 0,
+    maintenanceFacilities: 0,
+    totalFacilities: 0,
+    fillRate: 0,
+  });
+  
+  // Revenue data
+  const [revenueData, setRevenueData] = useState([]);
+  
+  // Facility stats
+  const [facilityStats, setFacilityStats] = useState({
+    activeFacilities: 0,
+    pausedFacilities: 0,
+    maintenanceFacilities: 0,
+    totalFacilities: 0,
+  });
+  
+  // Peak hours data
+  const [peakHoursData, setPeakHoursData] = useState([]);
+  
+  // Top facilities
+  const [topFacilities, setTopFacilities] = useState([]);
+  
+  // Top owners
+  const [topOwners, setTopOwners] = useState([]);
+  
+  // Loading states
+  const [loading, setLoading] = useState({
+    dashboard: true,
+    revenue: true,
+    facilityStats: true,
+    peakHours: true,
+    topFacilities: true,
+    topOwners: true,
+  });
 
   // Format giá tiền
   const formatPrice = (price) => {
-    return new Intl.NumberFormat("vi-VN").format(price);
+    return new Intl.NumberFormat("vi-VN").format(price || 0);
   };
 
-  // Tính doanh thu theo tháng/quý
-  const revenueData = useMemo(() => {
-    const data = [];
-    if (selectedPeriod === "month") {
-      for (let month = 1; month <= 12; month++) {
-        const monthBookings = bookingData.filter((b) => {
-          const bookingDate = new Date(b.date);
-          return (
-            bookingDate.getFullYear() === selectedYear &&
-            bookingDate.getMonth() + 1 === month &&
-            (b.status === "confirmed" || b.status === "completed")
-          );
-        });
-        const revenue = monthBookings.reduce((sum, b) => sum + b.price, 0);
-        data.push({
-          period: `Tháng ${month}`,
-          revenue,
-          bookings: monthBookings.length,
-        });
+  // Fetch dashboard stats
+  const fetchDashboardStats = async () => {
+    try {
+      setLoading((prev) => ({ ...prev, dashboard: true }));
+      const response = await analyticsApi.getAdminDashboard(selectedPeriod);
+      if (response.success) {
+        setDashboardStats(response.data);
       }
-    } else {
-      for (let quarter = 1; quarter <= 4; quarter++) {
-        const startMonth = (quarter - 1) * 3 + 1;
-        const endMonth = quarter * 3;
-        const quarterBookings = bookingData.filter((b) => {
-          const bookingDate = new Date(b.date);
-          const month = bookingDate.getMonth() + 1;
-          return (
-            bookingDate.getFullYear() === selectedYear &&
-            month >= startMonth &&
-            month <= endMonth &&
-            (b.status === "confirmed" || b.status === "completed")
-          );
-        });
-        const revenue = quarterBookings.reduce((sum, b) => sum + b.price, 0);
-        data.push({
-          period: `Q${quarter}`,
-          revenue,
-          bookings: quarterBookings.length,
-        });
-      }
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+      toast.error("Không thể tải thống kê tổng quan");
+    } finally {
+      setLoading((prev) => ({ ...prev, dashboard: false }));
     }
-    return data;
+  };
+
+  // Fetch revenue data
+  const fetchRevenueData = async () => {
+    try {
+      setLoading((prev) => ({ ...prev, revenue: true }));
+      const response = await analyticsApi.getAdminRevenue(selectedPeriod, selectedYear);
+      if (response.success) {
+        setRevenueData(response.data.revenueData || []);
+      }
+    } catch (error) {
+      console.error("Error fetching revenue data:", error);
+      toast.error("Không thể tải dữ liệu doanh thu");
+    } finally {
+      setLoading((prev) => ({ ...prev, revenue: false }));
+    }
+  };
+
+  // Fetch facility stats
+  const fetchFacilityStats = async () => {
+    try {
+      setLoading((prev) => ({ ...prev, facilityStats: true }));
+      const response = await analyticsApi.getAdminFacilityStats();
+      if (response.success) {
+        setFacilityStats(response.data);
+      }
+    } catch (error) {
+      console.error("Error fetching facility stats:", error);
+      toast.error("Không thể tải thống kê cơ sở");
+    } finally {
+      setLoading((prev) => ({ ...prev, facilityStats: false }));
+    }
+  };
+
+  // Fetch peak hours data
+  const fetchPeakHours = async () => {
+    try {
+      setLoading((prev) => ({ ...prev, peakHours: true }));
+      // Lấy dữ liệu 30 ngày gần nhất
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+      
+      const response = await analyticsApi.getAdminPeakHours(
+        startDate.toISOString().split('T')[0],
+        endDate.toISOString().split('T')[0]
+      );
+      if (response.success) {
+        setPeakHoursData(response.data.peakHours || []);
+      }
+    } catch (error) {
+      console.error("Error fetching peak hours:", error);
+      toast.error("Không thể tải dữ liệu giờ cao điểm");
+    } finally {
+      setLoading((prev) => ({ ...prev, peakHours: false }));
+    }
+  };
+
+  // Fetch top facilities
+  const fetchTopFacilities = async () => {
+    try {
+      setLoading((prev) => ({ ...prev, topFacilities: true }));
+      // Lấy dữ liệu năm hiện tại
+      const startDate = `${selectedYear}-01-01`;
+      const endDate = `${selectedYear}-12-31`;
+      
+      const response = await analyticsApi.getAdminTopFacilities(startDate, endDate, 10);
+      if (response.success) {
+        setTopFacilities(response.data.facilities || []);
+      }
+    } catch (error) {
+      console.error("Error fetching top facilities:", error);
+      toast.error("Không thể tải top cơ sở");
+    } finally {
+      setLoading((prev) => ({ ...prev, topFacilities: false }));
+    }
+  };
+
+  // Fetch top owners
+  const fetchTopOwners = async () => {
+    try {
+      setLoading((prev) => ({ ...prev, topOwners: true }));
+      // Lấy dữ liệu năm hiện tại
+      const startDate = `${selectedYear}-01-01`;
+      const endDate = `${selectedYear}-12-31`;
+      
+      const response = await analyticsApi.getAdminTopOwners(startDate, endDate, 10);
+      if (response.success) {
+        setTopOwners(response.data.owners || []);
+      }
+    } catch (error) {
+      console.error("Error fetching top owners:", error);
+      toast.error("Không thể tải top chủ sân");
+    } finally {
+      setLoading((prev) => ({ ...prev, topOwners: false }));
+    }
+  };
+
+  // Fetch all data on mount and when dependencies change
+  useEffect(() => {
+    fetchDashboardStats();
+    fetchFacilityStats();
+    fetchPeakHours();
+  }, [selectedPeriod]);
+
+  useEffect(() => {
+    fetchRevenueData();
+    fetchTopFacilities();
+    fetchTopOwners();
   }, [selectedPeriod, selectedYear]);
-
-  // Số lượng sân hoạt động
-  const activeFacilities = useMemo(() => {
-    return facilityData.filter((f) => f.status === "active").length;
-  }, []);
-
-  const totalFacilities = facilityData.length;
-  const pausedFacilities = facilityData.filter((f) => f.status === "paused").length;
-  const hiddenFacilities = facilityData.filter((f) => f.status === "hidden").length;
-
-  // Tỷ lệ đặt sân theo giờ cao điểm
-  const peakHoursData = useMemo(() => {
-    const hourCounts = {};
-    const hourRevenue = {};
-
-    bookingData.forEach((booking) => {
-      if (booking.status === "confirmed" || booking.status === "completed") {
-        const startHour = parseInt(booking.startTime.split(":")[0]);
-        const hourKey = `${startHour.toString().padStart(2, "0")}:00`;
-
-        if (!hourCounts[hourKey]) {
-          hourCounts[hourKey] = 0;
-          hourRevenue[hourKey] = 0;
-        }
-        hourCounts[hourKey]++;
-        hourRevenue[hourKey] += booking.price;
-      }
-    });
-
-    const hours = [];
-    for (let hour = 6; hour <= 22; hour++) {
-      const hourKey = `${hour.toString().padStart(2, "0")}:00`;
-      const nextHour = hour === 22 ? "23:00" : `${(hour + 1).toString().padStart(2, "0")}:00`;
-      hours.push({
-        hour: `${hourKey}-${nextHour}`,
-        bookings: hourCounts[hourKey] || 0,
-        revenue: hourRevenue[hourKey] || 0,
-        type:
-          (hourCounts[hourKey] || 0) >= 10
-            ? "Cao điểm"
-            : (hourCounts[hourKey] || 0) >= 5
-            ? "Trung bình"
-            : "Thấp điểm",
-      });
-    }
-
-    return hours;
-  }, []);
-
-  // Top sân được đặt nhiều nhất
-  const topFacilities = useMemo(() => {
-    const facilityStats = {};
-
-    bookingData.forEach((booking) => {
-      if (booking.status === "confirmed" || booking.status === "completed") {
-        if (!facilityStats[booking.facility]) {
-          facilityStats[booking.facility] = {
-            name: booking.facility,
-            bookings: 0,
-            revenue: 0,
-          };
-        }
-        facilityStats[booking.facility].bookings++;
-        facilityStats[booking.facility].revenue += booking.price;
-      }
-    });
-
-    return Object.values(facilityStats)
-      .sort((a, b) => b.bookings - a.bookings)
-      .slice(0, 10);
-  }, []);
-
-  // Top chủ sân doanh thu cao nhất
-  const topOwners = useMemo(() => {
-    const ownerStats = {};
-
-    paymentData
-      .filter((p) => p.status === "success" && p.performerRole === "owner")
-      .forEach((payment) => {
-        const facility = facilityData.find((f) => f.name === payment.facility);
-        if (facility) {
-          const ownerId = facility.ownerId;
-          const owner = userData.find((u) => u.id === ownerId);
-          if (owner && !ownerStats[ownerId]) {
-            ownerStats[ownerId] = {
-              id: ownerId,
-              name: owner.name,
-              email: owner.email,
-              facilities: [],
-              revenue: 0,
-              bookings: 0,
-            };
-          }
-          if (ownerStats[ownerId]) {
-            if (!ownerStats[ownerId].facilities.includes(payment.facility)) {
-              ownerStats[ownerId].facilities.push(payment.facility);
-            }
-            ownerStats[ownerId].revenue += payment.amount;
-          }
-        }
-      });
-
-    bookingData
-      .filter((b) => b.status === "confirmed" || b.status === "completed")
-      .forEach((booking) => {
-        const facility = facilityData.find((f) => f.name === booking.facility);
-        if (facility) {
-          const ownerId = facility.ownerId;
-          if (ownerStats[ownerId]) {
-            ownerStats[ownerId].bookings++;
-            ownerStats[ownerId].revenue += booking.price;
-          }
-        }
-      });
-
-    return Object.values(ownerStats)
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10);
-  }, []);
-
-  // Tính tổng doanh thu
-  const totalRevenue = useMemo(() => {
-    return bookingData
-      .filter((b) => b.status === "confirmed" || b.status === "completed")
-      .reduce((sum, b) => sum + b.price, 0);
-  }, []);
-
-  // Tỷ lệ tăng trưởng (mock)
-  const revenueGrowth = 12.5;
-
-  const totalBookings = bookingData.filter(
-    (b) => b.status === "confirmed" || b.status === "completed"
-  ).length;
-
-  const fillRate = Math.round((activeFacilities / totalFacilities) * 100);
 
   return (
     <div>
@@ -231,15 +216,32 @@ const Reports = () => {
         </button>
       </div>
 
-      <ReportStats
-        totalRevenue={totalRevenue}
-        revenueGrowth={revenueGrowth}
-        activeFacilities={activeFacilities}
-        totalFacilities={totalFacilities}
-        totalBookings={totalBookings}
-        fillRate={fillRate}
-        formatPrice={formatPrice}
-      />
+      {loading.dashboard ? (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 40,
+            background: "#fff",
+            borderRadius: 12,
+            boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+            marginBottom: 24,
+          }}
+        >
+          <Loader2 size={32} className="animate-spin" color="#10b981" />
+        </div>
+      ) : (
+        <ReportStats
+          totalRevenue={dashboardStats.totalRevenue}
+          revenueGrowth={dashboardStats.revenueGrowth}
+          activeFacilities={dashboardStats.activeFacilities}
+          totalFacilities={dashboardStats.totalFacilities}
+          totalBookings={dashboardStats.totalBookings}
+          fillRate={dashboardStats.fillRate}
+          formatPrice={formatPrice}
+        />
+      )}
 
       {/* Doanh thu theo tháng/quý */}
       <div
@@ -269,7 +271,20 @@ const Reports = () => {
             onYearChange={setSelectedYear}
           />
         </div>
-        <RevenueChart data={revenueData} formatPrice={formatPrice} />
+        {loading.revenue ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              height: 350,
+            }}
+          >
+            <Loader2 size={32} className="animate-spin" color="#10b981" />
+          </div>
+        ) : (
+          <RevenueChart data={revenueData} formatPrice={formatPrice} />
+        )}
       </div>
 
       {/* Chi tiết sân hoạt động */}
@@ -285,12 +300,25 @@ const Reports = () => {
         <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>
           Số lượng sân hoạt động
         </h2>
-        <FacilityStats
-          activeFacilities={activeFacilities}
-          pausedFacilities={pausedFacilities}
-          hiddenFacilities={hiddenFacilities}
-          totalFacilities={totalFacilities}
-        />
+        {loading.facilityStats ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 40,
+            }}
+          >
+            <Loader2 size={32} className="animate-spin" color="#10b981" />
+          </div>
+        ) : (
+          <FacilityStats
+            activeFacilities={facilityStats.activeFacilities}
+            pausedFacilities={facilityStats.pausedFacilities}
+            hiddenFacilities={facilityStats.maintenanceFacilities}
+            totalFacilities={facilityStats.totalFacilities}
+          />
+        )}
       </div>
 
       {/* Tỷ lệ đặt sân theo giờ cao điểm */}
@@ -306,7 +334,20 @@ const Reports = () => {
         <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>
           Tỷ lệ đặt sân theo giờ cao điểm
         </h2>
-        <PeakHoursChart data={peakHoursData} formatPrice={formatPrice} />
+        {loading.peakHours ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              height: 400,
+            }}
+          >
+            <Loader2 size={32} className="animate-spin" color="#10b981" />
+          </div>
+        ) : (
+          <PeakHoursChart data={peakHoursData} formatPrice={formatPrice} />
+        )}
       </div>
 
       {/* Top sân được đặt nhiều nhất */}
@@ -332,7 +373,20 @@ const Reports = () => {
             Top sân được đặt nhiều nhất
           </h2>
         </div>
-        <TopFacilitiesTable facilities={topFacilities} formatPrice={formatPrice} />
+        {loading.topFacilities ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 40,
+            }}
+          >
+            <Loader2 size={32} className="animate-spin" color="#10b981" />
+          </div>
+        ) : (
+          <TopFacilitiesTable facilities={topFacilities} formatPrice={formatPrice} />
+        )}
       </div>
 
       {/* Top chủ sân doanh thu cao nhất */}
@@ -357,7 +411,20 @@ const Reports = () => {
             Top chủ sân doanh thu cao nhất
           </h2>
         </div>
-        <TopOwnersTable owners={topOwners} formatPrice={formatPrice} />
+        {loading.topOwners ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 40,
+            }}
+          >
+            <Loader2 size={32} className="animate-spin" color="#10b981" />
+          </div>
+        ) : (
+          <TopOwnersTable owners={topOwners} formatPrice={formatPrice} />
+        )}
       </div>
     </div>
   );

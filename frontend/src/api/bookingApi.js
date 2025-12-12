@@ -175,5 +175,30 @@ export const bookingApi = {
       throw handleApiError(error);
     }
   },
+
+  /**
+   * Tạo walk-in booking (chỉ owner/admin)
+   * @param {Object} bookingData - Dữ liệu booking
+   * @param {string} bookingData.courtId - ID của sân
+   * @param {string} bookingData.facilityId - ID của cơ sở
+   * @param {string} bookingData.date - Ngày đặt (ISO string hoặc Date)
+   * @param {Array<string>} bookingData.timeSlots - Mảng các khung giờ (format: "HH:MM-HH:MM")
+   * @param {Object} bookingData.contactInfo - Thông tin liên hệ khách hàng
+   * @param {string} bookingData.contactInfo.name - Tên khách hàng (required)
+   * @param {string} [bookingData.contactInfo.phone] - Số điện thoại (optional)
+   * @param {string} [bookingData.contactInfo.email] - Email (optional)
+   * @param {string} [bookingData.contactInfo.notes] - Ghi chú (optional)
+   * @param {number} [bookingData.totalAmount] - Tổng tiền (optional, sẽ tính tự động nếu không có)
+   * @param {string} [bookingData.promotionCode] - Mã khuyến mãi (optional)
+   * @param {number} [bookingData.discountAmount] - Số tiền giảm giá (optional)
+   */
+  createWalkInBooking: async (bookingData) => {
+    try {
+      const response = await api.post('/bookings/walk-in', bookingData);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 

@@ -28,7 +28,7 @@ const TopFacilitiesTable = ({ facilities, formatPrice }) => {
         <tbody>
           {facilities.map((facility, index) => (
             <tr
-              key={facility.name}
+              key={facility.facilityId || facility.name}
               style={{
                 borderBottom: "1px solid #f3f4f6",
               }}
@@ -58,15 +58,18 @@ const TopFacilitiesTable = ({ facilities, formatPrice }) => {
                   {index + 1}
                 </span>
               </td>
-              <td style={{ padding: 12, fontWeight: 600 }}>{facility.name}</td>
+              <td style={{ padding: 12, fontWeight: 600 }}>{facility.name || "N/A"}</td>
               <td style={{ padding: 12, color: "#6b7280" }}>
-                {facility.bookings} lượt
+                {facility.bookings || 0} lượt
               </td>
               <td style={{ padding: 12, fontWeight: 600, color: "#10b981" }}>
-                {formatPrice(facility.revenue)} VNĐ
+                {formatPrice(facility.revenue || 0)} VNĐ
               </td>
               <td style={{ padding: 12, color: "#6b7280" }}>
-                {formatPrice(Math.round(facility.revenue / facility.bookings))} VNĐ
+                {facility.bookings > 0
+                  ? formatPrice(Math.round((facility.revenue || 0) / facility.bookings))
+                  : "0"}{" "}
+                VNĐ
               </td>
             </tr>
           ))}

@@ -1,12 +1,9 @@
 import React from "react";
-import { Image as ImageIcon, Mail, Key, FileText, Phone } from "lucide-react";
+import { FileText, Phone } from "lucide-react";
 
 const SettingsTabs = ({ activeTab, onTabChange }) => {
   const tabs = [
-    { id: "general", label: "Cài đặt chung", icon: ImageIcon },
-    { id: "smtp", label: "Email (SMTP)", icon: Mail },
     { id: "serviceFee", label: "Phí dịch vụ", icon: FileText },
-    { id: "apiKeys", label: "API Keys", icon: Key },
     { id: "policy", label: "Chính sách & Điều khoản", icon: FileText },
     { id: "support", label: "Liên hệ hỗ trợ", icon: Phone },
   ];

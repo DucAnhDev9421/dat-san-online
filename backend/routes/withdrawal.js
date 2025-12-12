@@ -26,5 +26,12 @@ router.get(
   withdrawalController.checkWithdrawalStatus
 );
 
+// GET /api/withdrawals/payos/list - Lấy danh sách lệnh rút tiền từ PayOS (Admin và Owner)
+router.get(
+  "/payos/list",
+  authorize("owner", "admin"),
+  withdrawalController.getPayosPayoutsList
+);
+
 export default router;
 

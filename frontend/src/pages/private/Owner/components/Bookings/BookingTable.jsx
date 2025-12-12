@@ -37,7 +37,7 @@ const BookingTable = ({
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#f9fafb", textAlign: "left" }}>
-              {headers.map((h) => (
+              {headers.map((h, index) => (
                 <th
                   key={h}
                   style={{
@@ -46,6 +46,7 @@ const BookingTable = ({
                     color: "#6b7280",
                     borderBottom: "1px solid #e5e7eb",
                     fontWeight: 600,
+                    ...(h === "Khung giờ" && { maxWidth: "200px", width: "200px" }),
                   }}
                 >
                   {h}

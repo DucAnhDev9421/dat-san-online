@@ -12,6 +12,7 @@ import {
   getPayoutInfo,
   estimatePayoutFee,
   getBankBin,
+  getPayoutsList,
 } from "../utils/payosPayoutService.js";
 
 /**
@@ -385,6 +386,62 @@ export const payosWithdrawalCallback = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error("Lỗi xử lý webhook withdrawal:", error);
     res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/withdrawals/payos/list
+ * Lấy danh sách lệnh rút tiền từ PayOS (Admin và Owner)
+ */
+export const getPayosPayoutsList = asyncHandler(async (req, res) => {
+  try {
+    const {
+      limit = 10,
+      offset = 0,
+      referenceId,
+      approvalState,
+      category,
+      fromDate,
+      toDate,
+    } = req.query;
+
+    // Chuyển đổi limit và offset sang number
+    const limitNum = parseInt(limit, 10);
+    const offsetNum = parseInt(offset, 10);
+
+    // Gọi PayOS API để lấy danh sách payouts
+    const result = await getPayoutsList({
+      limit: limitNum,
+      offset: offsetNum,
+      referenceId,
+      approvalState,
+      category,
+      fromDate,
+      toDate,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        payouts: result.payouts,
+        pagination: result.pagination,
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy danh sách payouts từ PayOS:", error);
+    
+    // Xử lý các lỗi đặc biệt
+    if (error.message.includes("IP_WHITELIST_ERROR")) {
+      return res.status(403).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: error.message || "Lỗi khi lấy danh sách lệnh rút tiền từ PayOS",
+    });
   }
 });
 

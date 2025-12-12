@@ -67,5 +67,27 @@ export const withdrawalApi = {
       throw handleApiError(error);
     }
   },
+
+  /**
+   * Lấy danh sách lệnh rút tiền từ PayOS
+   * GET /api/withdrawals/payos/list
+   * @param {Object} params - Query parameters
+   * @param {number} [params.limit] - Số lượng kết quả (mặc định 10)
+   * @param {number} [params.offset] - Vị trí bắt đầu (mặc định 0)
+   * @param {string} [params.referenceId] - Mã tham chiếu để lọc
+   * @param {string} [params.approvalState] - Trạng thái phê duyệt (SUCCEEDED, PENDING, FAILED, etc.)
+   * @param {string} [params.category] - Danh mục để lọc
+   * @param {string} [params.fromDate] - Lọc từ ngày (ISO 8601 format)
+   * @param {string} [params.toDate] - Lọc đến ngày (ISO 8601 format)
+   * @returns {Promise} Danh sách payouts và pagination
+   */
+  getPayosPayoutsList: async (params = {}) => {
+    try {
+      const response = await api.get('/withdrawals/payos/list', { params });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
 };
 
