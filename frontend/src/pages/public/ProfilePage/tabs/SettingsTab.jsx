@@ -6,6 +6,7 @@ import Dialog from '@/components/ui/Dialog'
 import { AlertTriangle } from 'lucide-react'
 import { userApi } from '@/api/userApi'
 import { useAuth } from '@/contexts/AuthContext'
+import { toast } from 'react-toastify'
 import '../modals/ChangePasswordModal.css'
 
 export default function SettingsTab({ notifications, setNotifications }) {
@@ -101,7 +102,22 @@ export default function SettingsTab({ notifications, setNotifications }) {
                 <input 
                   type="checkbox" 
                   checked={notifications.email}
-                  onChange={(e) => setNotifications({...notifications, email: e.target.checked})}
+                  onChange={async (e) => {
+                    const newValue = e.target.checked
+                    // Optimistic update
+                    setNotifications({...notifications, email: newValue})
+                    
+                    // Update backend
+                    try {
+                      await userApi.updateProfile({ emailNotifications: newValue })
+                      toast.success(newValue ? 'Đã bật thông báo email' : 'Đã tắt thông báo email')
+                    } catch (error) {
+                      // Revert on error
+                      setNotifications({...notifications, email: !newValue})
+                      toast.error('Không thể cập nhật cài đặt. Vui lòng thử lại.')
+                      console.error('Error updating email notifications:', error)
+                    }
+                  }}
                   style={{ opacity: 0, width: 0, height: 0 }} 
                 />
                 <span style={{

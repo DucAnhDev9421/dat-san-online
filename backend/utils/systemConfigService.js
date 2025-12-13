@@ -1,4 +1,4 @@
-import SystemConfig from "../models/SystemConfig.js";
+import SystemConfig from "../models/SystemConfig.js"; 
 
 let cachedConfig = null;
 let cacheTimestamp = null;

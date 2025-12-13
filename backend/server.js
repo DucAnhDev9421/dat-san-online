@@ -82,7 +82,20 @@ app.use(
 // CORS configuration
 app.use(
   cors({
-    origin: config.frontendUrl,
+    origin: function (origin, callback) {
+      // Cho phép tất cả origin trong development
+      if (config.nodeEnv === "development" || !origin) {
+        callback(null, true);
+      } else {
+        // Trong production, chỉ cho phép frontendUrl
+        const allowedOrigins = [config.frontendUrl];
+        if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+          callback(null, true);
+        } else {
+          callback(new Error("Not allowed by CORS"));
+        }
+      }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

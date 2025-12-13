@@ -76,6 +76,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "vi",
     },
+    
+    // Cài đặt thông báo
+    emailNotifications: {
+      type: Boolean,
+      default: true, // Mặc định bật thông báo email
+    },
 
     // ================== VÍ & LOYALTY (Đã sửa vị trí) ==================
     walletBalance: {

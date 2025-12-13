@@ -16,6 +16,11 @@
     align-items: stretch;
 }
 
+.ui-slider-track.ui-slider-loop {
+    /* Optimize for infinite loop */
+    will-change: scroll-position;
+}
+
 .ui-slider-track::-webkit-scrollbar {
     display: none;
 }

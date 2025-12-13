@@ -383,7 +383,7 @@ function Payment() {
             )
           }
         } else {
-          toast.success('Đã hủy đặt sân thành công')
+        toast.success('Đã hủy đặt sân thành công')
         }
         
         // Navigate back to booking page of the venue

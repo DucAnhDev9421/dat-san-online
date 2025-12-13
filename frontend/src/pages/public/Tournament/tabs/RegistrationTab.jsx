@@ -443,6 +443,19 @@ const RegistrationTab = ({ tournament }) => {
   const minMembers = tournament.membersPerTeam || 0
   const maxMembers = tournament.membersPerTeam || 0
   const isFootball = tournament.sport === 'Bóng đá'
+  
+  // Kiểm tra user đã đăng ký chưa
+  const isUserRegistered = user && tournament?.teams && tournament.teams.some(team => {
+    // Kiểm tra contactPhone trùng với user.phone
+    if (user.phone && team.contactPhone && team.contactPhone === user.phone) {
+      return true
+    }
+    // Kiểm tra có member nào có phone trùng với user.phone
+    if (user.phone && team.members && team.members.some(member => member.phone === user.phone)) {
+      return true
+    }
+    return false
+  })
 
   // Step 0: Countdown and start button
   if (step === 0) {
@@ -655,25 +668,31 @@ const RegistrationTab = ({ tournament }) => {
         {hasRegistration && !isExpired && !isFull && (
           <button
             onClick={handleStartRegister}
+            disabled={isUserRegistered}
             style={{
-              background: '#1f2937',
+              background: isUserRegistered ? '#9ca3af' : '#1f2937',
               color: '#fff',
               border: 'none',
               borderRadius: 8,
               padding: '14px 32px',
               fontSize: 16,
               fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'background 0.2s'
+              cursor: isUserRegistered ? 'not-allowed' : 'pointer',
+              transition: 'background 0.2s',
+              opacity: isUserRegistered ? 0.7 : 1
             }}
             onMouseEnter={(e) => {
-              e.target.style.background = '#374151'
+              if (!isUserRegistered) {
+                e.target.style.background = '#374151'
+              }
             }}
             onMouseLeave={(e) => {
-              e.target.style.background = '#1f2937'
+              if (!isUserRegistered) {
+                e.target.style.background = '#1f2937'
+              }
             }}
           >
-            Bắt đầu đăng ký
+            {isUserRegistered ? 'Bạn đã đăng ký' : 'Bắt đầu đăng ký'}
           </button>
         )}
 

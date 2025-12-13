@@ -90,7 +90,7 @@ export default function VenuesSection({
           </div>
         </div>
         {loading ? (
-          <Slider itemWidth={300} gap={16}>
+          <Slider itemWidth={300} gap={16} loop={true}>
             {[...Array(id === 'featured' ? 4 : 8)].map((_, i) => (
               <div key={i} style={cardStyle}>
                 <SkeletonVenueCard />
@@ -98,7 +98,7 @@ export default function VenuesSection({
             ))}
           </Slider>
         ) : filteredVenues.length > 0 ? (
-          <Slider itemWidth={300} gap={16}>
+          <Slider itemWidth={300} gap={16} loop={true}>
             {filteredVenues.map((venue) => (
               <div key={venue.id} style={cardStyle}>
                 <VenueCard

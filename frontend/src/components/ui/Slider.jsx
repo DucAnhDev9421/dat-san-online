@@ -1,19 +1,74 @@
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { debounce } from '../../utils/optimization'
 import './Slider.css'
 
-export default function Slider({ children, className = '', itemWidth = 320, gap = 16 }) {
+export default function Slider({ children, className = '', itemWidth = 320, gap = 16, loop = false, autoPlay = false, autoPlayInterval = 3000 }) {
     const scrollContainerRef = useRef(null)
     const [canScrollLeft, setCanScrollLeft] = useState(false)
     const [canScrollRight, setCanScrollRight] = useState(true)
+    const isScrollingRef = useRef(false)
+    const autoPlayTimerRef = useRef(null)
+    const scrollTimeoutRef = useRef(null)
+    const pendingScrollRef = useRef(null)
+
+    // Convert children to array for easier manipulation
+    const childrenArray = useMemo(() => {
+        return React.Children.toArray(children)
+    }, [children])
+
+    // For infinite loop, duplicate items
+    const duplicatedChildren = useMemo(() => {
+        if (!loop || childrenArray.length === 0) return childrenArray
+        return [...childrenArray, ...childrenArray, ...childrenArray]
+    }, [loop, childrenArray])
 
     const checkScrollButtons = () => {
-        if (scrollContainerRef.current) {
+        if (scrollContainerRef.current && !loop) {
             const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current
             setCanScrollLeft(scrollLeft > 0)
-            // Use a small buffer (1px) for floating point calculations
             setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1)
+        } else if (loop) {
+            // Always show buttons in loop mode
+            setCanScrollLeft(true)
+            setCanScrollRight(true)
+        }
+    }
+
+    const handleInfiniteScroll = () => {
+        if (!loop || !scrollContainerRef.current || childrenArray.length === 0) return
+
+        const container = scrollContainerRef.current
+        const { scrollLeft } = container
+        const itemWidthWithGap = itemWidth + gap
+        const singleSetWidth = itemWidthWithGap * childrenArray.length
+
+        // Calculate which set we're in (0 = first, 1 = middle, 2 = last)
+        const currentSet = Math.floor(scrollLeft / singleSetWidth)
+        
+        // If we're in the first set (set 0) or beyond the last set (set 2+), jump to middle
+        // Remove isScrollingRef check here to allow jump even during programmatic scroll
+        if (currentSet === 0 || currentSet >= 2) {
+            // Prevent infinite loop by checking if we're already jumping
+            if (isScrollingRef.current) return
+            
+            isScrollingRef.current = true
+            container.style.scrollBehavior = 'auto'
+            
+            // Calculate offset within the current set
+            const offsetInSet = scrollLeft % singleSetWidth
+            // Snap to exact card position within the middle set
+            const cardIndex = Math.round(offsetInSet / itemWidthWithGap)
+            const snapPosition = singleSetWidth + (cardIndex * itemWidthWithGap)
+            
+            container.scrollLeft = snapPosition
+            
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    container.style.scrollBehavior = 'smooth'
+                    isScrollingRef.current = false
+                }, 50)
+            })
         }
     }
 
@@ -21,43 +76,146 @@ export default function Slider({ children, className = '', itemWidth = 320, gap 
         // Delay to ensure DOM is ready and content is populated
         const timer = setTimeout(() => {
             checkScrollButtons()
-        }, 100)
+            
+            // Initialize scroll position for loop mode
+            if (loop && scrollContainerRef.current && childrenArray.length > 0) {
+                const container = scrollContainerRef.current
+                // Wait for layout to be calculated
+                requestAnimationFrame(() => {
+                    const itemWidthWithGap = itemWidth + gap
+                    const singleSetWidth = itemWidthWithGap * childrenArray.length
+                    // Start at the middle set (second set) to allow scrolling in both directions
+                    container.style.scrollBehavior = 'auto'
+                    container.scrollLeft = singleSetWidth
+                    // Reset scroll behavior after initialization
+                    setTimeout(() => {
+                        container.style.scrollBehavior = 'smooth'
+                    }, 100)
+                })
+            }
+        }, 150)
 
         const container = scrollContainerRef.current
         if (container) {
-            // Create a debounced resize handler
-            const debouncedCheck = debounce(checkScrollButtons, 200)
+            const debouncedCheck = debounce(() => {
+                checkScrollButtons()
+                handleInfiniteScroll()
+            }, 200)
 
-            container.addEventListener('scroll', checkScrollButtons)
+            const scrollHandler = () => {
+                checkScrollButtons()
+                // Always check infinite scroll, even during programmatic scrolling
+                // This ensures loop continues to work even after many clicks
+                handleInfiniteScroll()
+            }
+
+            container.addEventListener('scroll', scrollHandler)
             window.addEventListener('resize', debouncedCheck)
 
             return () => {
                 clearTimeout(timer)
-                container.removeEventListener('scroll', checkScrollButtons)
+                container.removeEventListener('scroll', scrollHandler)
                 window.removeEventListener('resize', debouncedCheck)
             }
         }
         return () => clearTimeout(timer)
-    }, [children])
+    }, [children, loop, itemWidth, gap, childrenArray.length])
+
+    // Auto-play functionality
+    useEffect(() => {
+        if (autoPlay && loop && childrenArray.length > 0) {
+            autoPlayTimerRef.current = setInterval(() => {
+                if (scrollContainerRef.current && !isScrollingRef.current) {
+                    const scrollAmount = itemWidth + gap
+                    scrollContainerRef.current.scrollBy({
+                        left: scrollAmount,
+                        behavior: 'smooth'
+                    })
+                }
+            }, autoPlayInterval)
+
+            return () => {
+                if (autoPlayTimerRef.current) {
+                    clearInterval(autoPlayTimerRef.current)
+                }
+            }
+        }
+    }, [autoPlay, loop, autoPlayInterval, itemWidth, gap, childrenArray.length])
 
     const scroll = (direction) => {
-        if (scrollContainerRef.current) {
-            const scrollAmount = itemWidth + gap
-            const currentScroll = scrollContainerRef.current.scrollLeft
-            const targetScroll = direction === 'left'
+        if (!scrollContainerRef.current) return
+
+        // If currently scrolling, queue this scroll
+        if (isScrollingRef.current) {
+            pendingScrollRef.current = direction
+            return
+        }
+
+        const scrollAmount = itemWidth + gap
+        const container = scrollContainerRef.current
+        const currentScroll = container.scrollLeft
+        
+        // For loop mode, ensure we snap to exact card positions
+        let targetScroll
+        if (loop) {
+            // Calculate which card we're currently at (snap to nearest card)
+            const currentCardIndex = Math.round(currentScroll / scrollAmount)
+            const nextCardIndex = direction === 'left' 
+                ? currentCardIndex - 1 
+                : currentCardIndex + 1
+            targetScroll = nextCardIndex * scrollAmount
+        } else {
+            targetScroll = direction === 'left'
                 ? currentScroll - scrollAmount
                 : currentScroll + scrollAmount
-
-            scrollContainerRef.current.scrollTo({
-                left: targetScroll,
-                behavior: 'smooth'
-            })
         }
+
+        // Mark as scrolling to prevent rapid clicks
+        isScrollingRef.current = true
+
+        container.scrollTo({
+            left: targetScroll,
+            behavior: 'smooth'
+        })
+
+        // Reset after scroll completes and ensure snap to exact position
+        if (scrollTimeoutRef.current) {
+            clearTimeout(scrollTimeoutRef.current)
+        }
+        
+        scrollTimeoutRef.current = setTimeout(() => {
+            // Ensure we're at exact card position (snap correction)
+            if (loop && container) {
+                const finalScroll = container.scrollLeft
+                const snapPosition = Math.round(finalScroll / scrollAmount) * scrollAmount
+                if (Math.abs(finalScroll - snapPosition) > 1) {
+                    container.style.scrollBehavior = 'auto'
+                    container.scrollLeft = snapPosition
+                    container.style.scrollBehavior = 'smooth'
+                }
+                
+                // Check infinite scroll after scroll completes to ensure loop continues
+                setTimeout(() => {
+                    handleInfiniteScroll()
+                }, 100)
+            }
+            
+            isScrollingRef.current = false
+            
+            // Process any queued scroll
+            if (pendingScrollRef.current) {
+                const queuedDirection = pendingScrollRef.current
+                pendingScrollRef.current = null
+                setTimeout(() => scroll(queuedDirection), 100)
+            }
+        }, 600) // Wait for smooth scroll to complete
     }
+
+    const displayChildren = loop ? duplicatedChildren : childrenArray
 
     return (
         <div className={`ui-slider-container ${className}`}>
-            {canScrollLeft && (
+            {(canScrollLeft || loop) && (
                 <button
                     className="ui-slider-btn ui-slider-btn-left"
                     onClick={() => scroll('left')}
@@ -69,13 +227,17 @@ export default function Slider({ children, className = '', itemWidth = 320, gap 
 
             <div
                 ref={scrollContainerRef}
-                className="ui-slider-track"
+                className={`ui-slider-track ${loop ? 'ui-slider-loop' : ''}`}
                 style={{ gap: `${gap}px` }}
             >
-                {children}
+                {displayChildren.map((child, index) => (
+                    <div key={loop ? `loop-${index}` : child.key || index}>
+                        {child}
+                    </div>
+                ))}
             </div>
 
-            {canScrollRight && (
+            {(canScrollRight || loop) && (
                 <button
                     className="ui-slider-btn ui-slider-btn-right"
                     onClick={() => scroll('right')}

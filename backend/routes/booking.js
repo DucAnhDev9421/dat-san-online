@@ -28,7 +28,7 @@ import Payment from "../models/Payment.js";
 import { isSlotLocked } from "../socket/bookingSocket.js";
 import asyncHandler from "express-async-handler";
 import { processBookingRewards } from "../utils/rewardService.js";
-import { sendPaymentReceipt, sendCancellationEmail } from "../utils/emailService.js";
+import { sendPaymentReceipt, sendCancellationEmail, sendUserCancellationEmail } from "../utils/emailService.js";
 const router = express.Router();
 
 // === MIDDLEWARE TÙY CHỈNH ===
@@ -229,28 +229,6 @@ router.get("/availability", async (req, res, next) => {
       ],
     });
     
-    console.log(`[BOOKING_AVAILABILITY] Kiểm tra sân ${courtId} ngày ${bookingDate.toISOString().split('T')[0]}:`, {
-      queryDateRange: {
-        start: startOfDay.toISOString(),
-        end: endOfDay.toISOString(),
-        bookingDate: bookingDate.toISOString()
-      },
-      foundBookings: existingBookings.length,
-      bookings: existingBookings.map(b => ({
-        id: b._id,
-        status: b.status,
-        date: b.date,
-        dateISO: b.date?.toISOString(),
-        startTime: b.startTime,
-        endTime: b.endTime,
-        isFlexibleBooking: b.isFlexibleBooking,
-        timeSlots: b.timeSlots,
-        league: b.league,
-        matchInfo: b.matchInfo,
-        holdUntil: b.holdUntil,
-        court: b.court
-      }))
-    });
 
     // Generate time slots based on operating hours
     const allSlots = [];
@@ -410,12 +388,6 @@ router.get("/availability", async (req, res, next) => {
             }
           }
           return false;
-        });
-        console.log(`[BOOKING_AVAILABILITY] Slot ${slotString} bị block bởi booking ${blockingBooking?._id}:`, {
-          status: blockingBooking?.status,
-          league: blockingBooking?.league,
-          matchInfo: blockingBooking?.matchInfo,
-          bookingTimeSlots: blockingBooking?.timeSlots
         });
       }
 
@@ -1911,7 +1883,7 @@ router.patch(
             console.warn("Không thể lấy chính sách hoàn tiền từ SystemConfig:", e);
           }
 
-          await sendCancellationEmail(
+          await sendUserCancellationEmail(
             booking,
             booking.cancellationReason || reason || "Người dùng tự hủy",
             refundAmount,

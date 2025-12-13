@@ -246,7 +246,6 @@ export default function bookingSocket(io) {
           });
         }
 
-        console.log(`🔒 Slot locked: User ${socket.userId} locked ${courtId} on ${date} at ${timeSlot}`);
       } catch (error) {
         console.error('Error in booking:lock:', error);
         socket.emit('booking:lock:error', { message: 'Failed to lock slot' });

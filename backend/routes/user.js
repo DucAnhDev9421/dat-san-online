@@ -31,19 +31,22 @@ router.get("/profile", (req, res) => {
  */
 router.put("/profile", async (req, res, next) => {
   try {
-    const { name, phone } = req.body;
+    const { name, phone, emailNotifications } = req.body;
 
     // Validation
-    if (!name && !phone) {
+    if (!name && !phone && emailNotifications === undefined) {
       return res.status(400).json({
         success: false,
-        message: "Vui lòng cung cấp ít nhất một trường để cập nhật (name hoặc phone).",
+        message: "Vui lòng cung cấp ít nhất một trường để cập nhật (name, phone hoặc emailNotifications).",
       });
     }
 
     const updateData = {};
     if (name) updateData.name = name;
     if (phone) updateData.phone = phone;
+    if (emailNotifications !== undefined) {
+      updateData.emailNotifications = Boolean(emailNotifications);
+    }
 
     const user = await User.findByIdAndUpdate(req.user._id, updateData, {
       new: true,
