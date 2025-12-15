@@ -260,13 +260,20 @@ const ScheduleTab = ({ tournament }) => {
       const nextMatchId = match.nextMatchId ? 
         (matchMap.has(match.nextMatchId.toString()) ? match.nextMatchId : null) : null;
 
-      // Format date để tránh "Invalid Date"
-      let scheduledDate = '';
+      // Format date để hiển thị ở vị trí "Invalid Date" - cần là Date object với cả time nếu có
+      let scheduledDate = null;
       if (match.date) {
         try {
           const date = new Date(match.date);
           if (!isNaN(date.getTime())) {
-            scheduledDate = date.toLocaleDateString('vi-VN');
+            // Nếu có time, thêm vào date
+            if (match.time) {
+              const [hours, minutes] = match.time.split(':').map(Number);
+              if (!isNaN(hours) && !isNaN(minutes)) {
+                date.setHours(hours, minutes, 0, 0);
+              }
+            }
+            scheduledDate = date; // Giữ nguyên Date object để Bracket component hiển thị
           }
         } catch (e) {
           // Ignore date parsing errors
@@ -743,7 +750,7 @@ const ScheduleTab = ({ tournament }) => {
                 hoveredTeamId={hoveredTeamId}
                 onHoveredTeamIdChange={setHoveredTeamId}
                 bottomText={(game) => {
-                  // Hiển thị tên vòng và tên sân nếu có
+                  // Hiển thị tên vòng và tên sân (ngày đã hiển thị ở vị trí scheduled)
                   const parts = [game.name];
                   if (game.courtName) {
                     parts.push(`Sân: ${game.courtName}`);
@@ -846,7 +853,7 @@ const ScheduleTab = ({ tournament }) => {
                 hoveredTeamId={hoveredTeamId}
                 onHoveredTeamIdChange={setHoveredTeamId}
                 bottomText={(game) => {
-                  // Hiển thị tên vòng và tên sân nếu có
+                  // Hiển thị tên vòng và tên sân (ngày đã hiển thị ở vị trí scheduled)
                   const parts = [game.name];
                   if (game.courtName) {
                     parts.push(`Sân: ${game.courtName}`);

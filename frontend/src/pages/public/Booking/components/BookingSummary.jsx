@@ -17,7 +17,8 @@ export default function BookingSummary({
   onBookNow,
   venueId,
   timeSlotDuration = 60, // Khung giờ đặt sân (30 hoặc 60 phút)
-  onPromotionChange // Callback to pass promotion data to parent
+  onPromotionChange, // Callback to pass promotion data to parent
+  selectedServices = [] // Array of selected services
 }) {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -34,9 +35,9 @@ export default function BookingSummary({
   const selectedCourtData = courts?.find(c => (c.id || c._id) === selectedCourt)
   const courtPrice = selectedCourtData?.price || 0
 
-  // Calculate total amount based on selected slots
+  // Calculate court total amount based on selected slots
   // Use actual price from court or timeSlotsData
-  const calculateTotal = () => {
+  const calculateCourtTotal = () => {
     if (!selectedSlots.length) return 0
 
     // If we have timeSlotsData with prices, use that
@@ -52,6 +53,18 @@ export default function BookingSummary({
 
     // Fallback: use court price * number of slots (each slot is 1 hour)
     return courtPrice * selectedSlots.length
+  }
+
+  // Calculate services total
+  const calculateServicesTotal = () => {
+    return selectedServices.reduce((total, item) => {
+      return total + (item.totalPrice || 0)
+    }, 0)
+  }
+
+  // Calculate total (court + services)
+  const calculateTotal = () => {
+    return calculateCourtTotal() + calculateServicesTotal()
   }
 
   // Check for promo code in URL params
@@ -71,7 +84,7 @@ export default function BookingSummary({
 
           if (result.success && result.data.valid && result.data.promotion) {
             const promotion = result.data.promotion
-            const subtotal = calculateTotal()
+            const subtotal = calculateTotal() // Includes services
             const discount = calculateDiscount(promotion, subtotal)
 
             setAppliedPromotion(promotion)
@@ -343,6 +356,45 @@ export default function BookingSummary({
           </div>
         )}
 
+        {/* Services Detail */}
+        {selectedServices && selectedServices.length > 0 && (
+          <div style={{ margin: '8px 0' }}>
+            <div style={{ fontSize: '14px', color: '#374151', fontWeight: '500', marginBottom: '8px' }}>
+              Dịch vụ
+            </div>
+            {selectedServices.map((item, index) => {
+              const service = item.service || {}
+              const serviceName = service.name || 'Dịch vụ'
+              const quantity = item.quantity || 1
+              const price = service.price || 0
+              const totalPrice = item.totalPrice || (price * quantity)
+
+              return (
+                <div key={index} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '4px',
+                  fontSize: '14px',
+                  color: '#374151'
+                }}>
+                  <span>
+                    {serviceName} {quantity > 1 ? `x${quantity}` : ''}
+                  </span>
+                  <span style={{ fontWeight: '500' }}>
+                    {totalPrice.toLocaleString('vi-VN')} VND
+                  </span>
+                </div>
+              )
+            })}
+            <div style={{
+              height: '1px',
+              background: '#e5e7eb',
+              margin: '8px 0'
+            }}></div>
+          </div>
+        )}
+
         <div style={{
           height: '1px',
           background: '#e5e7eb',
@@ -451,6 +503,11 @@ export default function BookingSummary({
             {calculateTotal().toLocaleString('vi-VN')} VNĐ
           </span>
         </div>
+        {selectedServices && selectedServices.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '12px', color: '#6b7280' }}>
+            <span>(Trong đó: Sân {calculateCourtTotal().toLocaleString('vi-VN')} VNĐ + Dịch vụ {calculateServicesTotal().toLocaleString('vi-VN')} VNĐ)</span>
+          </div>
+        )}
 
         {promoApplied && discountAmount > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>

@@ -6,7 +6,10 @@ import Service from "../models/Service.js";
 
 const router = express.Router();
 
-// Tất cả routes đều cần authentication
+// Public route - Lấy dịch vụ theo facility (không cần authentication)
+router.get("/facility/:facilityId", serviceController.getServicesByFacility);
+
+// Tất cả routes còn lại đều cần authentication
 router.use(authenticateToken);
 
 // Owner routes - chỉ owner mới có thể quản lý dịch vụ của mình

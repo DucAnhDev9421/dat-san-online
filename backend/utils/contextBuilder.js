@@ -12,12 +12,14 @@ import mongoose from 'mongoose';
  * @param {string} params.userQuery - User's query
  * @param {Object} params.userLocation - User location {lat, lng}
  * @param {string} params.userId - User ID (optional)
+ * @param {string} params.sportCategoryId - Sport category ID (optional)
  * @returns {Promise<Object>} Context object
  */
-export const buildContext = async ({ userQuery, userLocation, userId }) => {
+export const buildContext = async ({ userQuery, userLocation, userId, sportCategoryId }) => {
   const context = {
     timestamp: new Date().toISOString(),
     userLocation: userLocation || null,
+    sportCategoryId: sportCategoryId || null,
     facilities: [],
     courts: [],
     userBookings: [],
@@ -27,8 +29,84 @@ export const buildContext = async ({ userQuery, userLocation, userId }) => {
     // Extract intent from query (simple keyword matching, can be improved)
     const queryLower = userQuery.toLowerCase();
     
-    // Find nearest facilities if user has location
-    if (userLocation && (queryLower.includes('gần') || queryLower.includes('gần nhất') || queryLower.includes('gần đây'))) {
+    // Find nearest facilities by sport category if user has location and sportCategoryId
+    if (userLocation && sportCategoryId && (queryLower.includes('gần') || queryLower.includes('gần nhất') || queryLower.includes('gần đây') || queryLower.includes('tìm cơ sở'))) {
+      // Get sport category info
+      const sportCategory = await SportCategory.findById(sportCategoryId).lean();
+      
+      if (sportCategory) {
+        // Get court types for this sport category
+        const courtTypes = await CourtType.find({
+          sportCategory: sportCategoryId,
+          status: 'active'
+        }).select('name _id').lean();
+        
+        if (courtTypes.length > 0) {
+          const courtTypeNames = courtTypes.map(ct => ct.name);
+          const courtTypeIds = courtTypes.map(ct => ct._id);
+          
+          // Find facilities that have courts for this sport category
+          // First, get all courts for this sport
+          const courts = await Court.find({
+            status: 'active',
+            $or: [
+              { type: { $in: courtTypeNames } },
+              { courtType: { $in: courtTypeIds } },
+              { sportCategory: new mongoose.Types.ObjectId(sportCategoryId) }
+            ]
+          })
+          .populate({
+            path: 'facility',
+            match: { status: 'opening' },
+            select: 'name address location types pricePerHour phoneNumber images'
+          })
+          .lean();
+          
+          // Get unique facilities from courts
+          const facilityIds = new Set();
+          const facilitiesWithDistance = [];
+          
+          for (const court of courts) {
+            if (court.facility && court.facility.location?.coordinates) {
+              const facilityId = court.facility._id.toString();
+              if (!facilityIds.has(facilityId)) {
+                facilityIds.add(facilityId);
+                
+                // Calculate distance
+                const distance = calculateDistance(
+                  userLocation.lat,
+                  userLocation.lng,
+                  court.facility.location.coordinates[1],
+                  court.facility.location.coordinates[0]
+                );
+                
+                facilitiesWithDistance.push({
+                  id: facilityId,
+                  name: court.facility.name,
+                  address: court.facility.address,
+                  types: court.facility.types,
+                  pricePerHour: court.facility.pricePerHour,
+                  phoneNumber: court.facility.phoneNumber,
+                  location: {
+                    lat: court.facility.location.coordinates[1],
+                    lng: court.facility.location.coordinates[0]
+                  },
+                  images: court.facility.images?.slice(0, 1) || [],
+                  distance: distance
+                });
+              }
+            }
+          }
+          
+          // Sort by distance and limit to 10
+          facilitiesWithDistance.sort((a, b) => a.distance - b.distance);
+          context.facilities = facilitiesWithDistance.slice(0, 10);
+        }
+      }
+    }
+    
+    // Find nearest facilities if user has location (old logic for backward compatibility)
+    if (userLocation && !sportCategoryId && (queryLower.includes('gần') || queryLower.includes('gần nhất') || queryLower.includes('gần đây'))) {
       const facilities = await Facility.find({
         status: 'opening',
         location: {

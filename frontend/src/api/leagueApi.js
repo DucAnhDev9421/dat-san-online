@@ -611,6 +611,38 @@ export const leagueApi = {
   },
 
   /**
+   * Cancel match schedule - hủy lịch đấu cho một trận cụ thể
+   * DELETE /api/leagues/:id/matches/:stage/:matchNumber/schedule
+   * @param {String} leagueId - League ID
+   * @param {String} stage - Match stage
+   * @param {Number} matchNumber - Match number
+   * @returns {Promise} Cancel schedule result
+   */
+  cancelMatchSchedule: async (leagueId, stage, matchNumber) => {
+    try {
+      const response = await api.delete(`/leagues/${leagueId}/matches/${stage}/${matchNumber}/schedule`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Cancel all schedule - hủy toàn bộ lịch đấu đã chốt
+   * DELETE /api/leagues/:id/schedule/all
+   * @param {String} leagueId - League ID
+   * @returns {Promise} Cancel all schedule result
+   */
+  cancelAllSchedule: async (leagueId) => {
+    try {
+      const response = await api.delete(`/leagues/${leagueId}/schedule/all`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
    * Update match result (score1, score2, penaltyScore1, penaltyScore2)
    * PUT /api/leagues/:id/matches/result
    * Tự động tính winner và cập nhật vào vòng tiếp theo (single-elimination)

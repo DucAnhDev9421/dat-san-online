@@ -1,16 +1,27 @@
-import { generateChatResponse } from '../utils/geminiService.js';
+import { analyzeIntent, generateResponse } from '../utils/responseHandler.js';
 import { buildContext, buildBookingContext, buildSuggestContext } from '../utils/contextBuilder.js';
-import { getSystemPrompt } from '../utils/aiPrompts.js';
+import { filterMessage } from '../utils/messageFilter.js';
+import { checkAvailabilityWithQuery } from '../utils/availabilityService.js';
+import {
+  askFacilityTemplate,
+  askDateTemplate,
+  askTimeTemplate,
+  askDateTimeTemplate,
+  availableCourtsTemplate,
+  noAvailableWithAlternativesTemplate,
+  noCourtsFoundTemplate,
+  facilityClosedTemplate
+} from '../utils/availabilityTemplates.js';
 import SportCategory from '../models/SportCategory.js';
 import CourtType from '../models/CourtType.js';
 
 /**
  * POST /api/ai/chat
- * Chat with AI assistant
+ * Chat with AI assistant - Sử dụng câu trả lời có sẵn dựa trên dữ liệu database
  */
 export const chat = async (req, res, next) => {
   try {
-    const { message, conversationHistory = [], userLocation } = req.body;
+    const { message, conversationHistory = [], userLocation, sportCategoryId } = req.body;
     const userId = req.user?._id?.toString() || null;
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
@@ -20,53 +31,177 @@ export const chat = async (req, res, next) => {
       });
     }
 
-    // Build context based on user query
-    const context = await buildContext({
-      userQuery: message,
-      userLocation: userLocation || null,
-      userId: userId
-    });
-
-    // Get system prompt
-    const systemPrompt = getSystemPrompt();
-
-    // Format conversation history for Gemini
-    const formattedHistory = conversationHistory.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content || msg.text || '' }]
-    }));
-
-    // Add current user message to history
-    formattedHistory.push({
-      role: 'user',
-      parts: [{ text: message }]
-    });
-
-    // Generate response
-    const response = await generateChatResponse(
-      systemPrompt,
-      formattedHistory.slice(0, -1), // Exclude current message from history
-      context
-    );
-
-    if (!response.success) {
-      return res.status(500).json({
+    // Lọc tin nhắn trước khi xử lý
+    const filterResult = filterMessage(message);
+    
+    if (!filterResult.isValid) {
+      return res.status(400).json({
         success: false,
-        message: response.message || 'Có lỗi xảy ra khi xử lý yêu cầu'
+        message: filterResult.reason || 'Tin nhắn không hợp lệ. Vui lòng nhập lại.'
       });
     }
+
+    const filteredMessage = filterResult.filtered;
+
+    // Phân tích intent từ tin nhắn đã lọc
+    const intent = analyzeIntent(filteredMessage);
+
+    // Nếu là intent kiểm tra sân trống, sử dụng availability service với template
+    if (intent === 'check_availability') {
+      const availabilityResult = await checkAvailabilityWithQuery({
+        query: filteredMessage,
+        sportCategoryId: sportCategoryId || null,
+        facilityId: null,
+        userLocation: userLocation || null
+      });
+
+      // Sử dụng template để tạo response
+      let templateResponse = null;
+
+      // Kiểm tra nếu cần thêm thông tin
+      if (availabilityResult.needsMoreInfo) {
+        const missing = availabilityResult.missing || [];
+        
+        if (missing.includes('time') && !availabilityResult.date) {
+          // Thiếu cả date và time
+          templateResponse = askDateTimeTemplate(availabilityResult.facilityName || null);
+        } else if (missing.includes('time')) {
+          // Chỉ thiếu time
+          templateResponse = askTimeTemplate(availabilityResult.facilityName || null, availabilityResult.date);
+        } else if (missing.includes('date')) {
+          // Chỉ thiếu date
+          templateResponse = askDateTemplate(availabilityResult.facilityName || null);
+        } else if (missing.includes('facility')) {
+          // Thiếu facility
+          templateResponse = askFacilityTemplate();
+        }
+      } else if (availabilityResult.success) {
+        // Có kết quả kiểm tra
+        if (availabilityResult.templateType === 'available_courts') {
+          // Có sân trống
+          templateResponse = availableCourtsTemplate({
+            courts: availabilityResult.availableCourts,
+            date: availabilityResult.date,
+            timeRange: availabilityResult.timeRange,
+            facilityName: availabilityResult.facilityName
+          });
+        } else if (availabilityResult.templateType === 'no_available_with_alternatives') {
+          // Hết sân nhưng có gợi ý
+          templateResponse = noAvailableWithAlternativesTemplate({
+            alternatives: availabilityResult.alternativeSlots,
+            date: availabilityResult.date,
+            timeRange: availabilityResult.timeRange,
+            facilityName: availabilityResult.facilityName
+          });
+        }
+      } else {
+        // Không tìm thấy sân hoặc lỗi
+        if (availabilityResult.templateType === 'no_courts_found') {
+          templateResponse = noCourtsFoundTemplate(availabilityResult.facilityName || null);
+        } else {
+          // Lỗi hoặc không xác định
+          templateResponse = {
+            message: availabilityResult.error || 'Không thể kiểm tra sân trống. Vui lòng thử lại.',
+            type: 'error',
+            actions: []
+          };
+        }
+      }
+
+      if (templateResponse) {
+        // Convert available courts to format compatible with response (nếu có)
+        const facilities = [];
+        const courts = [];
+        const facilityMap = new Map();
+
+        if (availabilityResult.availableCourts && availabilityResult.availableCourts.length > 0) {
+          availabilityResult.availableCourts.forEach(item => {
+            const facilityId = item.facility.id;
+            if (!facilityMap.has(facilityId)) {
+              facilityMap.set(facilityId, {
+                id: item.facility.id,
+                name: item.facility.name,
+                address: item.facility.address,
+                phoneNumber: item.facility.phoneNumber,
+                courts: []
+              });
+            }
+            
+            facilityMap.get(facilityId).courts.push({
+              id: item.court.id,
+              name: item.court.name,
+              type: item.court.type,
+              price: item.court.price,
+              availableSlots: item.availableSlots,
+              totalPrice: item.totalPrice
+            });
+
+            courts.push({
+              id: item.court.id,
+              name: item.court.name,
+              type: item.court.type,
+              price: item.court.price,
+              facility: {
+                id: item.facility.id,
+                name: item.facility.name,
+                address: item.facility.address
+              },
+              availableSlots: item.availableSlots,
+              totalPrice: item.totalPrice
+            });
+          });
+
+          facilities.push(...Array.from(facilityMap.values()));
+        }
+
+        return res.json({
+          success: true,
+          data: {
+            message: templateResponse.message,
+            templateType: templateResponse.type,
+            facilities: facilities,
+            courts: courts,
+            alternativeSlots: availabilityResult.alternativeSlots || [],
+            date: availabilityResult.date,
+            timeRange: availabilityResult.timeRange,
+            facilityId: availabilityResult.facilityId,
+            facilityName: availabilityResult.facilityName,
+            needsMoreInfo: availabilityResult.needsMoreInfo || false,
+            missing: availabilityResult.missing || [],
+            actions: templateResponse.actions || [],
+            templateData: templateResponse.data || {},
+            needsSportSelection: false,
+            context: {
+              facilitiesCount: facilities.length,
+              courtsCount: courts.length,
+            }
+          }
+        });
+      }
+    }
+
+    // Build context dựa trên user query đã lọc và intent
+    const context = await buildContext({
+      userQuery: filteredMessage,
+      userLocation: userLocation || null,
+      userId: userId,
+      sportCategoryId: sportCategoryId || null
+    });
+
+    // Tạo câu trả lời dựa trên intent và context
+    const response = generateResponse(intent, context);
 
     res.json({
       success: true,
       data: {
         message: response.message,
-        facilities: context.facilities || [],
-        courts: context.courts || [],
+        facilities: response.facilities || [],
+        courts: response.courts || [],
+        needsSportSelection: response.needsSportSelection || false,
         context: {
-          facilitiesCount: context.facilities?.length || 0,
-          courtsCount: context.courts?.length || 0,
-        },
-        usage: response.usage
+          facilitiesCount: response.facilities?.length || 0,
+          courtsCount: response.courts?.length || 0,
+        }
       }
     });
   } catch (error) {
@@ -214,6 +349,165 @@ export const searchSuggestFacilities = async (req, res, next) => {
     });
   } catch (error) {
     console.error('Search Suggest Facilities Error:', error);
+    next(error);
+  }
+};
+
+/**
+ * POST /api/ai/check-availability
+ * Kiểm tra sân trống từ câu hỏi tự nhiên với gợi ý thông minh
+ * Example: "Tối thứ 3 tuần sau còn sân không?", "Chiều nay tầm 5h-7h có sân nào trống?"
+ */
+export const checkAvailability = async (req, res, next) => {
+  try {
+    const { query, sportCategoryId, facilityId, userLocation } = req.body;
+
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng nhập câu hỏi về sân trống'
+      });
+    }
+
+    // Lọc tin nhắn trước khi xử lý
+    const filterResult = filterMessage(query);
+    
+    if (!filterResult.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: filterResult.reason || 'Câu hỏi không hợp lệ. Vui lòng nhập lại.'
+      });
+    }
+
+     const filteredQuery = filterResult.filtered;
+     const userLocationObj = userLocation || null;
+
+     // Kiểm tra sân trống với availability service
+     const result = await checkAvailabilityWithQuery({
+       query: filteredQuery,
+       sportCategoryId: sportCategoryId || null,
+       facilityId: facilityId || null,
+       userLocation: userLocationObj
+     });
+
+     // Sử dụng template để tạo response
+     let templateResponse = null;
+
+     if (result.needsMoreInfo) {
+       const missing = result.missing || [];
+       
+       if (missing.includes('time') && !result.date) {
+         templateResponse = askDateTimeTemplate(result.facilityName || null);
+       } else if (missing.includes('time')) {
+         templateResponse = askTimeTemplate(result.facilityName || null, result.date);
+       } else if (missing.includes('date')) {
+         templateResponse = askDateTemplate(result.facilityName || null);
+       } else if (missing.includes('facility')) {
+         templateResponse = askFacilityTemplate();
+       }
+     } else if (result.success) {
+       if (result.templateType === 'available_courts') {
+         templateResponse = availableCourtsTemplate({
+           courts: result.availableCourts,
+           date: result.date,
+           timeRange: result.timeRange,
+           facilityName: result.facilityName
+         });
+       } else if (result.templateType === 'no_available_with_alternatives') {
+         templateResponse = noAvailableWithAlternativesTemplate({
+           alternatives: result.alternativeSlots,
+           date: result.date,
+           timeRange: result.timeRange,
+           facilityName: result.facilityName
+         });
+       }
+     } else {
+       if (result.templateType === 'no_courts_found') {
+         templateResponse = noCourtsFoundTemplate(result.facilityName || null);
+       } else {
+         templateResponse = {
+           message: result.error || 'Không thể kiểm tra sân trống. Vui lòng thử lại.',
+           type: 'error',
+           actions: []
+         };
+       }
+     }
+
+     if (templateResponse) {
+       // Convert available courts to response format (nếu có)
+       const facilities = [];
+       const courts = [];
+       const facilityMap = new Map();
+
+       if (result.availableCourts && result.availableCourts.length > 0) {
+         result.availableCourts.forEach(item => {
+           const facilityId = item.facility.id;
+           if (!facilityMap.has(facilityId)) {
+             facilityMap.set(facilityId, {
+               id: item.facility.id,
+               name: item.facility.name,
+               address: item.facility.address,
+               phoneNumber: item.facility.phoneNumber,
+               courts: []
+             });
+           }
+           
+           facilityMap.get(facilityId).courts.push({
+             id: item.court.id,
+             name: item.court.name,
+             type: item.court.type,
+             price: item.court.price,
+             availableSlots: item.availableSlots,
+             totalPrice: item.totalPrice
+           });
+
+           courts.push({
+             id: item.court.id,
+             name: item.court.name,
+             type: item.court.type,
+             price: item.court.price,
+             facility: {
+               id: item.facility.id,
+               name: item.facility.name,
+               address: item.facility.address
+             },
+             availableSlots: item.availableSlots,
+             totalPrice: item.totalPrice
+           });
+         });
+
+         facilities.push(...Array.from(facilityMap.values()));
+       }
+
+       res.json({
+         success: true,
+         data: {
+           message: templateResponse.message,
+           templateType: templateResponse.type,
+           facilities: facilities,
+           courts: courts,
+           alternativeSlots: result.alternativeSlots || [],
+           date: result.date,
+           timeRange: result.timeRange,
+           facilityId: result.facilityId,
+           facilityName: result.facilityName,
+           needsMoreInfo: result.needsMoreInfo || false,
+           missing: result.missing || [],
+           actions: templateResponse.actions || [],
+           templateData: templateResponse.data || {}
+         }
+       });
+     } else {
+       res.json({
+         success: false,
+         message: 'Không thể xử lý yêu cầu. Vui lòng thử lại.',
+         facilities: [],
+         courts: [],
+         alternativeSlots: []
+       });
+     }
+  } catch (error) {
+    console.error('Check Availability Error:', error);
     next(error);
   }
 };

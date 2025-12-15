@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Save, FileUp, X, Zap, AlertTriangle } from 'lucide-react'
+import { Save, FileUp, X, Zap, AlertTriangle, Trash2 } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { useParams } from 'react-router-dom'
 import { leagueApi } from '../../../../../api/leagueApi'
@@ -30,6 +30,8 @@ const ScheduleManagementTab = ({ tournament }) => {
   const [conflicts, setConflicts] = useState([])
   const [warnings, setWarnings] = useState([])
   const [confirmingSchedule, setConfirmingSchedule] = useState(false)
+  const [cancellingMatch, setCancellingMatch] = useState(null) // Track which match is being cancelled
+  const [cancellingAll, setCancellingAll] = useState(false)
   
   const isRoundRobin = tournament?.format === 'Vòng tròn' || tournament?.format === 'round-robin'
 
@@ -426,6 +428,50 @@ const ScheduleManagementTab = ({ tournament }) => {
       toast.error(error.message || 'Không thể chốt lịch thi đấu')
     } finally {
       setConfirmingSchedule(false)
+    }
+  }
+
+  const handleCancelMatchSchedule = async (scheduleItem) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn hủy lịch đấu cho trận #${scheduleItem.matchId}?`)) {
+      return
+    }
+
+    try {
+      setCancellingMatch(scheduleItem.matchId)
+      
+      const result = await leagueApi.cancelMatchSchedule(id, scheduleItem.stage, scheduleItem.matchId)
+      
+      if (result.success) {
+        toast.success('Đã hủy lịch đấu cho trận này')
+        refreshTournament()
+      }
+    } catch (error) {
+      console.error('Error cancelling match schedule:', error)
+      toast.error(error.message || 'Không thể hủy lịch đấu')
+    } finally {
+      setCancellingMatch(null)
+    }
+  }
+
+  const handleCancelAllSchedule = async () => {
+    if (!window.confirm('Bạn có chắc chắn muốn hủy toàn bộ lịch đấu đã chốt? Hành động này không thể hoàn tác.')) {
+      return
+    }
+
+    try {
+      setCancellingAll(true)
+      
+      const result = await leagueApi.cancelAllSchedule(id)
+      
+      if (result.success) {
+        toast.success(result.message || 'Đã hủy toàn bộ lịch đấu')
+        refreshTournament()
+      }
+    } catch (error) {
+      console.error('Error cancelling all schedule:', error)
+      toast.error(error.message || 'Không thể hủy lịch đấu')
+    } finally {
+      setCancellingAll(false)
     }
   }
 
@@ -1069,6 +1115,33 @@ const ScheduleManagementTab = ({ tournament }) => {
                               )}
                             </select>
                           )}
+                          
+                          {/* Nút hủy lịch đấu cho trận này */}
+                          {(scheduleItem.date || scheduleItem.time || scheduleItem.courtId) && (
+                            <button
+                              onClick={() => handleCancelMatchSchedule(scheduleItem)}
+                              disabled={cancellingMatch === scheduleItem.matchId}
+                              style={{
+                                padding: '8px 12px',
+                                backgroundColor: '#ef4444',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: cancellingMatch === scheduleItem.matchId ? 'not-allowed' : 'pointer',
+                                fontSize: '13px',
+                                fontWeight: '500',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                opacity: cancellingMatch === scheduleItem.matchId ? 0.6 : 1,
+                                flexShrink: 0
+                              }}
+                              title="Hủy lịch đấu cho trận này"
+                            >
+                              <Trash2 size={14} />
+                              {cancellingMatch === scheduleItem.matchId ? 'Đang hủy...' : 'Hủy'}
+                            </button>
+                          )}
                         </div>
 
                         {/* Hiển thị conflicts/warnings cho match này */}
@@ -1143,6 +1216,32 @@ const ScheduleManagementTab = ({ tournament }) => {
           >
             <Zap size={16} />
             {confirmingSchedule ? 'Đang chốt lịch...' : 'Chốt lịch thi đấu'}
+          </button>
+        )}
+
+        {/* Nút hủy toàn bộ lịch đấu đã chốt */}
+        {scheduleData.some(item => item.date && item.time && item.courtId) && (
+          <button
+            onClick={handleCancelAllSchedule}
+            disabled={cancellingAll}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#ef4444',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: cancellingAll ? 'not-allowed' : 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              opacity: cancellingAll ? 0.6 : 1
+            }}
+            title="Hủy toàn bộ lịch đấu đã chốt"
+          >
+            <Trash2 size={16} />
+            {cancellingAll ? 'Đang hủy...' : 'Hủy toàn bộ lịch đấu'}
           </button>
         )}
       </div>

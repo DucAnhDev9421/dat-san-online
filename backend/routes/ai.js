@@ -1,5 +1,5 @@
 import express from 'express';
-import { chat, suggestFacilities, getBookingData, searchBookingFacilities, searchSuggestFacilities } from '../controllers/aiController.js';
+import { chat, suggestFacilities, getBookingData, searchBookingFacilities, searchSuggestFacilities, checkAvailability } from '../controllers/aiController.js';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { config } from '../config/config.js';
@@ -61,6 +61,12 @@ router.post('/booking-search', optionalAuth, searchBookingFacilities);
  * Search facilities with suggestions (price, radius, time slots)
  */
 router.post('/suggest-search', optionalAuth, searchSuggestFacilities);
+
+/**
+ * POST /api/ai/check-availability
+ * Kiểm tra sân trống từ câu hỏi tự nhiên với gợi ý thông minh
+ */
+router.post('/check-availability', optionalAuth, checkAvailability);
 
 export default router;
 

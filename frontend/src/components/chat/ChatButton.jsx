@@ -8,6 +8,8 @@ import { aiApi } from '../../api/aiApi';
 import FacilityCard from './FacilityCard';
 import CourtCard from './CourtCard';
 import chatbotAvatar from '../../assets/chatbot.png';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import './ChatButton.css';
 
 // Quick Replies - Common questions
@@ -31,7 +33,7 @@ const ChatButton = () => {
 
   // Booking flow state
   const [bookingStep, setBookingStep] = useState(null); // 'sport' | 'courtType' | 'date' | 'timeSlots' | 'search' | 'suggest' | 'priceRange' | 'radius'
-  const [flowType, setFlowType] = useState(null); // 'booking' | 'suggest'
+  const [flowType, setFlowType] = useState(null); // 'booking' | 'suggest' | 'find_nearby' | 'find_nearby'
   const [selectedSport, setSelectedSport] = useState(null);
   const [selectedCourtType, setSelectedCourtType] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -41,6 +43,13 @@ const ChatButton = () => {
   const [dynamicQuickReplies, setDynamicQuickReplies] = useState([]);
   const [sportCategories, setSportCategories] = useState([]);
   const [courtTypes, setCourtTypes] = useState([]);
+  
+  // Date/Time picker states for availability check
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [tempSelectedDate, setTempSelectedDate] = useState(null);
+  const [tempSelectedTime, setTempSelectedTime] = useState(null);
+  const [currentMessageId, setCurrentMessageId] = useState(null); // Track which message triggered picker
 
   // Hide chat button on auth pages, admin pages, owner pages, and chat page
   const authPages = ['/login', '/register', '/verify-otp', '/forgot-password', '/reset-password', '/auth/callback', '/auth/error'];
@@ -71,12 +80,32 @@ const ChatButton = () => {
     }
   }, [isOpen]);
 
+  // Clear chat history and start new conversation
+  const handleClearChat = () => {
+    // Reset all state
+    setMessages([{
+      id: Date.now(),
+      role: 'bot',
+      content: 'Chào bạn! Chào mừng bạn đến với hệ thống đặt sân thể thao.\n\nTôi có thể giúp bạn tìm kiếm sân, kiểm tra lịch trống hoặc đặt sân ngay bây giờ không?',
+      timestamp: new Date()
+    }]);
+    setBookingStep(null);
+    setFlowType(null);
+    setSelectedSport(null);
+    setSelectedCourtType(null);
+    setSelectedDate(null);
+    setSelectedTimeSlots([]);
+    setSelectedPriceRange(null);
+    setSelectedRadius(null);
+    setDynamicQuickReplies([]);
+  };
+
   // Scroll to bottom when new message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const sendMessage = async (messageText) => {
+  const sendMessage = async (messageText, sportCategoryId = null) => {
     if (!messageText.trim() || isLoading) return;
 
     const userMessage = {
@@ -106,11 +135,19 @@ const ChatButton = () => {
         lng: userLocation.longitude
       } : null;
 
+      // Use sportCategoryId from parameter or from selectedSport if in find_nearby flow
+      const finalSportCategoryId = sportCategoryId || (flowType === 'find_nearby' && selectedSport?.id) || null;
+
+      // Check if message is about finding nearby facilities
+      const isFindNearbyMessage = messageText.toLowerCase().includes('tìm') && 
+        (messageText.toLowerCase().includes('gần') || messageText.toLowerCase().includes('cơ sở'));
+
       // Call AI API
       const response = await aiApi.chat(
         userMessage.content,
         conversationHistory,
-        location
+        location,
+        finalSportCategoryId
       );
 
       if (response.success) {
@@ -120,10 +157,51 @@ const ChatButton = () => {
           content: response.data.message,
           facilities: response.data.facilities || [],
           courts: response.data.courts || [],
+          alternativeSlots: response.data.alternativeSlots || [],
+          templateType: response.data.templateType,
+          actions: response.data.actions || [],
+          needsMoreInfo: response.data.needsMoreInfo,
+          missing: response.data.missing || [],
           timestamp: new Date()
         };
 
         setMessages(prev => [...prev, botMessage]);
+
+        // Handle template actions (for availability check)
+        if (response.data.actions && response.data.actions.length > 0) {
+          setDynamicQuickReplies(response.data.actions.map(action => ({
+            text: action.label,
+            message: action.value || action.label,
+            data: {
+              type: action.type,
+              action: action.action,
+              value: action.value
+            }
+          })));
+        }
+
+        // If needs sport selection, start find_nearby flow
+        if (response.data.needsSportSelection || (isFindNearbyMessage && !finalSportCategoryId)) {
+          // Don't add another message, just start the flow
+          setFlowType('find_nearby');
+          setBookingStep('sport');
+          
+          // Load sport categories
+          try {
+            const sportResponse = await aiApi.getBookingData();
+            if (sportResponse.success) {
+              setSportCategories(sportResponse.data.sportCategories || []);
+              const quickReplies = (sportResponse.data.sportCategories || []).map(cat => ({
+                text: cat.name,
+                message: `Chọn ${cat.name}`,
+                data: { type: 'sport', id: cat.id, name: cat.name }
+              }));
+              setDynamicQuickReplies(quickReplies);
+            }
+          } catch (error) {
+            console.error('Error loading sport categories:', error);
+          }
+        }
       } else {
         throw new Error(response.message || 'Có lỗi xảy ra');
       }
@@ -132,7 +210,7 @@ const ChatButton = () => {
       const errorMessage = {
         id: Date.now() + 1,
         role: 'bot',
-        content: 'Xin lỗi, tôi gặp lỗi khi xử lý yêu cầu của bạn. Vui lòng thử lại sau. 😔',
+        content: 'Xin lỗi, tôi gặp lỗi khi xử lý yêu cầu của bạn. Vui lòng thử lại sau.',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -148,14 +226,104 @@ const ChatButton = () => {
   };
 
   const handleQuickReply = async (message, data = null) => {
+    // Handle special actions (datepicker, timepicker)
+    if (data && data.action) {
+      if (data.action === 'open_datepicker') {
+        setShowDatePicker(true);
+        setCurrentMessageId(messages[messages.length - 1]?.id || null);
+        return;
+      } else if (data.action === 'open_timepicker') {
+        setShowTimePicker(true);
+        setCurrentMessageId(messages[messages.length - 1]?.id || null);
+        return;
+      } else if (data.action === 'open_datetimepicker') {
+        setShowDatePicker(true);
+        setCurrentMessageId(messages[messages.length - 1]?.id || null);
+        return;
+      }
+    }
+
+    // Handle date/time quick replies (from template actions)
+    if (data && data.type) {
+      if (data.type === 'date' || data.type === 'datetime') {
+        // Quick reply for date (e.g., "Hôm nay", "Ngày mai")
+        // Send message with the value directly
+        sendMessage(message || data.value);
+        return;
+      } else if (data.type === 'time') {
+        // Quick reply for time (e.g., "Sáng", "Chiều", "Tối")
+        // Convert to time range format
+        let timeValue = message || data.value;
+        if (timeValue === 'sáng') timeValue = 'tầm 6h-12h';
+        else if (timeValue === 'chiều') timeValue = 'tầm 12h-18h';
+        else if (timeValue === 'tối') timeValue = 'tầm 18h-22h';
+        sendMessage(timeValue);
+        return;
+      }
+    }
+
     // Check flow type
     if (message === 'Hướng dẫn tôi cách đặt sân' || (bookingStep && flowType === 'booking')) {
       await handleBookingFlow(message, data);
     } else if (message === 'Gợi ý sân phù hợp' || (bookingStep && flowType === 'suggest')) {
       await handleSuggestFlow(message, data);
+    } else if (message === 'Tìm các cơ sở gần tôi' || message === 'Tìm cơ sở gần nhất' || (bookingStep && flowType === 'find_nearby')) {
+      await handleFindNearbyFlow(message, data);
     } else {
       sendMessage(message);
     }
+  };
+
+  // Handle date selection from picker
+  const handleDateSelect = (date) => {
+    setTempSelectedDate(date);
+    setShowDatePicker(false);
+    
+    // Format date for Vietnamese to match timeParser format
+    const dayNames = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+    const dayName = dayNames[date.getDay()];
+    const dateStr = `${dayName}, ngày ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+    
+    // If time picker is also open, just set date and keep time picker open
+    if (showTimePicker) {
+      // Send combined date and time
+      sendMessage(`${dateStr} tầm ${tempSelectedTime || '18h-20h'}`);
+    } else {
+      // Send message with selected date
+      sendMessage(dateStr);
+    }
+  };
+
+  // Handle time selection
+  const handleTimeSelect = (timeRange) => {
+    setTempSelectedTime(timeRange);
+    setShowTimePicker(false);
+    
+    // Format time range
+    let timeStr;
+    if (typeof timeRange === 'string') {
+      // Convert "18:00-20:00" to "18h-20h" format for parser
+      timeStr = timeRange.replace(/:/g, 'h');
+    } else if (timeRange.start && timeRange.end) {
+      timeStr = `${timeRange.start.replace(':', 'h')}-${timeRange.end.replace(':', 'h')}`;
+    } else {
+      timeStr = timeRange;
+    }
+    
+    // If date was already selected, send combined
+    if (tempSelectedDate) {
+      const dayNames = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+      const dayName = dayNames[tempSelectedDate.getDay()];
+      const dateStr = `${dayName}, ngày ${tempSelectedDate.getDate()}/${tempSelectedDate.getMonth() + 1}/${tempSelectedDate.getFullYear()}`;
+      sendMessage(`${dateStr} tầm ${timeStr}`);
+    } else {
+      // Send message with selected time
+      sendMessage(`tầm ${timeStr}`);
+    }
+    
+    // Reset temp values
+    setTempSelectedDate(null);
+    setTempSelectedTime(null);
   };
 
   const handleBookingFlow = async (message, data = null) => {
@@ -180,7 +348,7 @@ const ChatButton = () => {
           const botMessage = {
             id: Date.now(),
             role: 'bot',
-            content: 'Bạn muốn đặt sân cho môn thể thao nào? 🏃',
+            content: 'Bạn muốn đặt sân cho môn thể thao nào?',
             timestamp: new Date(),
             quickReplies: quickReplies
           };
@@ -749,6 +917,119 @@ const ChatButton = () => {
     }
   };
 
+  // Handle find nearby flow - Tìm cơ sở gần nhất
+  const handleFindNearbyFlow = async (message, data = null) => {
+    if (!bookingStep) {
+      // Start find nearby flow
+      setFlowType('find_nearby');
+      setBookingStep('sport');
+
+      // Load sport categories
+      try {
+        const response = await aiApi.getBookingData();
+        if (response.success) {
+          setSportCategories(response.data.sportCategories || []);
+          const quickReplies = (response.data.sportCategories || []).map(cat => ({
+            text: cat.name,
+            message: `Chọn ${cat.name}`,
+            data: { type: 'sport', id: cat.id, name: cat.name }
+          }));
+          setDynamicQuickReplies(quickReplies);
+
+          // Add bot message
+          const botMessage = {
+            id: Date.now(),
+            role: 'bot',
+            content: 'Bạn muốn tìm cơ sở cho môn thể thao nào?',
+            timestamp: new Date(),
+            quickReplies: quickReplies
+          };
+          setMessages(prev => [...prev, botMessage]);
+        }
+      } catch (error) {
+        console.error('Error loading sport categories:', error);
+      }
+      return;
+    }
+
+    // Handle sport selection
+    if (bookingStep === 'sport' && data && data.type === 'sport') {
+      setSelectedSport(data);
+      setBookingStep('search');
+      setIsTyping(true);
+      setIsLoading(true);
+
+      // Add user message
+      const userMsg = {
+        id: Date.now(),
+        role: 'user',
+        content: data.name,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMsg]);
+
+      try {
+        // Get user location
+        const location = userLocation ? {
+          lat: userLocation.latitude,
+          lng: userLocation.longitude
+        } : null;
+
+        if (!location) {
+          const errorMsg = {
+            id: Date.now() + 1,
+            role: 'bot',
+            content: 'Để tìm cơ sở gần nhất, vui lòng cung cấp vị trí của bạn.',
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, errorMsg]);
+          setBookingStep(null);
+          setFlowType(null);
+          setSelectedSport(null);
+          setDynamicQuickReplies([]);
+          return;
+        }
+
+        // Call AI API with sport category and location
+        const response = await aiApi.chat(
+          'Tìm các cơ sở gần tôi',
+          [],
+          location,
+          data.id
+        );
+
+        if (response.success) {
+          const botMsg = {
+            id: Date.now() + 1,
+            role: 'bot',
+            content: response.data.message,
+            facilities: response.data.facilities || [],
+            courts: response.data.courts || [],
+            timestamp: new Date()
+          };
+
+          setMessages(prev => [...prev, botMsg]);
+          setBookingStep(null);
+          setFlowType(null);
+          setSelectedSport(null);
+          setDynamicQuickReplies([]);
+        }
+      } catch (error) {
+        console.error('Error finding nearby facilities:', error);
+        const errorMsg = {
+          id: Date.now() + 1,
+          role: 'bot',
+          content: 'Xin lỗi, có lỗi xảy ra khi tìm kiếm. Vui lòng thử lại.',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMsg]);
+      } finally {
+        setIsTyping(false);
+        setIsLoading(false);
+      }
+    }
+  };
+
   // Check if should show quick replies
   const shouldShowQuickReplies = () => {
     if (messages.length === 0) return false;
@@ -830,11 +1111,22 @@ const ChatButton = () => {
                 <span className="status">Đang hoạt động</span>
               </div>
             </div>
-            <button className="close-button" onClick={toggleChat}>
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z" fill="currentColor" />
-              </svg>
-            </button>
+            <div className="chat-header-actions">
+              <button 
+                className="clear-button" 
+                onClick={handleClearChat}
+                title="Xóa lịch sử chat"
+              >
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M19 7L18.1327 19.1425C18.0579 20.1891 17.187 21 16.1378 21H7.86224C6.81296 21 5.94208 20.1891 5.86732 19.1425L5 7M10 11V17M14 11V17M15 7V4C15 3.44772 14.5523 3 14 3H10C9.44772 3 9 3.44772 9 4V7M4 7H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+              <button className="close-button" onClick={toggleChat} title="Đóng chat">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z" fill="currentColor" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="chat-messages">
@@ -926,6 +1218,136 @@ const ChatButton = () => {
                     <span>Đã chọn: {selectedTimeSlots.join(', ')}</span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Date Picker Modal */}
+            {showDatePicker && (
+              <div 
+                className="chat-datepicker-overlay"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) {
+                    setShowDatePicker(false);
+                  }
+                }}
+              >
+                <div className="chat-datepicker-modal">
+                  <div className="chat-datepicker-header">
+                    <h3>Chọn ngày</h3>
+                    <button 
+                      className="chat-datepicker-close"
+                      onClick={() => setShowDatePicker(false)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <DatePicker
+                    selected={tempSelectedDate || new Date()}
+                    onChange={handleDateSelect}
+                    minDate={new Date()}
+                    inline
+                    locale="vi"
+                    dateFormat="dd/MM/yyyy"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Time Picker */}
+            {showTimePicker && (
+              <div 
+                className="chat-timepicker-overlay"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) {
+                    setShowTimePicker(false);
+                  }
+                }}
+              >
+                <div className="chat-timepicker-modal">
+                  <div className="chat-timepicker-header">
+                    <h3>Chọn khung giờ</h3>
+                    <button 
+                      className="chat-timepicker-close"
+                      onClick={() => setShowTimePicker(false)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="chat-timepicker-options">
+                    {/* Quick time ranges */}
+                    <div className="time-range-group">
+                      <h4>Sáng</h4>
+                      <div className="time-slots-grid">
+                        {['06:00-12:00', '07:00-09:00', '09:00-11:00'].map(slot => (
+                          <button
+                            key={slot}
+                            className="time-slot-button"
+                            onClick={() => handleTimeSelect(slot)}
+                          >
+                            {slot}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="time-range-group">
+                      <h4>Chiều</h4>
+                      <div className="time-slots-grid">
+                        {['12:00-18:00', '14:00-16:00', '16:00-18:00'].map(slot => (
+                          <button
+                            key={slot}
+                            className="time-slot-button"
+                            onClick={() => handleTimeSelect(slot)}
+                          >
+                            {slot}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="time-range-group">
+                      <h4>Tối</h4>
+                      <div className="time-slots-grid">
+                        {['18:00-22:00', '18:00-20:00', '20:00-22:00'].map(slot => (
+                          <button
+                            key={slot}
+                            className="time-slot-button"
+                            onClick={() => handleTimeSelect(slot)}
+                          >
+                            {slot}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Custom time range */}
+                    <div className="time-range-group">
+                      <h4>Khung giờ khác</h4>
+                      <div className="custom-time-input">
+                        <input
+                          type="time"
+                          id="start-time"
+                          style={{ marginRight: '8px', padding: '8px', borderRadius: '6px', border: '1px solid #e5e7eb' }}
+                        />
+                        <span>đến</span>
+                        <input
+                          type="time"
+                          id="end-time"
+                          style={{ marginLeft: '8px', padding: '8px', borderRadius: '6px', border: '1px solid #e5e7eb' }}
+                        />
+                        <button
+                          className="apply-time-button"
+                          onClick={() => {
+                            const start = document.getElementById('start-time').value;
+                            const end = document.getElementById('end-time').value;
+                            if (start && end) {
+                              handleTimeSelect(`${start}-${end}`);
+                            }
+                          }}
+                        >
+                          Áp dụng
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

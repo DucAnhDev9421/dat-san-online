@@ -73,6 +73,31 @@ export const serviceApi = {
   },
 
   /**
+   * Lấy dịch vụ theo facility (Public)
+   * GET /api/services/facility/:facilityId
+   * @param {string} facilityId - ID của facility
+   * @param {Object} params - Query parameters (type, sportCategory)
+   */
+  getServicesByFacility: async (facilityId, params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+      
+      const queryString = queryParams.toString();
+      const url = `/services/facility/${facilityId}${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await api.get(url);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
    * Upload ảnh cho dịch vụ
    * POST /api/services/:id/upload
    * @param {string} id - ID của dịch vụ

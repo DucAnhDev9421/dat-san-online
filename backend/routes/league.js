@@ -3710,6 +3710,72 @@ router.post(
           booking.paymentStatus = "paid"; // Tournament booking coi như đã thanh toán
           await booking.save();
 
+          // Cập nhật date và time vào match trong league
+          if (booking.matchInfo && booking.matchInfo.stage && booking.matchInfo.matchNumber !== undefined) {
+            const matchIndex = league.matches.findIndex((m) => {
+              const stageMatch = m.stage === booking.matchInfo.stage;
+              const numberMatch = m.matchNumber === booking.matchInfo.matchNumber || 
+                                 m.matchNumber === parseInt(booking.matchInfo.matchNumber) ||
+                                 parseInt(m.matchNumber) === booking.matchInfo.matchNumber;
+              return stageMatch && numberMatch;
+            });
+
+            if (matchIndex !== -1) {
+              // Cập nhật date từ booking
+              if (booking.date) {
+                league.matches[matchIndex].date = new Date(booking.date);
+              }
+
+              // Cập nhật time từ timeSlots đầu tiên
+              if (booking.timeSlots && booking.timeSlots.length > 0) {
+                const firstSlot = booking.timeSlots[0];
+                // Parse time từ slot: format thường là "HH:MM-HH:MM"
+                let timeStr = '';
+                if (firstSlot.includes('-')) {
+                  const parts = firstSlot.split('-');
+                  // Format "HH:MM-HH:MM" -> lấy phần đầu (start time)
+                  if (parts.length === 2 && parts[0].includes(':')) {
+                    timeStr = parts[0];
+                  } else if (parts.length >= 4) {
+                    // Format "YYYY-MM-DD-HH:MM" -> lấy phần cuối
+                    timeStr = parts[parts.length - 1];
+                  } else if (parts.length === 2) {
+                    // Fallback: lấy phần đầu
+                    timeStr = parts[0];
+                  }
+                } else if (firstSlot.includes(':')) {
+                  // Format chỉ có "HH:MM"
+                  timeStr = firstSlot;
+                }
+
+                if (timeStr && timeStr.includes(':')) {
+                  league.matches[matchIndex].time = timeStr;
+                }
+
+                // Cập nhật endTime từ slot cuối cùng nếu có
+                const lastSlot = booking.timeSlots[booking.timeSlots.length - 1];
+                if (lastSlot.includes('-')) {
+                  const parts = lastSlot.split('-');
+                  if (parts.length === 2 && parts[1].includes(':')) {
+                    // Format "HH:MM-HH:MM" -> lấy phần cuối (end time)
+                    league.matches[matchIndex].endTime = parts[1];
+                  } else if (parts.length >= 4 && parts[parts.length - 1].includes(':')) {
+                    // Format "YYYY-MM-DD-HH:MM" -> lấy phần cuối
+                    league.matches[matchIndex].endTime = parts[parts.length - 1];
+                  }
+                }
+              }
+
+              console.log(`[CONFIRM_SCHEDULE] Đã cập nhật match ${booking.matchInfo.stage}-${booking.matchInfo.matchNumber}:`, {
+                date: league.matches[matchIndex].date,
+                time: league.matches[matchIndex].time,
+                endTime: league.matches[matchIndex].endTime
+              });
+            } else {
+              console.warn(`[CONFIRM_SCHEDULE] Không tìm thấy match ${booking.matchInfo.stage}-${booking.matchInfo.matchNumber} trong league`);
+            }
+          }
+
           confirmedBookings.push({
             bookingId: booking._id,
             matchInfo: booking.matchInfo
@@ -3726,6 +3792,9 @@ router.post(
         }
       }
 
+      // Lưu league sau khi cập nhật tất cả matches
+      await league.save();
+
       await logAudit("CONFIRM_SCHEDULE", req.user._id, req, {
         leagueId: leagueId,
         leagueName: league.name,
@@ -3739,6 +3808,142 @@ router.post(
         data: {
           confirmed: confirmedBookings,
           failed: failedBookings.length > 0 ? failedBookings : undefined
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/leagues/:id/matches/:stage/:matchNumber/schedule
+ * Hủy lịch đấu cho một trận cụ thể - xóa date/time/courtId và hủy bookings (hold + confirmed)
+ * User (người tạo)
+ */
+router.delete(
+  "/:id/matches/:stage/:matchNumber/schedule",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+      const stage = req.params.stage;
+      const matchNumber = parseInt(req.params.matchNumber);
+
+      const league = await League.findById(leagueId);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      // Tìm match
+      const matchIndex = league.matches.findIndex((m) => {
+        const stageMatch = m.stage === stage;
+        const numberMatch = m.matchNumber === matchNumber || 
+                           m.matchNumber === parseInt(matchNumber) ||
+                           parseInt(m.matchNumber) === matchNumber;
+        return stageMatch && numberMatch;
+      });
+
+      if (matchIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy trận đấu",
+        });
+      }
+
+      // Hủy tất cả bookings (hold và confirmed) của match này
+      const deletedBookings = await Booking.deleteMany({
+        league: leagueId,
+        "matchInfo.stage": stage,
+        "matchInfo.matchNumber": matchNumber,
+        status: { $in: ["hold", "confirmed"] }
+      });
+
+      // Xóa date, time, endTime, courtId khỏi match
+      league.matches[matchIndex].date = null;
+      league.matches[matchIndex].time = null;
+      league.matches[matchIndex].endTime = null;
+      league.matches[matchIndex].courtId = null;
+
+      await league.save();
+
+      await logAudit("CANCEL_MATCH_SCHEDULE", req.user._id, req, {
+        leagueId: leagueId,
+        leagueName: league.name,
+        stage: stage,
+        matchNumber: matchNumber,
+        deletedBookingsCount: deletedBookings.deletedCount
+      });
+
+      res.json({
+        success: true,
+        message: "Đã hủy lịch đấu cho trận này",
+        data: {
+          deletedBookingsCount: deletedBookings.deletedCount
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/leagues/:id/schedule/all
+ * Hủy toàn bộ lịch đấu đã chốt - xóa date/time/courtId của tất cả matches và hủy tất cả confirmed bookings
+ * User (người tạo)
+ */
+router.delete(
+  "/:id/schedule/all",
+  checkOwnership,
+  async (req, res, next) => {
+    try {
+      const leagueId = req.params.id;
+
+      const league = await League.findById(leagueId);
+      if (!league) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giải đấu",
+        });
+      }
+
+      // Hủy tất cả confirmed bookings của giải đấu này
+      const deletedBookings = await Booking.deleteMany({
+        league: leagueId,
+        status: "confirmed"
+      });
+
+      // Xóa date, time, endTime, courtId khỏi tất cả matches
+      let updatedMatchesCount = 0;
+      for (let i = 0; i < league.matches.length; i++) {
+        if (league.matches[i].date || league.matches[i].time || league.matches[i].courtId) {
+          league.matches[i].date = null;
+          league.matches[i].time = null;
+          league.matches[i].endTime = null;
+          league.matches[i].courtId = null;
+          updatedMatchesCount++;
+        }
+      }
+
+      await league.save();
+
+      await logAudit("CANCEL_ALL_SCHEDULE", req.user._id, req, {
+        leagueId: leagueId,
+        leagueName: league.name,
+        deletedBookingsCount: deletedBookings.deletedCount,
+        updatedMatchesCount: updatedMatchesCount
+      });
+
+      res.json({
+        success: true,
+        message: `Đã hủy toàn bộ lịch đấu. Đã xóa ${updatedMatchesCount} lịch đấu và ${deletedBookings.deletedCount} booking đã chốt.`,
+        data: {
+          deletedBookingsCount: deletedBookings.deletedCount,
+          updatedMatchesCount: updatedMatchesCount
         }
       });
     } catch (error) {
