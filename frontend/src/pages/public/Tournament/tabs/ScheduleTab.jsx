@@ -572,7 +572,7 @@ const ScheduleTab = ({ tournament }) => {
                     const hasScore = match.score1 !== undefined && match.score2 !== undefined
                     let scoreText = hasScore ? `${match.score1 || 0}-${match.score2 || 0}` : 'Chưa có lịch thi đấu'
                     // Thêm penalty score nếu có và hòa (chỉ cho single-elimination, round-robin không cần)
-                    if (hasScore && match.score1 === match.score2 && 
+                    if (!isRoundRobin && hasScore && match.score1 === match.score2 && 
                         match.penaltyScore1 !== null && match.penaltyScore2 !== null) {
                       scoreText += ` (${match.penaltyScore1 || 0}-${match.penaltyScore2 || 0} P)`
                     }

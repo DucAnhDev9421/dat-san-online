@@ -177,12 +177,14 @@ const ScheduleManagementTab = ({ tournament }) => {
     }
 
     if (isRoundRobin) {
-      // Round-robin: Nhóm matches theo vòng (dựa trên matchNumber)
+      // Round-robin: Nhóm matches theo stage (có thể là round-robin, round-robin-v1, round-robin-round1-v1, etc.)
       const roundRobinMatches = tournament.matches
         .filter(m => {
           // Lọc bỏ matches có BYE
           const hasBye = m.team1Id === "BYE" || m.team2Id === "BYE";
-          return m.stage === 'round-robin' && !hasBye;
+          // Kiểm tra stage bắt đầu bằng 'round-robin'
+          const isRoundRobinStage = m.stage && (m.stage === 'round-robin' || m.stage.startsWith('round-robin'));
+          return isRoundRobinStage && !hasBye;
         })
         .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
       
@@ -190,37 +192,84 @@ const ScheduleManagementTab = ({ tournament }) => {
         return []
       }
 
-      // Nhóm matches theo vòng (giả sử backend đã sắp xếp matchNumber theo vòng)
-      const matchesPerRound = Math.ceil(roundRobinMatches.length / (tournament.maxParticipants || 4))
-      const rounds = []
-      const numRounds = Math.ceil(roundRobinMatches.length / matchesPerRound)
-      
-      for (let round = 0; round < numRounds; round++) {
-        const startIndex = round * matchesPerRound
-        const endIndex = startIndex + matchesPerRound
-        const roundMatches = roundRobinMatches
-          .slice(startIndex, endIndex)
-          .map(match => ({
+      // Nhóm matches theo stage để tạo các vòng
+      // Các stage có thể là: round-robin-v1, round-robin-v2, round-robin-round1-v1, round-robin-round1-v2, etc.
+      const matchesByStage = {}
+      roundRobinMatches.forEach(match => {
+        const stage = match.stage || 'round-robin'
+        if (!matchesByStage[stage]) {
+          matchesByStage[stage] = []
+        }
+        matchesByStage[stage].push(match)
+      })
+
+      // Sắp xếp các stage theo thứ tự: round-robin, round-robin-v1, round-robin-v2, ..., round-robin-round1-v1, ...
+      const sortedStages = Object.keys(matchesByStage).sort((a, b) => {
+        // Extract round và sub-round numbers để sắp xếp
+        const parseStage = (stage) => {
+          // round-robin -> round=0, subRound=0
+          if (stage === 'round-robin') return { round: 0, subRound: 0 }
+          
+          // round-robin-v2 -> round=1, subRound=2
+          const vMatch = stage.match(/round-robin-v(\d+)/)
+          if (vMatch) return { round: 1, subRound: parseInt(vMatch[1]) }
+          
+          // round-robin-round2-v3 -> round=2, subRound=3
+          const roundVMatch = stage.match(/round-robin-round(\d+)-v(\d+)/)
+          if (roundVMatch) return { round: parseInt(roundVMatch[1]), subRound: parseInt(roundVMatch[2]) }
+          
+          return { round: 0, subRound: 0 }
+        }
+        
+        const aParsed = parseStage(a)
+        const bParsed = parseStage(b)
+        
+        if (aParsed.round !== bParsed.round) return aParsed.round - bParsed.round
+        return aParsed.subRound - bParsed.subRound
+      })
+
+      // Tạo rounds từ các stage đã sắp xếp
+      const rounds = sortedStages.map((stage, index) => {
+        const stageMatches = matchesByStage[stage]
+          .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
+        
+        // Tạo label và fullName từ stage
+        let label = `V${index + 1}`
+        let fullName = `VÒNG ${index + 1}`
+        
+        if (stage === 'round-robin' && index === 0) {
+          label = 'Tất cả'
+          fullName = 'TẤT CẢ CÁC TRẬN ĐẤU'
+        } else {
+          // Parse stage để tạo label có ý nghĩa hơn
+          const roundVMatch = stage.match(/round-robin(?:-round(\d+))?-v(\d+)/)
+          if (roundVMatch) {
+            const roundNum = roundVMatch[1] ? parseInt(roundVMatch[1]) : 1
+            const subRoundNum = parseInt(roundVMatch[2])
+            label = roundNum > 1 ? `Lượt ${roundNum} - V${subRoundNum}` : `V${subRoundNum}`
+            fullName = roundNum > 1 ? `LƯỢT ${roundNum} - VÒNG ${subRoundNum}` : `VÒNG ${subRoundNum}`
+          }
+        }
+        
+        return {
+          id: index + 1,
+          name: stage,
+          label: label,
+          fullName: fullName,
+          matches: stageMatches.map(match => ({
             id: match.matchNumber || match.id,
             team1: match.team1Id || null,
             team2: match.team2Id || null,
             _match: match
           }))
-        
-        rounds.push({
-          id: round + 1,
-          name: 'round-robin',
-          label: round === 0 ? 'Tất cả' : `V${round + 1}`,
-          fullName: round === 0 ? 'TẤT CẢ CÁC TRẬN ĐẤU' : `VÒNG ${round + 1}`,
-          matches: roundMatches
-        })
-      }
+        }
+      })
       
       return rounds
     } else {
-      // Single-elimination: CHỈ nhóm matches theo stage từ API
+      // Single-elimination: CHỈ nhóm matches theo stage từ API (loại bỏ tất cả round-robin stages)
       const singleEliminationMatches = tournament.matches.filter(
-        m => m.stage && m.stage !== 'round-robin'
+        m => m.stage && m.stage !== 'round-robin' && !m.stage.startsWith('round-robin')
       )
 
       if (singleEliminationMatches.length === 0) {
@@ -276,9 +325,10 @@ const ScheduleManagementTab = ({ tournament }) => {
   useEffect(() => {
     if (rounds.length > 0 && rounds[activeRoundIndex]) {
       const currentRound = rounds[activeRoundIndex]
-      const stage = isRoundRobin ? 'round-robin' : currentRound.name
+      // Sử dụng stage thực tế từ currentRound.name (có thể là round-robin, round-robin-v1, round-robin-round1-v1, etc.)
+      const stage = currentRound.name
       
-      // Lấy matches từ database
+      // Lấy matches từ database với stage cụ thể
       const dbMatches = tournament?.matches?.filter(m => m.stage === stage) || []
       
       const initialSchedule = currentRound.matches.map(match => {
@@ -292,7 +342,7 @@ const ScheduleManagementTab = ({ tournament }) => {
         return {
           matchId: match.id,
           roundId: currentRound.id,
-          stage: stage,
+          stage: stage, // Sử dụng stage thực tế
           team1: match.team1,
           team2: match.team2,
           date: dbMatch?.date ? new Date(dbMatch.date).toISOString().split('T')[0] : '',

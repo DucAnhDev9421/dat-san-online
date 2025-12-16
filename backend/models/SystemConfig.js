@@ -10,6 +10,17 @@ const systemConfigSchema = new mongoose.Schema(
       max: 1,
       required: true,
     },
+    // Thông tin liên hệ hỗ trợ
+    supportEmail: {
+      type: String,
+      trim: true,
+      default: "support@datsanonline.com",
+    },
+    supportPhone: {
+      type: String,
+      trim: true,
+      default: "1900123456",
+    },
     // Các settings khác có thể thêm sau
     // siteName, siteDescription, logo, etc.
   },
@@ -22,7 +33,11 @@ const systemConfigSchema = new mongoose.Schema(
 systemConfigSchema.statics.getConfig = async function () {
   let config = await this.findOne();
   if (!config) {
-    config = new this({ platformFee: 0.1 });
+    config = new this({ 
+      platformFee: 0.1,
+      supportEmail: "support@datsanonline.com",
+      supportPhone: "1900123456"
+    });
     await config.save();
   }
   return config;

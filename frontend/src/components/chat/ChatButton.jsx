@@ -15,7 +15,6 @@ import './ChatButton.css';
 // Quick Replies - Common questions
 const QUICK_REPLIES = [
   { text: 'Tìm cơ sở gần nhất', message: 'Tìm các cơ sở gần tôi' },
-  { text: 'Đặt sân', message: 'Hướng dẫn tôi cách đặt sân' },
   { text: 'Gợi ý sân phù hợp', message: 'Gợi ý sân phù hợp' },
 ];
 
@@ -178,6 +177,23 @@ const ChatButton = () => {
               value: action.value
             }
           })));
+        }
+
+        // If needs radius selection (after sport selection in find_nearby flow)
+        if (response.data.needsRadiusSelection && response.data.radiusOptions) {
+          setFlowType('find_nearby');
+          setBookingStep('radius');
+          const radiusQuickReplies = response.data.radiusOptions.map(option => ({
+            text: option.text,
+            message: option.text,
+            data: {
+              type: 'radius',
+              value: option.value,
+              text: option.text
+            }
+          }));
+          setDynamicQuickReplies(radiusQuickReplies);
+          return;
         }
 
         // If needs sport selection, start find_nearby flow
@@ -955,7 +971,6 @@ const ChatButton = () => {
     // Handle sport selection
     if (bookingStep === 'sport' && data && data.type === 'sport') {
       setSelectedSport(data);
-      setBookingStep('search');
       setIsTyping(true);
       setIsLoading(true);
 
@@ -987,15 +1002,128 @@ const ChatButton = () => {
           setFlowType(null);
           setSelectedSport(null);
           setDynamicQuickReplies([]);
+          setIsTyping(false);
+          setIsLoading(false);
           return;
         }
 
-        // Call AI API with sport category and location
+        // Call AI API with sport category and location (without radius to trigger radius selection)
         const response = await aiApi.chat(
           'Tìm các cơ sở gần tôi',
           [],
           location,
           data.id
+        );
+
+        if (response.success) {
+          // If needs radius selection, show quick replies for radius selection
+          if (response.data.needsRadiusSelection && response.data.radiusOptions) {
+            setBookingStep('radius');
+            const radiusQuickReplies = response.data.radiusOptions.map(option => ({
+              text: option.text,
+              message: option.text,
+              data: {
+                type: 'radius',
+                value: option.value,
+                text: option.text
+              }
+            }));
+            setDynamicQuickReplies(radiusQuickReplies);
+            
+            // Add bot message asking for radius
+            const botMsg = {
+              id: Date.now() + 1,
+              role: 'bot',
+              content: response.data.message,
+              timestamp: new Date(),
+              quickReplies: radiusQuickReplies
+            };
+            setMessages(prev => [...prev, botMsg]);
+            setIsTyping(false);
+            setIsLoading(false);
+            return;
+          }
+
+          // Otherwise, show results
+          const botMsg = {
+            id: Date.now() + 1,
+            role: 'bot',
+            content: response.data.message,
+            facilities: response.data.facilities || [],
+            courts: response.data.courts || [],
+            timestamp: new Date()
+          };
+
+          setMessages(prev => [...prev, botMsg]);
+          setBookingStep(null);
+          setFlowType(null);
+          setSelectedSport(null);
+          setSelectedRadius(null);
+          setDynamicQuickReplies([]);
+        }
+      } catch (error) {
+        console.error('Error finding nearby facilities:', error);
+        const errorMsg = {
+          id: Date.now() + 1,
+          role: 'bot',
+          content: 'Xin lỗi, có lỗi xảy ra khi tìm kiếm. Vui lòng thử lại.',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMsg]);
+      } finally {
+        setIsTyping(false);
+        setIsLoading(false);
+      }
+    }
+
+    // Handle radius selection
+    if (bookingStep === 'radius' && data && data.type === 'radius') {
+      setSelectedRadius(data);
+      setBookingStep('search');
+      setIsTyping(true);
+      setIsLoading(true);
+
+      // Add user message
+      const userMsg = {
+        id: Date.now(),
+        role: 'user',
+        content: data.text,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMsg]);
+
+      try {
+        // Get user location
+        const location = userLocation ? {
+          lat: userLocation.latitude,
+          lng: userLocation.longitude
+        } : null;
+
+        if (!location) {
+          const errorMsg = {
+            id: Date.now() + 1,
+            role: 'bot',
+            content: 'Để tìm cơ sở gần nhất, vui lòng cung cấp vị trí của bạn.',
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, errorMsg]);
+          setBookingStep(null);
+          setFlowType(null);
+          setSelectedSport(null);
+          setSelectedRadius(null);
+          setDynamicQuickReplies([]);
+          setIsTyping(false);
+          setIsLoading(false);
+          return;
+        }
+
+        // Call AI API with sport category, location, and radius
+        const response = await aiApi.chat(
+          'Tìm các cơ sở gần tôi',
+          [],
+          location,
+          selectedSport?.id,
+          data.value
         );
 
         if (response.success) {
@@ -1012,6 +1140,7 @@ const ChatButton = () => {
           setBookingStep(null);
           setFlowType(null);
           setSelectedSport(null);
+          setSelectedRadius(null);
           setDynamicQuickReplies([]);
         }
       } catch (error) {

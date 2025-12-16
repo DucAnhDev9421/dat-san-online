@@ -76,6 +76,11 @@ export const analyzeIntent = (message) => {
     return 'goodbye';
   }
   
+  // Liên hệ hỗ trợ
+  if (msg.match(/(liên hệ|hỗ trợ|contact|support|số điện thoại|email|sdt|phone|gọi|gọi điện|nhắn tin|tin nhắn|chat|trợ giúp)/)) {
+    return 'contact_support';
+  }
+  
   // Tìm kiếm chung
   if (msg.length > 2) {
     return 'search';
@@ -88,7 +93,7 @@ export const analyzeIntent = (message) => {
  * Tạo câu trả lời dựa trên intent và context
  */
 export const generateResponse = (intent, context = {}) => {
-  const { facilities = [], courts = [], userBookings = [] } = context;
+  const { facilities = [], courts = [], userBookings = [], sportCategoryId, userLocation, radius } = context;
   
   switch (intent) {
     case 'greeting':
@@ -109,6 +114,27 @@ export const generateResponse = (intent, context = {}) => {
         };
       }
       
+      // Nếu đã có sportCategoryId nhưng chưa có radius, hỏi bán kính
+      if (context.sportCategoryId && !context.radius && context.userLocation) {
+        const radiusOptions = [
+          { text: '1 km', value: 1000 },
+          { text: '3 km', value: 3000 },
+          { text: '5 km', value: 5000 },
+          { text: '10 km', value: 10000 },
+          { text: '20 km', value: 20000 },
+          { text: '30 km', value: 30000 },
+          { text: '40 km', value: 40000 },
+          { text: '50 km', value: 50000 }
+        ];
+        return {
+          message: 'Bán kính tối đa mà bạn muốn tìm là bao nhiêu?',
+          facilities: [],
+          courts: [],
+          needsRadiusSelection: true,
+          radiusOptions: radiusOptions
+        };
+      }
+      
       if (!context.userLocation) {
         return {
           message: 'Để tìm cơ sở gần nhất, vui lòng cung cấp vị trí của bạn.',
@@ -118,20 +144,40 @@ export const generateResponse = (intent, context = {}) => {
       }
       
       if (facilities.length === 0) {
+        const radiusMsg = radius ? ` trong bán kính ${(radius / 1000).toFixed(0)}km` : '';
         return {
-          message: 'Không tìm thấy cơ sở nào gần vị trí của bạn cho môn thể thao này. Vui lòng thử tìm kiếm với môn thể thao khác.',
+          message: `Không tìm thấy cơ sở nào${radiusMsg} gần vị trí của bạn cho môn thể thao này. Vui lòng thử tìm kiếm với bán kính lớn hơn hoặc môn thể thao khác.`,
           facilities: [],
           courts: []
         };
       }
       
-      const facilityList = facilities.slice(0, 5).map(f => 
-        `${f.name} - ${f.address}${f.pricePerHour ? ` (Giá: ${f.pricePerHour.toLocaleString('vi-VN')}đ/giờ)` : ''}`
+      const radiusMsg = radius ? ` trong bán kính ${(radius / 1000).toFixed(0)}km` : '';
+      
+      // Show more facilities when radius is larger to demonstrate the difference
+      // For small radius (1-3km): show up to 5
+      // For medium radius (5km): show up to 8
+      // For large radius (10km): show up to 10
+      // For very large radius (20-50km): show up to 15
+      let displayLimit = 5;
+      if (radius) {
+        if (radius >= 20000) displayLimit = 15; // 20km or more
+        else if (radius >= 10000) displayLimit = 10; // 10km
+        else if (radius >= 5000) displayLimit = 8; // 5km
+        else displayLimit = 5; // 1-3km
+      }
+      
+      const facilityList = facilities.slice(0, displayLimit).map(f => 
+        `${f.name} - ${f.address}${f.distance ? ` (Cách ${(f.distance / 1000).toFixed(1)}km)` : ''}${f.pricePerHour ? ` (Giá: ${f.pricePerHour.toLocaleString('vi-VN')}đ/giờ)` : ''}`
       ).join('\n');
       
+      const moreInfo = facilities.length > displayLimit 
+        ? `\n\n... và còn ${facilities.length - displayLimit} cơ sở khác trong bán kính này.`
+        : '';
+      
       return {
-        message: `Tìm thấy ${facilities.length} cơ sở gần bạn:\n\n${facilityList}\n\nBạn có thể xem chi tiết và đặt sân tại các cơ sở này.`,
-        facilities: facilities.slice(0, 5),
+        message: `Tìm thấy ${facilities.length} cơ sở${radiusMsg}:\n\n${facilityList}${moreInfo}\n\nBạn có thể xem chi tiết và đặt sân tại các cơ sở này.`,
+        facilities: facilities.slice(0, displayLimit),
         courts: []
       };
     
@@ -265,6 +311,60 @@ export const generateResponse = (intent, context = {}) => {
         courts: []
       };
     
+    case 'contact_support':
+      // Context sẽ chứa supportContactInfo từ aiController
+      const supportInfo = context.supportContactInfo || {};
+      const ownerInfo = context.ownerContactInfo || {};
+      const facilityName = context.facilityName || null;
+      
+      let message = '';
+      
+      // Nếu có thông tin chủ sân (khi người dùng hỏi về một cơ sở cụ thể)
+      if (ownerInfo.phoneNumber || ownerInfo.email) {
+        message = `Thông tin liên hệ${facilityName ? ` của ${facilityName}` : ' chủ sân'}:\n\n`;
+        if (ownerInfo.phoneNumber) {
+          message += `📞 Số điện thoại: ${ownerInfo.phoneNumber}\n`;
+        }
+        if (ownerInfo.email) {
+          message += `📧 Email: ${ownerInfo.email}\n`;
+        }
+        message += '\nBạn có thể liên hệ trực tiếp với chủ sân để được hỗ trợ.';
+        
+        // Nếu cũng có thông tin admin, thêm vào như một lựa chọn khác
+        if (supportInfo.email || supportInfo.phone) {
+          message += '\n\n---\n\nNgoài ra, bạn cũng có thể liên hệ với bộ phận hỗ trợ hệ thống:\n';
+          if (supportInfo.phone) {
+            message += `📞 Số điện thoại: ${supportInfo.phone}\n`;
+          }
+          if (supportInfo.email) {
+            message += `📧 Email: ${supportInfo.email}\n`;
+          }
+        }
+      } 
+      // Nếu chỉ có thông tin admin/support
+      else if (supportInfo.email || supportInfo.phone) {
+        message = 'Thông tin liên hệ hỗ trợ:\n\n';
+        if (supportInfo.phone) {
+          message += `📞 Số điện thoại: ${supportInfo.phone}\n`;
+        }
+        if (supportInfo.email) {
+          message += `📧 Email: ${supportInfo.email}\n`;
+        }
+        message += '\nBạn có thể liên hệ với đội ngũ hỗ trợ để được giải đáp thắc mắc.';
+      } 
+      // Fallback
+      else {
+        message = 'Để được hỗ trợ, bạn có thể:\n- Liên hệ trực tiếp với chủ sân qua số điện thoại trên trang thông tin cơ sở\n- Gửi email hoặc gọi điện đến bộ phận hỗ trợ của hệ thống';
+      }
+      
+      return {
+        message: message,
+        facilities: [],
+        courts: [],
+        supportContactInfo: supportInfo,
+        ownerContactInfo: ownerInfo
+      };
+    
     case 'search':
       if (facilities.length > 0 || courts.length > 0) {
         const results = facilities.length > 0
@@ -313,6 +413,30 @@ export const generateResponse = (intent, context = {}) => {
     
     case 'unknown':
     default:
+      // If we have facilities found in context (from nearby search), return them
+      if (sportCategoryId && userLocation && radius && facilities.length > 0) {
+        // Show more facilities when radius is larger
+        let displayLimit = 5;
+        if (radius >= 20000) displayLimit = 15; // 20km or more
+        else if (radius >= 10000) displayLimit = 10; // 10km
+        else if (radius >= 5000) displayLimit = 8; // 5km
+        else displayLimit = 5; // 1-3km
+        
+        const facilityList = facilities.slice(0, displayLimit).map(f => 
+          `${f.name} - ${f.address}${f.distance ? ` (Cách ${(f.distance / 1000).toFixed(1)}km)` : ''}${f.pricePerHour ? ` (Giá: ${f.pricePerHour.toLocaleString('vi-VN')}đ/giờ)` : ''}`
+        ).join('\n');
+        
+        const moreInfo = facilities.length > displayLimit 
+          ? `\n\n... và còn ${facilities.length - displayLimit} cơ sở khác trong bán kính này.`
+          : '';
+        
+        return {
+          message: `Tìm thấy ${facilities.length} cơ sở trong bán kính ${(radius / 1000).toFixed(0)}km:\n\n${facilityList}${moreInfo}\n\nBạn có thể xem chi tiết và đặt sân tại các cơ sở này.`,
+          facilities: facilities.slice(0, displayLimit),
+          courts: []
+        };
+      }
+      
       return {
         message: 'Xin lỗi, tôi chưa hiểu yêu cầu của bạn. Bạn có thể:\n- Tìm cơ sở gần nhất\n- Tìm sân giá rẻ\n- Đặt sân\n- Kiểm tra sân trống\n- Gợi ý sân phù hợp',
         facilities: [],

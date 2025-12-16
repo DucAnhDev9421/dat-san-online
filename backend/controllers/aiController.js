@@ -14,6 +14,9 @@ import {
 } from '../utils/availabilityTemplates.js';
 import SportCategory from '../models/SportCategory.js';
 import CourtType from '../models/CourtType.js';
+import SystemConfig from '../models/SystemConfig.js';
+import Facility from '../models/Facility.js';
+import User from '../models/User.js';
 
 /**
  * POST /api/ai/chat
@@ -21,8 +24,17 @@ import CourtType from '../models/CourtType.js';
  */
 export const chat = async (req, res, next) => {
   try {
-    const { message, conversationHistory = [], userLocation, sportCategoryId } = req.body;
+    const { message, conversationHistory = [], userLocation, sportCategoryId, radius } = req.body;
     const userId = req.user?._id?.toString() || null;
+    
+    // Debug: Log radius value
+    console.log('[AI Chat] Received params:', {
+      message: message?.substring(0, 50),
+      hasUserLocation: !!userLocation,
+      sportCategoryId: sportCategoryId,
+      radius: radius,
+      radiusType: typeof radius
+    });
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({
@@ -185,8 +197,110 @@ export const chat = async (req, res, next) => {
       userQuery: filteredMessage,
       userLocation: userLocation || null,
       userId: userId,
-      sportCategoryId: sportCategoryId || null
+      sportCategoryId: sportCategoryId || null,
+      radius: radius || null
     });
+
+    // Xử lý intent contact_support - lấy thông tin liên hệ
+    if (intent === 'contact_support') {
+      try {
+        // Lấy thông tin hỗ trợ từ SystemConfig
+        const systemConfig = await SystemConfig.getConfig();
+        context.supportContactInfo = {
+          email: systemConfig.supportEmail || 'support@datsanonline.com',
+          phone: systemConfig.supportPhone || '1900123456'
+        };
+
+        // Thử tìm tên cơ sở trong tin nhắn hoặc conversation history
+        let facilityName = null;
+        
+        // Tìm trong tin nhắn hiện tại - nhiều pattern khác nhau
+        const facilityPatterns = [
+          /(?:cơ sở|sân|facility|sân thể thao)\s+([^,.\n?]+)/i,
+          /([^,.\n?]+)\s+(?:cơ sở|sân|facility)/i,
+          /liên hệ\s+(?:với\s+)?([^,.\n?]+)/i
+        ];
+        
+        for (const pattern of facilityPatterns) {
+          const match = filteredMessage.match(pattern);
+          if (match && match[1]) {
+            facilityName = match[1].trim();
+            // Loại bỏ các từ không cần thiết
+            facilityName = facilityName.replace(/\b(của|với|tại|ở)\b/gi, '').trim();
+            if (facilityName.length > 2) {
+              break;
+            }
+          }
+        }
+        
+        // Tìm trong conversation history
+        if (!facilityName && conversationHistory && conversationHistory.length > 0) {
+          const reversedHistory = [...conversationHistory].reverse();
+          for (const msg of reversedHistory) {
+            const content = msg.content || '';
+            for (const pattern of facilityPatterns) {
+              const match = content.match(pattern);
+              if (match && match[1]) {
+                facilityName = match[1].trim().replace(/\b(của|với|tại|ở)\b/gi, '').trim();
+                if (facilityName.length > 2) {
+                  break;
+                }
+              }
+            }
+            if (facilityName && facilityName.length > 2) break;
+          }
+        }
+
+        // Nếu tìm thấy tên cơ sở, lấy thông tin chủ sân
+        if (facilityName) {
+          const facility = await Facility.findOne({
+            name: { $regex: facilityName, $options: 'i' },
+            status: 'opening'
+          })
+          .populate('owner', 'email phone name')
+          .lean();
+
+          if (facility && facility.owner) {
+            context.facilityName = facility.name;
+            context.ownerContactInfo = {
+              phoneNumber: facility.phoneNumber || facility.owner.phone || null,
+              email: facility.owner.email || null,
+              ownerName: facility.owner.name || null
+            };
+          }
+        }
+
+        // Nếu không tìm thấy cơ sở cụ thể, kiểm tra xem có facilityId trong context không
+        if (!context.ownerContactInfo && context.facilities && context.facilities.length > 0) {
+          // Lấy facility đầu tiên từ context
+          const firstFacility = context.facilities[0];
+          if (firstFacility.id) {
+            const facility = await Facility.findById(firstFacility.id)
+              .populate('owner', 'email phone name')
+              .lean();
+
+            if (facility && facility.owner) {
+              context.facilityName = facility.name;
+              context.ownerContactInfo = {
+                phoneNumber: facility.phoneNumber || facility.owner.phone || null,
+                email: facility.owner.email || null,
+                ownerName: facility.owner.name || null
+              };
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching contact info:', error);
+        // Fallback: vẫn trả về thông tin support từ SystemConfig
+        const systemConfig = await SystemConfig.getConfig().catch(() => null);
+        if (systemConfig) {
+          context.supportContactInfo = {
+            email: systemConfig.supportEmail || 'support@datsanonline.com',
+            phone: systemConfig.supportPhone || '1900123456'
+          };
+        }
+      }
+    }
 
     // Tạo câu trả lời dựa trên intent và context
     const response = generateResponse(intent, context);
@@ -198,6 +312,10 @@ export const chat = async (req, res, next) => {
         facilities: response.facilities || [],
         courts: response.courts || [],
         needsSportSelection: response.needsSportSelection || false,
+        needsRadiusSelection: response.needsRadiusSelection || false,
+        radiusOptions: response.radiusOptions || [],
+        supportContactInfo: response.supportContactInfo || null,
+        ownerContactInfo: response.ownerContactInfo || null,
         context: {
           facilitiesCount: response.facilities?.length || 0,
           courtsCount: response.courts?.length || 0,

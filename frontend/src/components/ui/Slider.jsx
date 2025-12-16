@@ -3,10 +3,12 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { debounce } from '../../utils/optimization'
 import './Slider.css'
 
-export default function Slider({ children, className = '', itemWidth = 320, gap = 16, loop = false, autoPlay = false, autoPlayInterval = 3000 }) {
+export default function Slider({ children, className = '', itemWidth = 320, gap = 16, loop = false, autoPlay = false, autoPlayInterval = 3000, mobileItemWidth = null }) {
     const scrollContainerRef = useRef(null)
     const [canScrollLeft, setCanScrollLeft] = useState(false)
     const [canScrollRight, setCanScrollRight] = useState(true)
+    const [isMobile, setIsMobile] = useState(false)
+    const [calculatedItemWidth, setCalculatedItemWidth] = useState(itemWidth)
     const isScrollingRef = useRef(false)
     const autoPlayTimerRef = useRef(null)
     const scrollTimeoutRef = useRef(null)
@@ -16,6 +18,39 @@ export default function Slider({ children, className = '', itemWidth = 320, gap 
     const childrenArray = useMemo(() => {
         return React.Children.toArray(children)
     }, [children])
+
+    // Calculate responsive itemWidth for mobile
+    useEffect(() => {
+        const calculateItemWidth = () => {
+            const width = window.innerWidth
+            const isMobileDevice = width <= 768
+            
+            setIsMobile(isMobileDevice)
+            
+            if (isMobileDevice) {
+                // On mobile, calculate width based on viewport minus padding
+                // Default: viewport width - 32px (16px padding on each side) - gap
+                if (mobileItemWidth !== null) {
+                    setCalculatedItemWidth(mobileItemWidth)
+                } else {
+                    // Auto-calculate: use 85% of viewport width for better mobile UX
+                    const containerPadding = 32 // 16px on each side
+                    const calculated = Math.floor((width - containerPadding - gap) * 0.85)
+                    setCalculatedItemWidth(Math.max(calculated, 280)) // Minimum 280px
+                }
+            } else {
+                setCalculatedItemWidth(itemWidth)
+            }
+        }
+
+        calculateItemWidth()
+        const debouncedResize = debounce(calculateItemWidth, 150)
+        window.addEventListener('resize', debouncedResize)
+        
+        return () => {
+            window.removeEventListener('resize', debouncedResize)
+        }
+    }, [itemWidth, mobileItemWidth, gap])
 
     // For infinite loop, duplicate items
     const duplicatedChildren = useMemo(() => {
@@ -40,7 +75,7 @@ export default function Slider({ children, className = '', itemWidth = 320, gap 
 
         const container = scrollContainerRef.current
         const { scrollLeft } = container
-        const itemWidthWithGap = itemWidth + gap
+        const itemWidthWithGap = calculatedItemWidth + gap
         const singleSetWidth = itemWidthWithGap * childrenArray.length
 
         // Calculate which set we're in (0 = first, 1 = middle, 2 = last)
@@ -82,7 +117,7 @@ export default function Slider({ children, className = '', itemWidth = 320, gap 
                 const container = scrollContainerRef.current
                 // Wait for layout to be calculated
                 requestAnimationFrame(() => {
-                    const itemWidthWithGap = itemWidth + gap
+                    const itemWidthWithGap = calculatedItemWidth + gap
                     const singleSetWidth = itemWidthWithGap * childrenArray.length
                     // Start at the middle set (second set) to allow scrolling in both directions
                     container.style.scrollBehavior = 'auto'
@@ -119,14 +154,14 @@ export default function Slider({ children, className = '', itemWidth = 320, gap 
             }
         }
         return () => clearTimeout(timer)
-    }, [children, loop, itemWidth, gap, childrenArray.length])
+    }, [children, loop, calculatedItemWidth, gap, childrenArray.length])
 
     // Auto-play functionality
     useEffect(() => {
         if (autoPlay && loop && childrenArray.length > 0) {
             autoPlayTimerRef.current = setInterval(() => {
                 if (scrollContainerRef.current && !isScrollingRef.current) {
-                    const scrollAmount = itemWidth + gap
+                    const scrollAmount = calculatedItemWidth + gap
                     scrollContainerRef.current.scrollBy({
                         left: scrollAmount,
                         behavior: 'smooth'
@@ -140,7 +175,7 @@ export default function Slider({ children, className = '', itemWidth = 320, gap 
                 }
             }
         }
-    }, [autoPlay, loop, autoPlayInterval, itemWidth, gap, childrenArray.length])
+    }, [autoPlay, loop, autoPlayInterval, calculatedItemWidth, gap, childrenArray.length])
 
     const scroll = (direction) => {
         if (!scrollContainerRef.current) return
@@ -151,7 +186,7 @@ export default function Slider({ children, className = '', itemWidth = 320, gap 
             return
         }
 
-        const scrollAmount = itemWidth + gap
+        const scrollAmount = calculatedItemWidth + gap
         const container = scrollContainerRef.current
         const currentScroll = container.scrollLeft
         
@@ -214,8 +249,8 @@ export default function Slider({ children, className = '', itemWidth = 320, gap 
     const displayChildren = loop ? duplicatedChildren : childrenArray
 
     return (
-        <div className={`ui-slider-container ${className}`}>
-            {(canScrollLeft || loop) && (
+        <div className={`ui-slider-container ${className} ${isMobile ? 'ui-slider-container-mobile' : ''}`}>
+            {(canScrollLeft || loop) && !isMobile && (
                 <button
                     className="ui-slider-btn ui-slider-btn-left"
                     onClick={() => scroll('left')}
@@ -227,17 +262,23 @@ export default function Slider({ children, className = '', itemWidth = 320, gap 
 
             <div
                 ref={scrollContainerRef}
-                className={`ui-slider-track ${loop ? 'ui-slider-loop' : ''}`}
+                className={`ui-slider-track ${loop ? 'ui-slider-loop' : ''} ${isMobile ? 'ui-slider-mobile' : ''}`}
                 style={{ gap: `${gap}px` }}
             >
                 {displayChildren.map((child, index) => (
-                    <div key={loop ? `loop-${index}` : child.key || index}>
+                    <div 
+                        key={loop ? `loop-${index}` : child.key || index}
+                        style={{ 
+                            flex: `0 0 ${calculatedItemWidth}px`,
+                            width: `${calculatedItemWidth}px`
+                        }}
+                    >
                         {child}
                     </div>
                 ))}
             </div>
 
-            {(canScrollRight || loop) && (
+            {(canScrollRight || loop) && !isMobile && (
                 <button
                     className="ui-slider-btn ui-slider-btn-right"
                     onClick={() => scroll('right')}

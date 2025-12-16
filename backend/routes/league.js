@@ -2186,29 +2186,56 @@ router.post(
       if (isRoundRobin) {
         // Round-robin: tạo tất cả các cặp đấu (mỗi đội đấu với tất cả đội khác) × số lượt
         const numRounds = league.numRounds || 1;
+        const numTeams = validTeams.length;
         let matchNumber = 1;
-        const matchesPerRound = 2; // Mỗi vòng 2 trận
         
-        // Tạo tất cả các cặp đấu cho 1 lượt
-        const allPairs = [];
+        // Tính số trận đấu mỗi vòng dựa trên số đội
+        // Với n đội: tổng số trận = n*(n-1)/2
+        // Chia đều thành các vòng, mỗi vòng có thể có tối đa Math.floor(n/2) trận (nếu n chẵn) hoặc Math.floor(n/2) trận (nếu n lẻ)
+        // Nhưng để linh hoạt hơn, ta tính dựa trên số đội: nếu <= 4 đội thì 2 trận/vòng, nếu > 4 đội thì Math.floor(n/2) trận/vòng
+        const totalMatchesPerLeg = (numTeams * (numTeams - 1)) / 2;
+        let matchesPerRound;
+        if (numTeams <= 4) {
+          matchesPerRound = 2; // Với ít đội, mỗi vòng 2 trận
+        } else if (numTeams <= 6) {
+          matchesPerRound = Math.floor(numTeams / 2); // Với 5-6 đội, mỗi vòng có thể có 2-3 trận
+        } else {
+          matchesPerRound = Math.floor(numTeams / 2); // Với nhiều đội hơn, mỗi vòng có thể có nhiều trận hơn
+        }
+        
+        // Tạo tất cả các cặp đấu cho 1 lượt (cơ sở cho tất cả các lượt)
+        const basePairs = [];
         for (let i = 0; i < shuffledTeams.length; i++) {
           for (let j = i + 1; j < shuffledTeams.length; j++) {
-            allPairs.push({
+            basePairs.push({
               team1Id: shuffledTeams[i].id !== null && shuffledTeams[i].id !== undefined ? shuffledTeams[i].id : shuffledTeams[i]._id,
               team2Id: shuffledTeams[j].id !== null && shuffledTeams[j].id !== undefined ? shuffledTeams[j].id : shuffledTeams[j]._id,
             });
           }
         }
         
-        // Tạo matches cho từng lượt, chia thành các vòng nhỏ (mỗi vòng 2 trận)
+        // Helper function để xáo trộn mảng bằng Fisher-Yates shuffle
+        const shuffleArray = (array) => {
+          const shuffled = [...array];
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+          return shuffled;
+        };
+        
+        // Tạo matches cho từng lượt với thứ tự ngẫu nhiên khác nhau
         for (let round = 1; round <= numRounds; round++) {
+          // Xáo trộn lại các cặp đấu cho mỗi lượt để có thứ tự ngẫu nhiên khác nhau
+          const shuffledPairs = shuffleArray(basePairs);
+          
           // Chia allPairs thành các vòng nhỏ
-          const totalRoundsPerLeg = Math.ceil(allPairs.length / matchesPerRound);
+          const totalRoundsPerLeg = Math.ceil(shuffledPairs.length / matchesPerRound);
           
           for (let subRound = 1; subRound <= totalRoundsPerLeg; subRound++) {
             const startIndex = (subRound - 1) * matchesPerRound;
-            const endIndex = Math.min(startIndex + matchesPerRound, allPairs.length);
-            const roundPairs = allPairs.slice(startIndex, endIndex);
+            const endIndex = Math.min(startIndex + matchesPerRound, shuffledPairs.length);
+            const roundPairs = shuffledPairs.slice(startIndex, endIndex);
             
             // Tạo stage name: round-robin-round1-v1, round-robin-round1-v2, ... (nếu numRounds > 1)
             // hoặc round-robin-v1, round-robin-v2, ... (nếu numRounds = 1)

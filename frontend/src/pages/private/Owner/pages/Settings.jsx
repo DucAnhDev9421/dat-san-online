@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Save, RefreshCw, Loader, CreditCard } from "lucide-react";
+import { Save, RefreshCw, Loader, CreditCard, Plus, X, Trophy } from "lucide-react";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { facilityApi } from "../../../../api/facilityApi";
 import { userApi } from "../../../../api/userApi";
+import { categoryApi } from "../../../../api/categoryApi";
 import { toast } from "react-toastify";
 
 const Settings = () => {
@@ -43,6 +44,14 @@ const Settings = () => {
     bankName: "",
   });
   const [bankAccountLoading, setBankAccountLoading] = useState(false);
+  
+  // Sport categories management
+  const [sportCategories, setSportCategories] = useState([]); // Available sport categories from admin
+  const [facilitySports, setFacilitySports] = useState([]); // Sports currently in facility
+  const [newSportInput, setNewSportInput] = useState(""); // Input for adding new sport
+  const [selectedSportCategory, setSelectedSportCategory] = useState(""); // Selected from dropdown
+  const [loadingSports, setLoadingSports] = useState(false);
+  const [savingSports, setSavingSports] = useState(false);
   
   // Bank list
   const banks = [
@@ -116,6 +125,11 @@ const Settings = () => {
               smsNotifications: false,
               maintenanceMode: facility.status === "maintenance",
             });
+            
+            // Load facility sports
+            if (facility.types && Array.isArray(facility.types)) {
+              setFacilitySports(facility.types);
+            }
           } else {
             toast.warning("Bạn chưa có cơ sở nào. Vui lòng tạo cơ sở trước.");
           }
@@ -149,6 +163,25 @@ const Settings = () => {
     };
     fetchBankAccount();
   }, [user]);
+
+  // Fetch available sport categories
+  useEffect(() => {
+    const fetchSportCategories = async () => {
+      try {
+        setLoadingSports(true);
+        const result = await categoryApi.getSportCategories({ status: "active" });
+        if (result.success && result.data) {
+          setSportCategories(Array.isArray(result.data) ? result.data : []);
+        }
+      } catch (error) {
+        console.error("Error fetching sport categories:", error);
+        toast.error("Không thể tải danh sách môn thể thao");
+      } finally {
+        setLoadingSports(false);
+      }
+    };
+    fetchSportCategories();
+  }, []);
 
   const handleInputChange = (field, value) => {
     setSettings(prev => ({
@@ -858,6 +891,349 @@ const Settings = () => {
     }
   };
 
+  // Sport categories management functions
+  const handleAddSportFromDropdown = () => {
+    if (!selectedSportCategory) {
+      toast.error("Vui lòng chọn môn thể thao");
+      return;
+    }
+    
+    const selectedCategory = sportCategories.find(
+      cat => (cat._id || cat.id) === selectedSportCategory
+    );
+    
+    if (!selectedCategory) {
+      toast.error("Môn thể thao không hợp lệ");
+      return;
+    }
+    
+    const sportName = selectedCategory.name;
+    
+    if (facilitySports.includes(sportName)) {
+      toast.warning("Môn thể thao này đã có trong danh sách");
+      return;
+    }
+    
+    setFacilitySports([...facilitySports, sportName]);
+    setSelectedSportCategory("");
+    toast.success(`Đã thêm "${sportName}" vào danh sách`);
+  };
+
+  const handleAddCustomSport = () => {
+    const sportName = newSportInput.trim();
+    
+    if (!sportName) {
+      toast.error("Vui lòng nhập tên môn thể thao");
+      return;
+    }
+    
+    if (facilitySports.includes(sportName)) {
+      toast.warning("Môn thể thao này đã có trong danh sách");
+      setNewSportInput("");
+      return;
+    }
+    
+    setFacilitySports([...facilitySports, sportName]);
+    setNewSportInput("");
+    toast.success(`Đã thêm "${sportName}" vào danh sách`);
+  };
+
+  const handleRemoveSport = (sportName) => {
+    if (facilitySports.length <= 1) {
+      toast.error("Cơ sở phải có ít nhất một môn thể thao");
+      return;
+    }
+    
+    setFacilitySports(facilitySports.filter(sport => sport !== sportName));
+    toast.success(`Đã xóa "${sportName}" khỏi danh sách`);
+  };
+
+  const handleSaveSports = async () => {
+    if (!facilityId) {
+      toast.error("Không tìm thấy cơ sở để cập nhật");
+      return;
+    }
+
+    if (facilitySports.length === 0) {
+      toast.error("Cơ sở phải có ít nhất một môn thể thao");
+      return;
+    }
+
+    setSavingSports(true);
+    try {
+      const result = await facilityApi.updateFacility(facilityId, {
+        types: facilitySports,
+      });
+
+      if (result.success) {
+        toast.success("Cập nhật môn thể thao thành công!");
+      } else {
+        throw new Error(result.message || "Có lỗi xảy ra");
+      }
+    } catch (error) {
+      console.error("Error updating facility sports:", error);
+      toast.error(error.message || "Không thể cập nhật môn thể thao");
+    } finally {
+      setSavingSports(false);
+    }
+  };
+
+  const renderSportCategoriesSettings = () => {
+    if (loading) {
+      return (
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "center", 
+          alignItems: "center", 
+          minHeight: "400px",
+          background: "#fff",
+          borderRadius: 12,
+          padding: 24
+        }}>
+          <div style={{ textAlign: "center" }}>
+            <Loader size={32} style={{ animation: "spin 1s linear infinite", margin: "0 auto 16px" }} />
+            <div style={{ color: "#6b7280" }}>Đang tải thông tin cơ sở...</div>
+          </div>
+        </div>
+      );
+    }
+
+    if (!facilityId) {
+      return (
+        <div style={{ 
+          background: "#fff", 
+          borderRadius: 12, 
+          padding: 24, 
+          boxShadow: "0 6px 20px rgba(0,0,0,.06)",
+          textAlign: "center"
+        }}>
+          <div style={{ color: "#6b7280", fontSize: 16 }}>
+            Bạn chưa có cơ sở nào. Vui lòng tạo cơ sở trước khi cấu hình.
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: "grid", gap: 24 }}>
+        <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 6px 20px rgba(0,0,0,.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+            <Trophy size={24} color="#10b981" />
+            <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Quản lý môn thể thao</h3>
+          </div>
+          
+          <div style={{ marginBottom: 20, padding: 16, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
+            <div style={{ fontSize: 14, color: "#166534", lineHeight: 1.6 }}>
+              <strong>Lưu ý:</strong> Bạn có thể chọn môn thể thao từ danh sách có sẵn hoặc nhập tùy ý môn thể thao mới. 
+              Cơ sở phải có ít nhất một môn thể thao.
+            </div>
+          </div>
+
+          {/* Current sports list */}
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: "block", marginBottom: 12, fontWeight: 600, color: "#374151" }}>
+              Môn thể thao hiện tại ({facilitySports.length})
+            </label>
+            {facilitySports.length === 0 ? (
+              <div style={{ 
+                padding: 16, 
+                background: "#f9fafb", 
+                borderRadius: 8, 
+                border: "1px dashed #d1d5db",
+                textAlign: "center",
+                color: "#6b7280"
+              }}>
+                Chưa có môn thể thao nào. Vui lòng thêm môn thể thao.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {facilitySports.map((sport, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 12px",
+                      background: "#10b981",
+                      color: "#fff",
+                      borderRadius: 20,
+                      fontSize: 14,
+                      fontWeight: 500,
+                    }}
+                  >
+                    <span>{sport}</span>
+                    <button
+                      onClick={() => handleRemoveSport(sport)}
+                      disabled={facilitySports.length <= 1}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 20,
+                        height: 20,
+                        borderRadius: "50%",
+                        border: "none",
+                        background: "rgba(255, 255, 255, 0.3)",
+                        color: "#fff",
+                        cursor: facilitySports.length <= 1 ? "not-allowed" : "pointer",
+                        opacity: facilitySports.length <= 1 ? 0.5 : 1,
+                        fontSize: 12,
+                        padding: 0,
+                      }}
+                      title="Xóa môn thể thao"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add sport from dropdown */}
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+              Thêm từ danh sách có sẵn
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <select
+                value={selectedSportCategory}
+                onChange={(e) => setSelectedSportCategory(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: "12px 16px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  fontSize: 14,
+                  outline: "none",
+                  background: "#fff",
+                }}
+                disabled={loadingSports}
+              >
+                <option value="">Chọn môn thể thao...</option>
+                {sportCategories
+                  .filter(cat => !facilitySports.includes(cat.name))
+                  .map((category) => (
+                    <option key={category._id || category.id} value={category._id || category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+              </select>
+              <button
+                onClick={handleAddSportFromDropdown}
+                disabled={!selectedSportCategory || loadingSports}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "12px 20px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: !selectedSportCategory || loadingSports ? "#9ca3af" : "#3b82f6",
+                  color: "#fff",
+                  fontWeight: 600,
+                  cursor: !selectedSportCategory || loadingSports ? "not-allowed" : "pointer",
+                  fontSize: 14,
+                }}
+              >
+                <Plus size={16} />
+                Thêm
+              </button>
+            </div>
+          </div>
+
+          {/* Add custom sport */}
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+              Thêm môn thể thao tùy ý
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                value={newSportInput}
+                onChange={(e) => setNewSportInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") {
+                    handleAddCustomSport();
+                  }
+                }}
+                placeholder="Nhập tên môn thể thao (VD: Bóng rổ, Bóng chuyền...)"
+                style={{
+                  flex: 1,
+                  padding: "12px 16px",
+                  borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+              />
+              <button
+                onClick={handleAddCustomSport}
+                disabled={!newSportInput.trim()}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "12px 20px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: !newSportInput.trim() ? "#9ca3af" : "#10b981",
+                  color: "#fff",
+                  fontWeight: 600,
+                  cursor: !newSportInput.trim() ? "not-allowed" : "pointer",
+                  fontSize: 14,
+                }}
+              >
+                <Plus size={16} />
+                Thêm
+              </button>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+              Bạn có thể nhập bất kỳ tên môn thể thao nào bạn muốn
+            </div>
+          </div>
+
+          {/* Save button */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 8 }}>
+            <button
+              onClick={handleSaveSports}
+              disabled={savingSports || facilitySports.length === 0}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "12px 24px",
+                borderRadius: 8,
+                border: "none",
+                background: savingSports || facilitySports.length === 0
+                  ? "#9ca3af"
+                  : "#10b981",
+                color: "#fff",
+                fontWeight: 600,
+                cursor: savingSports || facilitySports.length === 0
+                  ? "not-allowed"
+                  : "pointer",
+              }}
+            >
+              {savingSports ? (
+                <>
+                  <Loader size={16} style={{ animation: "spin 1s linear infinite" }} />
+                  Đang lưu...
+                </>
+              ) : (
+                <>
+                  <Save size={16} />
+                  Lưu môn thể thao
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderBankAccountSettings = () => (
     <div style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 6px 20px rgba(0,0,0,.06)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
@@ -1039,6 +1415,7 @@ const Settings = () => {
       <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
         {[
           { id: "general", label: "Cài đặt chung" },
+          { id: "sports", label: "Môn thể thao" },
           { id: "notifications", label: "Thông báo" },
           { id: "bankAccount", label: "Tài khoản ngân hàng" },
           { id: "system", label: "Hệ thống" },
@@ -1062,6 +1439,7 @@ const Settings = () => {
       </div>
 
       {activeTab === "general" && renderGeneralSettings()}
+      {activeTab === "sports" && renderSportCategoriesSettings()}
       {activeTab === "notifications" && renderNotificationSettings()}
       {activeTab === "bankAccount" && renderBankAccountSettings()}
       {activeTab === "system" && renderSystemSettings()}

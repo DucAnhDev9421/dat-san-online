@@ -202,20 +202,40 @@ export default function Facilities() {
     const district = addressParts[addressParts.length - 2]?.trim() || ''
     const city = addressParts[addressParts.length - 1]?.trim() || ''
 
-    // Format price
-    const formatPrice = (pricePerHour) => {
-      if (!pricePerHour) return 0
-      return pricePerHour
+    // Format price - giống HomePage
+    const formatPrice = (priceRange, pricePerHour) => {
+      // Ưu tiên sử dụng priceRange nếu có
+      if (priceRange && priceRange.min !== undefined && priceRange.max !== undefined) {
+        const minFormatted = new Intl.NumberFormat('vi-VN', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(priceRange.min);
+        const maxFormatted = new Intl.NumberFormat('vi-VN', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(priceRange.max);
+        return `${minFormatted} - ${maxFormatted} VND`;
+      }
+      // Fallback về pricePerHour nếu không có priceRange
+      if (pricePerHour) {
+        const formatted = new Intl.NumberFormat('vi-VN', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(pricePerHour);
+        return `${formatted} VND`;
+      }
+      return null;
     }
 
     return {
       id: facility._id || facility.id,
       name: facility.name,
       sport: facility.types?.[0] || 'Khác',
+      sports: facility.types || [], // Array of all sports
       city: city,
       district: district,
       open: formatOperatingHours(facility.operatingHours),
-      price: formatPrice(facility.pricePerHour),
+      price: formatPrice(facility.priceRange, facility.pricePerHour),
       rating: facility.averageRating || 0,
       totalReviews: facility.totalReviews || 0,
       status: facility.status === 'opening' ? 'Còn trống' : 'Đóng cửa',

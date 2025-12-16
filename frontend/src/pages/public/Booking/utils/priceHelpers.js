@@ -17,7 +17,7 @@ export const formatPrice = (priceRange, pricePerHour) => {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(priceRange.max);
-    return `${minFormatted} - ${maxFormatted} VND/khung giờ`;
+    return `${minFormatted} - ${maxFormatted} VND`;
   }
   // Fallback về pricePerHour nếu không có priceRange
   if (pricePerHour) {
@@ -25,9 +25,9 @@ export const formatPrice = (priceRange, pricePerHour) => {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(pricePerHour);
-    return `${formatted} VND/giờ`;
+    return `${formatted} VND`;
   }
-  return '0 VND/giờ';
+  return '0 VND';
 };
 
 /**

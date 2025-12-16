@@ -1099,7 +1099,7 @@ const RegistrationTab = ({ tournament }) => {
                 </div>
 
                 {/* Form Fields */}
-                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: isFootball ? '80px 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: 16 }}>
+                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: isFootball ? '80px 1fr 1fr 1fr' : '1fr 1fr', gap: 16 }}>
                   {isFootball && (
                     <div>
                       <label style={{
@@ -1128,36 +1128,38 @@ const RegistrationTab = ({ tournament }) => {
                     </div>
                   )}
 
-                  <div>
-                    <label style={{
-                      display: 'block',
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: '#374151',
-                      marginBottom: 6
-                    }}>
-                      Vị trí
-                    </label>
-                    <select
-                      value={member.position}
-                      onChange={(e) => handleMemberChange(index, 'position', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '10px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: 6,
-                        fontSize: 14,
-                        color: '#1f2937',
-                        background: '#fff',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <option value="">Chọn vị trí</option>
-                      {positions.map(pos => (
-                        <option key={pos} value={pos}>{pos}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {isFootball && (
+                    <div>
+                      <label style={{
+                        display: 'block',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: '#374151',
+                        marginBottom: 6
+                      }}>
+                        Vị trí
+                      </label>
+                      <select
+                        value={member.position}
+                        onChange={(e) => handleMemberChange(index, 'position', e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: 6,
+                          fontSize: 14,
+                          color: '#1f2937',
+                          background: '#fff',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <option value="">Chọn vị trí</option>
+                        {positions.map(pos => (
+                          <option key={pos} value={pos}>{pos}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div>
                     <label style={{

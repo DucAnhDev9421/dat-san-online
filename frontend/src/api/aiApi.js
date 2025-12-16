@@ -7,15 +7,17 @@ export const aiApi = {
    * @param {Array} conversationHistory - Previous conversation history
    * @param {Object} userLocation - User location {lat, lng}
    * @param {string} sportCategoryId - Sport category ID (optional)
+   * @param {number} radius - Search radius in meters (optional)
    * @returns {Promise} AI response
    */
-  chat: async (message, conversationHistory = [], userLocation = null, sportCategoryId = null) => {
+  chat: async (message, conversationHistory = [], userLocation = null, sportCategoryId = null, radius = null) => {
     try {
       const response = await api.post('/ai/chat', {
         message,
         conversationHistory,
         userLocation,
-        sportCategoryId
+        sportCategoryId,
+        radius
       });
       return handleApiSuccess(response);
     } catch (error) {
