@@ -9,8 +9,6 @@ const Reports = lazy(() => import("./pages/Reports"));
 const Reviews = lazy(() => import("./pages/Reviews"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Notifications = lazy(() => import("./pages/Notifications"));
-const Staff = lazy(() => import("./pages/Staff"));
-const ActivityLog = lazy(() => import("./pages/ActivityLog"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Leagues = lazy(() => import("./pages/Leagues"));
 const Rewards = lazy(() => import("./pages/Rewards"));
@@ -38,8 +36,6 @@ const OwnerRoutes = () => {
         <Route path="reviews" element={<Reviews />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="notifications" element={<Notifications />} />
-        <Route path="staff" element={<Staff />} />
-        <Route path="activity" element={<ActivityLog />} />
         <Route path="settings" element={<Settings />} />
         <Route path="leagues" element={<Leagues />} />
         <Route path="rewards" element={<Rewards />} />

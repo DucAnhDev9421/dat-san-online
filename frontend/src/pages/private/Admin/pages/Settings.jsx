@@ -1,44 +1,17 @@
-import React, { useState } from "react";
-import { Save, RefreshCw } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Save, RefreshCw, Loader2 } from "lucide-react";
 import ResetSettingsModal from "../modals/ResetSettingsModal";
 import SettingsTabs from "../components/Settings/SettingsTabs";
-import GeneralSettings from "../components/Settings/GeneralSettings";
-import SMTPSettings from "../components/Settings/SMTPSettings";
 import ServiceFeeSettings from "../components/Settings/ServiceFeeSettings";
-import APIKeysSettings from "../components/Settings/APIKeysSettings";
 import PolicySettings from "../components/Settings/PolicySettings";
 import SupportSettings from "../components/Settings/SupportSettings";
+import { systemConfigApi } from "../../../../api/systemConfigApi";
 
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeTab, setActiveTab] = useState("serviceFee");
   const [settings, setSettings] = useState({
-    // General
-    siteName: "Dat San Online",
-    siteDescription: "Hệ thống đặt sân bóng đá trực tuyến",
-    logo: null,
-    favicon: null,
-    logoUrl: "https://via.placeholder.com/200x60",
-    faviconUrl: "https://via.placeholder.com/32x32",
-
-    // SMTP
-    smtpHost: "smtp.gmail.com",
-    smtpPort: 587,
-    smtpSecure: false,
-    smtpUser: "noreply@datsanonline.com",
-    smtpPassword: "",
-    smtpFromName: "Dat San Online",
-    smtpFromEmail: "noreply@datsanonline.com",
-
     // Service Fee
     serviceFeePercent: 10,
-
-    // API Keys
-    vnpayTmnCode: "",
-    vnpayHashSecret: "",
-    momoPartnerCode: "",
-    momoAccessKey: "",
-    momoSecretKey: "",
-    vietmapApiKey: "",
 
     // Policy & Terms
     termsOfService: "Điều khoản sử dụng...",
@@ -52,13 +25,32 @@ const Settings = () => {
     supportHours: "Thứ 2 - Chủ nhật: 8:00 - 22:00",
   });
 
-  const [showPasswords, setShowPasswords] = useState({
-    smtpPassword: false,
-    vnpayHashSecret: false,
-    momoSecretKey: false,
-  });
-
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState(null);
+
+  // Load system config khi component mount
+  useEffect(() => {
+    const loadSystemConfig = async () => {
+      setIsLoading(true);
+      try {
+        const result = await systemConfigApi.getSystemConfig();
+        if (result.success && result.data) {
+          setSettings((prev) => ({
+            ...prev,
+            serviceFeePercent: result.data.serviceFeePercent || 10,
+          }));
+        }
+      } catch (error) {
+        console.error("Lỗi khi tải cấu hình hệ thống:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSystemConfig();
+  }, []);
 
   const handleInputChange = (field, value) => {
     setSettings((prev) => ({
@@ -67,29 +59,39 @@ const Settings = () => {
     }));
   };
 
-  const handleFileUpload = (field, file) => {
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSettings((prev) => ({
-          ...prev,
-          [field]: file,
-          [`${field}Url`]: reader.result,
-        }));
-      };
-      reader.readAsDataURL(file);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveMessage(null);
+    try {
+      // Chỉ lưu serviceFeePercent vào backend
+      const result = await systemConfigApi.updateSystemConfig({
+        serviceFeePercent: settings.serviceFeePercent,
+      });
+
+      if (result.success) {
+        setSaveMessage({
+          type: "success",
+          text: "Đã lưu cấu hình phí dịch vụ thành công!",
+        });
+        setTimeout(() => setSaveMessage(null), 3000);
+      } else {
+        setSaveMessage({
+          type: "error",
+          text: result.message || "Không thể lưu cấu hình",
+        });
+        setTimeout(() => setSaveMessage(null), 5000);
+      }
+    } catch (error) {
+      console.error("Lỗi khi lưu cấu hình:", error);
+      setSaveMessage({
+        type: "error",
+        text: error.message || "Đã xảy ra lỗi khi lưu cấu hình",
+      });
+      setTimeout(() => setSaveMessage(null), 5000);
+    } finally {
+      setIsSaving(false);
     }
-  };
-
-  const togglePasswordVisibility = (field) => {
-    setShowPasswords((prev) => ({
-      ...prev,
-      [field]: !prev[field],
-    }));
-  };
-
-  const handleSave = () => {
-    alert("Đã lưu cài đặt thành công!");
   };
 
   const handleReset = () => {
@@ -98,26 +100,7 @@ const Settings = () => {
 
   const handleConfirmReset = () => {
     setSettings({
-      siteName: "Dat San Online",
-      siteDescription: "Hệ thống đặt sân bóng đá trực tuyến",
-      logo: null,
-      favicon: null,
-      logoUrl: "https://via.placeholder.com/200x60",
-      faviconUrl: "https://via.placeholder.com/32x32",
-      smtpHost: "smtp.gmail.com",
-      smtpPort: 587,
-      smtpSecure: false,
-      smtpUser: "noreply@datsanonline.com",
-      smtpPassword: "",
-      smtpFromName: "Dat San Online",
-      smtpFromEmail: "noreply@datsanonline.com",
       serviceFeePercent: 10,
-      vnpayTmnCode: "",
-      vnpayHashSecret: "",
-      momoPartnerCode: "",
-      momoAccessKey: "",
-      momoSecretKey: "",
-      vietmapApiKey: "",
       termsOfService: "Điều khoản sử dụng...",
       privacyPolicy: "Chính sách bảo mật...",
       refundPolicy: "Chính sách hoàn tiền...",
@@ -159,54 +142,91 @@ const Settings = () => {
           </button>
           <button
             onClick={handleSave}
+            disabled={isSaving || activeTab !== "serviceFee"}
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: 8,
-              background: "#10b981",
+              background:
+                isSaving || activeTab !== "serviceFee"
+                  ? "#9ca3af"
+                  : "#10b981",
               color: "#fff",
               border: 0,
               borderRadius: 10,
               padding: "10px 14px",
-              cursor: "pointer",
+              cursor:
+                isSaving || activeTab !== "serviceFee"
+                  ? "not-allowed"
+                  : "pointer",
               fontWeight: 700,
+              opacity: isSaving || activeTab !== "serviceFee" ? 0.6 : 1,
             }}
           >
-            <Save size={16} /> Lưu cài đặt
+            {isSaving ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Đang lưu...
+              </>
+            ) : (
+              <>
+                <Save size={16} /> Lưu cài đặt
+              </>
+            )}
           </button>
         </div>
       </div>
 
       <SettingsTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {activeTab === "general" && (
-        <GeneralSettings
-          settings={settings}
-          onInputChange={handleInputChange}
-          onFileUpload={handleFileUpload}
-        />
-      )}
-      {activeTab === "smtp" && (
-        <SMTPSettings
-          settings={settings}
-          showPasswords={showPasswords}
-          onInputChange={handleInputChange}
-          onTogglePassword={togglePasswordVisibility}
-        />
-      )}
       {activeTab === "serviceFee" && (
-        <ServiceFeeSettings
-          settings={settings}
-          onInputChange={handleInputChange}
-        />
-      )}
-      {activeTab === "apiKeys" && (
-        <APIKeysSettings
-          settings={settings}
-          showPasswords={showPasswords}
-          onInputChange={handleInputChange}
-          onTogglePassword={togglePasswordVisibility}
-        />
+        <>
+          {isLoading ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "48px",
+                gap: 12,
+                color: "#6b7280",
+              }}
+            >
+              <Loader2 size={20} className="animate-spin" />
+              <span>Đang tải cấu hình...</span>
+            </div>
+          ) : (
+            <>
+              {saveMessage && (
+                <div
+                  style={{
+                    padding: "12px 16px",
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    background:
+                      saveMessage.type === "success"
+                        ? "#d1fae5"
+                        : "#fee2e2",
+                    color:
+                      saveMessage.type === "success"
+                        ? "#065f46"
+                        : "#991b1b",
+                    border: `1px solid ${
+                      saveMessage.type === "success"
+                        ? "#10b981"
+                        : "#ef4444"
+                    }`,
+                  }}
+                >
+                  {saveMessage.text}
+                </div>
+              )}
+              <ServiceFeeSettings
+                settings={settings}
+                onInputChange={handleInputChange}
+              />
+            </>
+          )}
+        </>
       )}
       {activeTab === "policy" && (
         <PolicySettings settings={settings} onInputChange={handleInputChange} />

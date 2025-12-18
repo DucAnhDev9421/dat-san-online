@@ -49,13 +49,16 @@
     "react-modal": "^3.16.3",
     "react-router": "^7.9.4",
     "react-router-dom": "^7.9.4",
+    "react-svg-pan-zoom": "^3.13.1",
     "react-toastify": "^11.0.5",
     "react-tournament-bracket": "^0.2.4",
+    "react-tournament-brackets": "^1.0.41",
     "recharts": "^3.2.1",
     "scrolltrigger": "^1.0.1",
     "socket.io-client": "^4.8.1",
     "sonner": "^2.0.7",
     "split-text": "^1.0.0",
+    "styled-components": "^6.1.19",
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {

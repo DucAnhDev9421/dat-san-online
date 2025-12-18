@@ -611,7 +611,39 @@ export const leagueApi = {
   },
 
   /**
-   * Update match result (score1, score2)
+   * Cancel match schedule - hủy lịch đấu cho một trận cụ thể
+   * DELETE /api/leagues/:id/matches/:stage/:matchNumber/schedule
+   * @param {String} leagueId - League ID
+   * @param {String} stage - Match stage
+   * @param {Number} matchNumber - Match number
+   * @returns {Promise} Cancel schedule result
+   */
+  cancelMatchSchedule: async (leagueId, stage, matchNumber) => {
+    try {
+      const response = await api.delete(`/leagues/${leagueId}/matches/${stage}/${matchNumber}/schedule`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Cancel all schedule - hủy toàn bộ lịch đấu đã chốt
+   * DELETE /api/leagues/:id/schedule/all
+   * @param {String} leagueId - League ID
+   * @returns {Promise} Cancel all schedule result
+   */
+  cancelAllSchedule: async (leagueId) => {
+    try {
+      const response = await api.delete(`/leagues/${leagueId}/schedule/all`);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Update match result (score1, score2, penaltyScore1, penaltyScore2)
    * PUT /api/leagues/:id/matches/result
    * Tự động tính winner và cập nhật vào vòng tiếp theo (single-elimination)
    * Cập nhật thống kê teams (wins, draws, losses) cho round-robin
@@ -620,15 +652,19 @@ export const leagueApi = {
    * @param {Number} matchNumber - Match number
    * @param {Number} score1 - Score of team 1
    * @param {Number} score2 - Score of team 2
+   * @param {Number} penaltyScore1 - Penalty score of team 1 (optional, for tie-breaker)
+   * @param {Number} penaltyScore2 - Penalty score of team 2 (optional, for tie-breaker)
    * @returns {Promise} Updated league object
    */
-  updateMatchResult: async (leagueId, stage, matchNumber, score1, score2) => {
+  updateMatchResult: async (leagueId, stage, matchNumber, score1, score2, penaltyScore1 = null, penaltyScore2 = null) => {
     try {
       const response = await api.put(`/leagues/${leagueId}/matches/result`, {
         stage,
         matchNumber,
         score1,
         score2,
+        penaltyScore1,
+        penaltyScore2,
       });
       return handleApiSuccess(response);
     } catch (error) {

@@ -50,6 +50,8 @@ import partnerRoutes from "./routes/partner.js";
 import feedbackRoutes from "./routes/feedback.js";
 import chatRoutes from "./routes/chat.js";
 import serviceRoutes from "./routes/service.js";
+import withdrawalRoutes from "./routes/withdrawal.js";
+import systemConfigRoutes from "./routes/systemConfig.js";
 import { startReservationExpiryJob } from "./jobs/reservationExpiry.js";
 import { startBookingAutoCancelJob } from "./jobs/bookingAutoCancel.js";
 
@@ -80,7 +82,20 @@ app.use(
 // CORS configuration
 app.use(
   cors({
-    origin: config.frontendUrl,
+    origin: function (origin, callback) {
+      // Cho phép tất cả origin trong development
+      if (config.nodeEnv === "development" || !origin) {
+        callback(null, true);
+      } else {
+        // Trong production, chỉ cho phép frontendUrl
+        const allowedOrigins = [config.frontendUrl];
+        if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+          callback(null, true);
+        } else {
+          callback(new Error("Not allowed by CORS"));
+        }
+      }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -157,6 +172,8 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/feedbacks", feedbackRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/services", serviceRoutes);
+app.use("/api/withdrawals", withdrawalRoutes);
+app.use("/api/system-config", systemConfigRoutes);
 // 404 handler
 app.use(notFound);
 

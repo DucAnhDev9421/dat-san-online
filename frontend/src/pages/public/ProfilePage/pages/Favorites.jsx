@@ -39,7 +39,7 @@ export default function Favorites() {
         style: 'currency',
         currency: 'VND',
         minimumFractionDigits: 0
-      }).format(pricePerHour) + '/giờ'
+      }).format(pricePerHour)
     }
 
     return {

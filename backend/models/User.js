@@ -45,6 +45,26 @@ const userSchema = new mongoose.Schema(
     dateOfBirth: {
       type: Date,
     },
+    
+    // ================== TÀI KHOẢN NGÂN HÀNG (Cho Owner) ==================
+    bankAccount: {
+      accountNumber: {
+        type: String,
+        trim: true,
+      },
+      accountName: {
+        type: String,
+        trim: true,
+      },
+      bankCode: {
+        type: String,
+        trim: true,
+      },
+      bankName: {
+        type: String,
+        trim: true,
+      },
+    },
 
     // ================== VAI TRÒ & CÀI ĐẶT ==================
     role: {
@@ -55,6 +75,12 @@ const userSchema = new mongoose.Schema(
     language: {
       type: String,
       default: "vi",
+    },
+    
+    // Cài đặt thông báo
+    emailNotifications: {
+      type: Boolean,
+      default: true, // Mặc định bật thông báo email
     },
 
     // ================== VÍ & LOYALTY (Đã sửa vị trí) ==================

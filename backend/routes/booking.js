@@ -10,6 +10,7 @@ import {
   authenticateToken,
   authorize,
   requireAdmin,
+  requireOwnerOrAdmin,
 } from "../middleware/auth.js";
 import { logAudit } from "../utils/auditLogger.js";
 import { emitToUser, emitToFacility, emitToOwners } from "../socket/index.js";
@@ -18,14 +19,16 @@ import {
   notifyFacilityOwner,
 } from "../utils/notificationService.js";
 import QRCode from "qrcode";
+import { generateTimeSlotsFromRange, timeToMinutes, minutesToTime } from "../utils/bookingHelpers.js";
 
 // === IMPORTS TỪ STASH (CHO TÍNH NĂNG VÍ & REWARD) ===
-import { debit } from "../utils/walletService.js";
+import { debit, credit } from "../utils/walletService.js";
+import { creditOwnerBalance } from "../utils/ownerBalanceService.js";
 import Payment from "../models/Payment.js";
 import { isSlotLocked } from "../socket/bookingSocket.js";
 import asyncHandler from "express-async-handler";
 import { processBookingRewards } from "../utils/rewardService.js";
-import { sendPaymentReceipt } from "../utils/emailService.js";
+import { sendPaymentReceipt, sendCancellationEmail, sendUserCancellationEmail } from "../utils/emailService.js";
 const router = express.Router();
 
 // === MIDDLEWARE TÙY CHỈNH ===
@@ -226,25 +229,6 @@ router.get("/availability", async (req, res, next) => {
       ],
     });
     
-    console.log(`[BOOKING_AVAILABILITY] Kiểm tra sân ${courtId} ngày ${bookingDate.toISOString().split('T')[0]}:`, {
-      queryDateRange: {
-        start: startOfDay.toISOString(),
-        end: endOfDay.toISOString(),
-        bookingDate: bookingDate.toISOString()
-      },
-      foundBookings: existingBookings.length,
-      bookings: existingBookings.map(b => ({
-        id: b._id,
-        status: b.status,
-        date: b.date,
-        dateISO: b.date?.toISOString(),
-        timeSlots: b.timeSlots,
-        league: b.league,
-        matchInfo: b.matchInfo,
-        holdUntil: b.holdUntil,
-        court: b.court
-      }))
-    });
 
     // Generate time slots based on operating hours
     const allSlots = [];
@@ -280,12 +264,99 @@ router.get("/availability", async (req, res, next) => {
         return hours * 60 + minutes;
       };
 
-      // Check if this slot is booked (check overlap, không chỉ exact match)
+      // Check if this slot is booked (check overlap với cả fixed và flexible bookings)
       const slotStartMinutes = timeToMinutes(startTime);
       const slotEndMinutes = timeToMinutes(endTime);
       
+      // Tạo Date objects cho slot để check overlap với flexible bookings
+      // Normalize bookingDate trước (đảm bảo cùng timezone và cùng ngày)
+      const normalizedBookingDate = new Date(bookingDate);
+      normalizedBookingDate.setHours(0, 0, 0, 0);
+      
+      const slotStartDate = new Date(normalizedBookingDate);
+      slotStartDate.setHours(Math.floor(slotStartMinutes / 60), slotStartMinutes % 60, 0, 0);
+      const slotEndDate = new Date(normalizedBookingDate);
+      slotEndDate.setHours(Math.floor(slotEndMinutes / 60), slotEndMinutes % 60, 0, 0);
+      
       const isBooked = existingBookings.some((booking) => {
-        // Check overlap với bất kỳ slot nào trong booking
+        // Helper: Get start/end time from booking (support both Mongoose document and plain object)
+        let bookStartTime = null;
+        let bookEndTime = null;
+        
+        // Get booking date and normalize it - sử dụng normalizedBookingDate để đảm bảo cùng timezone
+        const bookingDateObj = booking.date instanceof Date ? new Date(booking.date) : new Date(booking.date);
+        bookingDateObj.setHours(0, 0, 0, 0);
+        
+        // Đảm bảo dùng cùng normalizedBookingDate (từ query date) thay vì bookingDateObj
+        // để tránh vấn đề timezone
+        
+        // Try to get from startTime/endTime fields first (flexible booking)
+        if (booking.startTime) {
+          bookStartTime = booking.startTime instanceof Date ? new Date(booking.startTime) : new Date(booking.startTime);
+          // Normalize date part to match normalizedBookingDate (từ query, không phải booking.date)
+          bookStartTime.setFullYear(normalizedBookingDate.getFullYear(), normalizedBookingDate.getMonth(), normalizedBookingDate.getDate());
+        } else if (booking.getStartTime && typeof booking.getStartTime === 'function') {
+          // Mongoose document method
+          try {
+            bookStartTime = booking.getStartTime();
+            if (bookStartTime) {
+              bookStartTime = new Date(bookStartTime);
+              bookStartTime.setFullYear(normalizedBookingDate.getFullYear(), normalizedBookingDate.getMonth(), normalizedBookingDate.getDate());
+            }
+          } catch (e) {
+            // Method not available, continue to fallback
+          }
+        }
+        
+        if (!bookStartTime && booking.timeSlots && booking.timeSlots.length > 0) {
+          // Calculate from timeSlots if startTime not available
+          const firstSlot = booking.timeSlots[0];
+          const [startTimeStr] = firstSlot.split('-');
+          const [hours, minutes] = startTimeStr.split(':').map(Number);
+          bookStartTime = new Date(normalizedBookingDate);
+          bookStartTime.setHours(hours, minutes, 0, 0);
+        }
+        
+        if (booking.endTime) {
+          bookEndTime = booking.endTime instanceof Date ? new Date(booking.endTime) : new Date(booking.endTime);
+          // Normalize date part to match normalizedBookingDate (từ query, không phải booking.date)
+          bookEndTime.setFullYear(normalizedBookingDate.getFullYear(), normalizedBookingDate.getMonth(), normalizedBookingDate.getDate());
+        } else if (booking.getEndTime && typeof booking.getEndTime === 'function') {
+          // Mongoose document method
+          try {
+            bookEndTime = booking.getEndTime();
+            if (bookEndTime) {
+              bookEndTime = new Date(bookEndTime);
+              bookEndTime.setFullYear(normalizedBookingDate.getFullYear(), normalizedBookingDate.getMonth(), normalizedBookingDate.getDate());
+            }
+          } catch (e) {
+            // Method not available, continue to fallback
+          }
+        }
+        
+        if (!bookEndTime && booking.timeSlots && booking.timeSlots.length > 0) {
+          // Calculate from timeSlots if endTime not available
+          const lastSlot = booking.timeSlots[booking.timeSlots.length - 1];
+          const [, endTimeStr] = lastSlot.split('-');
+          const [hours, minutes] = endTimeStr.split(':').map(Number);
+          bookEndTime = new Date(normalizedBookingDate);
+          bookEndTime.setHours(hours, minutes, 0, 0);
+        }
+        
+        // Check overlap với Date objects nếu có
+        if (bookStartTime && bookEndTime) {
+          const hasOverlap = Booking.hasTimeOverlap(
+            slotStartDate,
+            slotEndDate,
+            bookStartTime,
+            bookEndTime
+          );
+          if (hasOverlap) {
+            return true;
+          }
+        }
+        
+        // Fallback: Check overlap với timeSlots (backward compatibility for edge cases)
         for (const bookingSlot of booking.timeSlots || []) {
           const [bookingSlotStart, bookingSlotEnd] = bookingSlot.split('-');
           const bookingSlotStartMinutes = timeToMinutes(bookingSlotStart);
@@ -317,12 +388,6 @@ router.get("/availability", async (req, res, next) => {
             }
           }
           return false;
-        });
-        console.log(`[BOOKING_AVAILABILITY] Slot ${slotString} bị block bởi booking ${blockingBooking?._id}:`, {
-          status: blockingBooking?.status,
-          league: blockingBooking?.league,
-          matchInfo: blockingBooking?.matchInfo,
-          bookingTimeSlots: blockingBooking?.timeSlots
         });
       }
 
@@ -476,6 +541,25 @@ router.post("/", authenticateToken, async (req, res, next) => {
     // Apply discount to total amount
     const finalAmount = Math.max(0, calculatedAmount - finalDiscountAmount);
 
+    // Calculate startTime và endTime từ timeSlots (cho fixed booking)
+    let startTimeFromSlots = null;
+    let endTimeFromSlots = null;
+    
+    if (timeSlots && timeSlots.length > 0) {
+      const firstSlot = timeSlots[0];
+      const lastSlot = timeSlots[timeSlots.length - 1];
+      const [startStr] = firstSlot.split('-');
+      const [, endStr] = lastSlot.split('-');
+      
+      const [startHour, startMin] = startStr.split(':').map(Number);
+      const [endHour, endMin] = endStr.split(':').map(Number);
+      
+      startTimeFromSlots = new Date(bookingDate);
+      startTimeFromSlots.setHours(startHour, startMin, 0, 0);
+      endTimeFromSlots = new Date(bookingDate);
+      endTimeFromSlots.setHours(endHour, endMin, 0, 0);
+    }
+
     // Create booking với status pending_payment và holdUntil
     const holdUntil = new Date(Date.now() + 5 * 60 * 1000); // 5 phút từ bây giờ
 
@@ -485,6 +569,9 @@ router.post("/", authenticateToken, async (req, res, next) => {
       facility: facilityId,
       date: bookingDate,
       timeSlots,
+      startTime: startTimeFromSlots, // Date object - tính từ timeSlots
+      endTime: endTimeFromSlots,     // Date object - tính từ timeSlots
+      isFlexibleBooking: false,      // Fixed booking
       contactInfo,
       totalAmount: finalAmount,
       promotionCode: promotionCode ? promotionCode.toUpperCase() : null,
@@ -570,6 +657,324 @@ router.post("/", authenticateToken, async (req, res, next) => {
       data: {
         booking,
         paymentPending: true,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/bookings/walk-in
+ * Tạo booking trực tiếp tại sân (Walk-in Booking) - Chỉ owner/admin
+ */
+router.post("/walk-in", authenticateToken, requireOwnerOrAdmin, async (req, res, next) => {
+  try {
+    const {
+      courtId,
+      facilityId,
+      date,
+      timeSlots, // Optional - cho booking cố định
+      // Flexible booking params:
+      startTime, // Date object hoặc timestamp
+      startTimeHour, // Number: 15
+      startTimeMinute, // Number: 30
+      duration, // Số phút (required nếu có startTime)
+      contactInfo,
+      totalAmount,
+      promotionCode,
+      discountAmount,
+    } = req.body;
+
+    // Validation cơ bản
+    if (!courtId || !facilityId || !date || !contactInfo) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng điền đầy đủ thông tin",
+      });
+    }
+
+    // Validate: Phải có timeSlots HOẶC (startTime và duration)
+    const hasTimeSlots = timeSlots && Array.isArray(timeSlots) && timeSlots.length > 0;
+    const hasFlexibleTime = (startTime || (startTimeHour !== undefined && startTimeMinute !== undefined)) && duration;
+    
+    if (!hasTimeSlots && !hasFlexibleTime) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp timeSlots hoặc startTime + duration",
+      });
+    }
+
+    // Validate duration nếu có startTime
+    if (hasFlexibleTime && (!duration || duration <= 0)) {
+      return res.status(400).json({
+        success: false,
+        message: "Duration phải lớn hơn 0",
+      });
+    }
+
+    // Validate contactInfo
+    if (!contactInfo.name) {
+      return res.status(400).json({
+        success: false,
+        message: "Tên khách hàng là bắt buộc",
+      });
+    }
+
+    // Check court exists
+    const court = await Court.findById(courtId).populate("facility");
+    if (!court) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy sân",
+      });
+    }
+
+    // Check court belongs to facility
+    const facility = await Facility.findById(facilityId);
+    if (!facility) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy cơ sở",
+      });
+    }
+
+    if (court.facility._id.toString() !== facilityId.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: "Sân không thuộc cơ sở này",
+      });
+    }
+
+    // Check permission: owner of facility or admin
+    if (req.user.role !== "admin" && facility.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền tạo booking cho cơ sở này",
+      });
+    }
+
+    // Check court status
+    if (court.status !== "active") {
+      return res.status(400).json({
+        success: false,
+        message: "Sân này hiện không hoạt động",
+      });
+    }
+
+    // Prepare booking date
+    const bookingDate = new Date(date);
+    bookingDate.setHours(0, 0, 0, 0);
+
+    // Handle flexible booking (startTime + duration)
+    let startTimeDate = null;
+    let endTimeDate = null;
+    let finalTimeSlots = timeSlots;
+    let isFlexible = false;
+
+    if (hasFlexibleTime) {
+      // Tạo Date objects cho startTime và endTime
+      if (startTimeHour !== undefined && startTimeMinute !== undefined) {
+        startTimeDate = new Date(bookingDate);
+        startTimeDate.setHours(startTimeHour, startTimeMinute, 0, 0);
+      } else if (startTime) {
+        startTimeDate = new Date(startTime);
+        // Đảm bảo startTimeDate cùng ngày với bookingDate
+        startTimeDate.setFullYear(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate());
+      }
+
+      if (!startTimeDate) {
+        return res.status(400).json({
+          success: false,
+          message: "Không thể xác định startTime",
+        });
+      }
+
+      // Calculate endTime từ startTime + duration
+      endTimeDate = new Date(startTimeDate);
+      endTimeDate.setMinutes(endTimeDate.getMinutes() + duration);
+
+      // Validate endTime không được null
+      if (!endTimeDate) {
+        return res.status(400).json({
+          success: false,
+          message: "Không thể tính toán endTime",
+        });
+      }
+
+      // Generate timeSlots từ startTime và endTime (cho backward compatibility)
+      const slotDuration = facility.timeSlotDuration || 60;
+      finalTimeSlots = generateTimeSlotsFromRange(startTimeDate, endTimeDate, slotDuration);
+      isFlexible = true;
+    }
+
+    // Check availability
+    const isAvailable = await Booking.checkAvailability(
+      courtId,
+      bookingDate,
+      finalTimeSlots, // Cho backward compatibility
+      startTimeDate,  // Date object cho flexible booking
+      endTimeDate     // Date object - LUÔN CÓ nếu có startTimeDate
+    );
+
+    if (!isAvailable) {
+      return res.status(400).json({
+        success: false,
+        message: "Thời gian đã được đặt hoặc đang bị giữ chỗ",
+      });
+    }
+
+    // Validate and process promotion code if provided
+    let promotion = null;
+    let finalDiscountAmount = discountAmount || 0;
+
+    if (promotionCode) {
+      promotion = await Promotion.findOne({
+        code: promotionCode.toUpperCase(),
+      });
+
+      if (!promotion) {
+        return res.status(400).json({
+          success: false,
+          message: "Mã khuyến mãi không tồn tại",
+        });
+      }
+
+      // Validate promotion using isValid method
+      const validation = promotion.isValid(facilityId, null);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: validation.reason || "Mã khuyến mãi không hợp lệ",
+        });
+      }
+
+      // Calculate discount amount if not provided
+      if (!discountAmount || discountAmount === 0) {
+        // Tính total amount tạm để validate promotion
+        const tempTotal = totalAmount || 
+          (finalTimeSlots ? court.price * finalTimeSlots.length : 
+           (duration ? court.price * Math.ceil(duration / 60) : court.price));
+        const discountCalc = promotion.calculateDiscount(tempTotal);
+        finalDiscountAmount = discountCalc.discountAmount;
+      }
+    }
+
+    // Calculate total amount if not provided
+    let calculatedAmount = totalAmount;
+    if (!calculatedAmount) {
+      // Tính theo số slot hoặc theo duration (phút)
+      if (finalTimeSlots && finalTimeSlots.length > 0) {
+        calculatedAmount = court.price * finalTimeSlots.length;
+      } else if (duration) {
+        // Tính theo giờ (làm tròn lên)
+        const hours = Math.ceil(duration / 60);
+        calculatedAmount = court.price * hours;
+      } else {
+        calculatedAmount = court.price; // Fallback: 1 giờ
+      }
+    }
+
+    // Apply discount to total amount
+    const finalAmount = Math.max(0, calculatedAmount - finalDiscountAmount);
+
+    // Create walk-in booking với status confirmed và payment cash
+    const booking = new Booking({
+      user: null, // Walk-in booking không có user
+      court: courtId,
+      facility: facilityId,
+      date: bookingDate,
+      timeSlots: finalTimeSlots, // Generated từ startTime/endTime hoặc từ request
+      startTime: startTimeDate,  // Date object - có nếu flexible
+      endTime: endTimeDate,      // Date object - LUÔN CÓ nếu có startTimeDate
+      isFlexibleBooking: isFlexible, // Đánh dấu flexible booking
+      contactInfo,
+      totalAmount: finalAmount,
+      promotionCode: promotionCode ? promotionCode.toUpperCase() : null,
+      discountAmount: finalDiscountAmount,
+      status: "confirmed", // Đã xác nhận ngay vì đặt trực tiếp
+      paymentStatus: "paid", // Đã thanh toán tiền mặt tại sân
+      paymentMethod: "cash", // Phương thức thanh toán: tiền mặt
+      holdUntil: null, // Không cần hold vì đã confirmed
+    });
+
+    await booking.save();
+
+    // Increment promotion usage count if promotion was used
+    if (promotion) {
+      promotion.usageCount = (promotion.usageCount || 0) + 1;
+      await promotion.save();
+    }
+
+    // Sinh mã QR
+    let qrPayload = { bookingId: booking._id.toString() };
+    const qrData = JSON.stringify(qrPayload);
+    booking.qrCode = await QRCode.toDataURL(qrData);
+    await booking.save();
+
+    // Credit owner balance
+    try {
+      const platformFee = 0.1; // 10% platform fee
+      const ownerAmount = booking.totalAmount * (1 - platformFee);
+      await creditOwnerBalance(facility.owner, ownerAmount, {
+        bookingId: booking._id.toString(),
+        bookingCode: booking.bookingCode,
+      });
+    } catch (error) {
+      console.error("Error crediting owner balance:", error);
+      // Không fail booking nếu có lỗi credit balance, chỉ log
+    }
+
+    // Populate for response
+    await booking.populate("court", "name type price");
+    await booking.populate("facility", "name address location");
+
+    // Notify facility owner about new walk-in booking
+    await notifyFacilityOwner({
+      facilityId: facilityId.toString(),
+      type: "booking",
+      title: "Có đặt sân trực tiếp mới",
+      message: `Có đặt sân trực tiếp tại ${facility.name}. Mã đặt sân: ${
+        booking.bookingCode || booking._id.toString().slice(-8).toUpperCase()
+      }.`,
+      metadata: {
+        bookingId: booking._id.toString(),
+        bookingCode: booking.bookingCode,
+        facilityId: facilityId.toString(),
+        courtId: courtId.toString(),
+        isWalkIn: true,
+      },
+    });
+
+    // Notify all users in facility room about slot update
+    emitToFacility(facilityId, "booking:slot:booked", {
+      facilityId: facilityId.toString(),
+      courtId,
+      date,
+      timeSlots,
+      bookingId: booking._id,
+    });
+
+    // Audit log
+    await logAudit({
+      userId: req.user._id,
+      action: "create_walkin_booking",
+      resourceType: "Booking",
+      resourceId: booking._id,
+      details: {
+        bookingCode: booking.bookingCode,
+        facilityId: facilityId.toString(),
+        courtId: courtId.toString(),
+        customerName: contactInfo.name,
+        totalAmount: finalAmount,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Tạo đặt sân trực tiếp thành công!",
+      data: {
+        booking,
       },
     });
   } catch (error) {
@@ -1129,6 +1534,69 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
 
     if (status === "cancelled") {
       booking.cancelledAt = new Date();
+      
+      // Nếu owner hủy đặt sân đã thanh toán, kiểm tra và hoàn tiền
+      if (booking.paymentStatus === "paid" && booking.user) {
+        // Tính toán thời gian trước giờ vào sân
+        const bookingDateTime = new Date(
+          `${booking.date.toISOString().split("T")[0]} ${
+            booking.timeSlots[0]?.split("-")[0] || "00:00"
+          }`
+        );
+        const now = new Date();
+        const hoursUntilBooking = (bookingDateTime - now) / (1000 * 60 * 60);
+
+        // Chỉ hoàn tiền nếu hủy trước giờ vào sân (>= 0 giờ)
+        if (hoursUntilBooking >= 0) {
+          let refundAmount = 0;
+          
+          // Tính refund dựa trên thời gian hủy
+          if (hoursUntilBooking >= 24) {
+            // Hủy 24+ giờ trước: hoàn 100%
+            refundAmount = booking.totalAmount;
+          } else if (hoursUntilBooking >= 12) {
+            // Hủy 12-24 giờ trước: hoàn 50%
+            refundAmount = booking.totalAmount * 0.5;
+          } else {
+            // Hủy dưới 12 giờ: hoàn 100% nếu owner hủy (vì là lỗi của owner)
+            refundAmount = booking.totalAmount;
+          }
+
+          // Thực hiện hoàn tiền
+          if (refundAmount > 0) {
+            try {
+              // Tìm Payment liên quan
+              const payment = await Payment.findOne({ 
+                booking: booking._id,
+                status: "success"
+              });
+
+              if (payment) {
+                // Hoàn tiền vào ví người dùng
+                await credit(booking.user, refundAmount, "refund", {
+                  bookingId: booking._id,
+                  paymentId: payment._id,
+                  reason: `Hoàn tiền do owner hủy đặt sân. ${notes || ""}`,
+                });
+
+                // Cập nhật Payment status
+                payment.status = "refunded";
+                payment.refundInfo = {
+                  refundAmount,
+                  refundDate: new Date(),
+                  refundReason: notes || "Owner hủy đặt sân",
+                };
+                await payment.save();
+              }
+
+              booking.paymentStatus = "refunded";
+            } catch (error) {
+              console.error("Lỗi khi hoàn tiền:", error);
+              // Vẫn tiếp tục hủy booking dù có lỗi hoàn tiền
+            }
+          }
+        }
+      }
     }
 
     if (status === "completed") {
@@ -1140,14 +1608,75 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
     // Populate for socket events
     await booking.populate("court", "name type price");
     await booking.populate("facility", "name address location");
+    await booking.populate("user", "name email");
 
-    // Emit socket events for status update
+    // Gửi email thông báo hủy đặt sân nếu owner hủy
+    if (status === "cancelled" && booking.user) {
+      try {
+        // Tính toán refund amount nếu đã hoàn tiền
+        let refundAmount = 0;
+        if (booking.paymentStatus === "refunded") {
+          // Lấy refund amount từ payment nếu có
+          const payment = await Payment.findOne({ 
+            booking: booking._id,
+            status: "refunded"
+          });
+          if (payment && payment.refundInfo && payment.refundInfo.refundAmount) {
+            refundAmount = payment.refundInfo.refundAmount;
+          } else {
+            // Nếu không có trong payment, tính lại
+            const bookingDateTime = new Date(
+              `${booking.date.toISOString().split("T")[0]} ${
+                booking.timeSlots[0]?.split("-")[0] || "00:00"
+              }`
+            );
+            const now = new Date();
+            const hoursUntilBooking = (bookingDateTime - now) / (1000 * 60 * 60);
+            
+            if (hoursUntilBooking >= 24) {
+              refundAmount = booking.totalAmount;
+            } else if (hoursUntilBooking >= 12) {
+              refundAmount = booking.totalAmount * 0.5;
+            } else if (hoursUntilBooking >= 0) {
+              refundAmount = booking.totalAmount; // Owner hủy: hoàn 100%
+            }
+          }
+        }
+
+        // Lấy chính sách hoàn tiền từ SystemConfig
+        let refundPolicy = "";
+        try {
+          const SystemConfig = (await import("../models/SystemConfig.js")).default;
+          const config = await SystemConfig.findOne();
+          if (config && config.refundPolicy) {
+            refundPolicy = config.refundPolicy;
+          }
+        } catch (e) {
+          console.warn("Không thể lấy chính sách hoàn tiền từ SystemConfig:", e);
+        }
+
+        await sendCancellationEmail(
+          booking,
+          booking.cancellationReason || notes || "Owner hủy đặt sân",
+          refundAmount,
+          booking.totalAmount,
+          refundPolicy
+        );
+      } catch (emailError) {
+        console.error("Lỗi khi gửi email thông báo hủy đặt sân:", emailError);
+        // Không throw error để không làm gián đoạn flow
+      }
+    }
+
+    // Emit socket events for status update (chỉ khi có user)
+    if (booking.user) {
     const userId = booking.user._id?.toString() || booking.user.toString();
     emitToUser(userId, "booking:status:updated", {
       booking: booking.toObject(),
       status,
       message: `Trạng thái booking đã được cập nhật thành: ${status}`,
     });
+    }
 
     // Status messages
     const statusMessages = {
@@ -1188,7 +1717,9 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
       } đã được xác nhận và thanh toán tiền mặt thành công.`;
     }
 
-    // Create notification for user
+    // Create notification for user (chỉ khi có user - walk-in booking không có user)
+    if (booking.user) {
+      const userId = booking.user._id?.toString() || booking.user.toString();
     await createNotification({
       userId,
       type: status === "cancelled" ? "cancellation" : "booking",
@@ -1206,6 +1737,7 @@ router.patch("/:id/status", authenticateToken, async (req, res, next) => {
       },
       priority: status === "cancelled" ? "high" : "normal",
     });
+    }
 
     // Notify facility room
     const facilityId =
@@ -1270,6 +1802,7 @@ router.patch(
 
       // Check if eligible for refund
       let refundAmount = 0;
+      let refundProcessed = false;
       if (booking.paymentStatus === "paid") {
         // Calculate refund based on cancellation time
         const bookingDateTime = new Date(
@@ -1291,14 +1824,77 @@ router.patch(
           refundAmount = 0;
         }
 
+        // Nếu có refund, thực hiện hoàn tiền vào ví
+        if (refundAmount > 0 && booking.user) {
+          try {
+            // Tìm Payment liên quan
+            const payment = await Payment.findOne({ 
+              booking: booking._id,
+              status: "success"
+            });
+
+            if (payment) {
+              // Hoàn tiền vào ví người dùng
+              await credit(booking.user, refundAmount, "refund", {
+                bookingId: booking._id,
+                paymentId: payment._id,
+                reason: `Hoàn tiền do hủy đặt sân trước giờ vào sân. ${reason || ""}`,
+              });
+
+              // Cập nhật Payment status
+              payment.status = "refunded";
+              payment.refundInfo = {
+                refundAmount,
+                refundDate: new Date(),
+                refundReason: reason || "Hủy đặt sân trước giờ vào sân",
+              };
+              await payment.save();
+
+              refundProcessed = true;
+            }
+          } catch (error) {
+            console.error("Lỗi khi hoàn tiền:", error);
+            // Vẫn tiếp tục hủy booking dù có lỗi hoàn tiền
+          }
+        }
+
         booking.paymentStatus = "refunded";
       }
 
       await booking.save();
 
-      // Populate for notifications
+      // Populate for notifications and email
       await booking.populate("facility", "name owner");
       await booking.populate("court", "name");
+      await booking.populate("user", "name email");
+
+      // Gửi email thông báo hủy đặt sân
+      if (booking.user) {
+        try {
+          // Lấy chính sách hoàn tiền từ SystemConfig
+          let refundPolicy = "";
+          try {
+            const SystemConfig = (await import("../models/SystemConfig.js")).default;
+            const config = await SystemConfig.findOne();
+            if (config && config.refundPolicy) {
+              refundPolicy = config.refundPolicy;
+            }
+          } catch (e) {
+            console.warn("Không thể lấy chính sách hoàn tiền từ SystemConfig:", e);
+          }
+
+          await sendUserCancellationEmail(
+            booking,
+            booking.cancellationReason || reason || "Người dùng tự hủy",
+            refundAmount,
+            booking.totalAmount,
+            refundPolicy
+          );
+        } catch (emailError) {
+          console.error("Lỗi khi gửi email thông báo hủy đặt sân:", emailError);
+          // Không throw error để không làm gián đoạn flow
+        }
+      }
 
       // Notify facility owner about cancellation
       const facilityId =
@@ -1330,11 +1926,15 @@ router.patch(
 
       res.json({
         success: true,
-        message: "Đã hủy booking thành công",
+        message: refundProcessed 
+          ? `Đã hủy booking thành công. Đã hoàn tiền ${refundAmount.toLocaleString('vi-VN')} VNĐ vào ví.`
+          : refundAmount > 0
+          ? `Đã hủy booking thành công. Sẽ hoàn tiền ${refundAmount.toLocaleString('vi-VN')} VNĐ vào ví.`
+          : "Đã hủy booking thành công",
         data: {
           booking,
           refundAmount,
-          refundStatus: refundAmount > 0 ? "processing" : "not_eligible",
+          refundStatus: refundProcessed ? "completed" : refundAmount > 0 ? "processing" : "not_eligible",
         },
       });
     } catch (error) {
@@ -1629,6 +2229,41 @@ router.post(
     });
 
     processBookingRewards(booking);
+
+    // 7. Cộng tiền cho owner (sau khi thanh toán bằng ví thành công)
+    try {
+      await booking.populate("facility", "owner");
+      if (booking.facility?.owner) {
+        // Xử lý ownerId (có thể là ObjectId hoặc object đã populate)
+        let ownerId = booking.facility.owner;
+        if (ownerId._id) {
+          ownerId = ownerId._id;
+        } else if (typeof ownerId === 'object' && ownerId.toString) {
+          ownerId = ownerId.toString();
+        }
+        
+        // Lấy platformFee từ SystemConfig (hoặc dùng giá trị mặc định nếu có lỗi)
+        const { getPlatformFee } = await import("../utils/systemConfigService.js");
+        let platformFee = 0.1; // Fallback mặc định
+        try {
+          platformFee = await getPlatformFee();
+        } catch (e) {
+          console.warn("Không thể lấy platformFee từ SystemConfig, dùng giá trị mặc định 10%:", e);
+        }
+        
+        await creditOwnerBalance(
+          ownerId,
+          booking.totalAmount
+          // Không truyền platformFee, sẽ lấy từ SystemConfig trong creditOwnerBalance
+        );
+        
+        console.log(`✅ [WALLET] Đã cộng ${(booking.totalAmount * (1 - platformFee)).toLocaleString("vi-VN")} VNĐ cho owner ${ownerId} (từ booking ${booking.totalAmount.toLocaleString("vi-VN")} VNĐ, phí ${(platformFee * 100).toFixed(0)}%)`);
+      } else {
+        console.warn(`⚠️ [WALLET] Booking ${booking._id} không có facility hoặc owner`);
+      }
+    } catch (e) {
+      console.error("Lỗi cộng tiền cho owner (wallet):", e);
+    }
 
     res.json({
       success: true,

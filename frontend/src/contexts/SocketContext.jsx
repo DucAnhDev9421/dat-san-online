@@ -51,7 +51,7 @@ export const SocketProvider = ({ children }) => {
 
     try {
       isRefreshingRef.current = true;
-      console.log(`🔄 Token expired for ${socketName}, refreshing...`);
+      console.log(`Token expired for ${socketName}, refreshing...`);
       
       // Refresh token
       const newToken = await refreshAccessToken();
@@ -60,7 +60,7 @@ export const SocketProvider = ({ children }) => {
         throw new Error('Failed to refresh token');
       }
 
-      console.log(`✅ Token refreshed for ${socketName}, reconnecting...`);
+      console.log(`Token refreshed for ${socketName}, reconnecting...`);
       
       // Disconnect old socket
       if (socket && socket.connected) {
@@ -70,7 +70,7 @@ export const SocketProvider = ({ children }) => {
       // Reconnect with new token will be handled by useEffect
       return newToken;
     } catch (error) {
-      console.error(`❌ Failed to refresh token for ${socketName}:`, error);
+      console.error(`Failed to refresh token for ${socketName}:`, error);
       throw error;
     } finally {
       isRefreshingRef.current = false;
@@ -127,7 +127,7 @@ export const SocketProvider = ({ children }) => {
     });
 
     defaultSock.on('disconnect', (reason) => {
-      console.log('❌ Default socket disconnected:', reason);
+      console.log('Default socket disconnected:', reason);
       setIsConnected(false);
       
       if (reason === 'io server disconnect') {
@@ -155,7 +155,7 @@ export const SocketProvider = ({ children }) => {
       
       // Handle WebSocket closed before connection established
       if (error.message && error.message.includes('WebSocket is closed')) {
-        console.warn('⚠️ WebSocket closed before connection established, will retry...');
+        console.warn('WebSocket closed before connection established, will retry...');
         // Socket.IO will automatically retry with polling fallback
         return;
       }
@@ -168,7 +168,7 @@ export const SocketProvider = ({ children }) => {
     });
 
     defaultSock.on('error', async (error) => {
-      console.error('❌ Default socket error:', error);
+      console.error('Default socket error:', error);
       
       // Check if it's an authentication error
       if (error.message && (error.message.includes('jwt expired') || 
@@ -188,15 +188,15 @@ export const SocketProvider = ({ children }) => {
     socketsRef.current.user = userSock;
     
     userSock.on('connect', () => {
-      console.log('✅ User namespace socket connected:', userSock.id);
+      console.log('User namespace socket connected:', userSock.id);
     });
 
     userSock.on('disconnect', (reason) => {
-      console.log('❌ User namespace socket disconnected:', reason);
+      console.log('User namespace socket disconnected:', reason);
     });
 
     userSock.on('connect_error', async (error) => {
-      console.error('❌ User namespace connection error:', error.message);
+      console.error('User namespace connection error:', error.message);
       
       if (error.message && (error.message.includes('jwt expired') || 
           error.message.includes('Authentication error'))) {
@@ -209,7 +209,7 @@ export const SocketProvider = ({ children }) => {
     });
 
     userSock.on('error', async (error) => {
-      console.error('❌ User namespace socket error:', error);
+      console.error('User namespace socket error:', error);
       
       if (error.message && (error.message.includes('jwt expired') || 
           error.message.includes('Authentication error'))) {
@@ -229,15 +229,15 @@ export const SocketProvider = ({ children }) => {
       socketsRef.current.owner = ownerSock;
       
       ownerSock.on('connect', () => {
-        console.log('✅ Owner namespace socket connected:', ownerSock.id);
+        console.log('Owner namespace socket connected:', ownerSock.id);
       });
 
       ownerSock.on('disconnect', (reason) => {
-        console.log('❌ Owner namespace socket disconnected:', reason);
+        console.log('Owner namespace socket disconnected:', reason);
       });
 
       ownerSock.on('connect_error', async (error) => {
-        console.error('❌ Owner namespace connection error:', error.message);
+        console.error('Owner namespace connection error:', error.message);
         
         if (error.message && (error.message.includes('jwt expired') || 
             error.message.includes('Authentication error'))) {
@@ -250,7 +250,7 @@ export const SocketProvider = ({ children }) => {
       });
 
       ownerSock.on('error', async (error) => {
-        console.error('❌ Owner namespace socket error:', error);
+        console.error('Owner namespace socket error:', error);
         
         if (error.message && (error.message.includes('jwt expired') || 
             error.message.includes('Authentication error'))) {
@@ -271,15 +271,15 @@ export const SocketProvider = ({ children }) => {
       socketsRef.current.admin = adminSock;
       
       adminSock.on('connect', () => {
-        console.log('✅ Admin namespace socket connected:', adminSock.id);
+        console.log('Admin namespace socket connected:', adminSock.id);
       });
 
       adminSock.on('disconnect', (reason) => {
-        console.log('❌ Admin namespace socket disconnected:', reason);
+        console.log('Admin namespace socket disconnected:', reason);
       });
 
       adminSock.on('connect_error', async (error) => {
-        console.error('❌ Admin namespace connection error:', error.message);
+        console.error('Admin namespace connection error:', error.message);
         
         if (error.message && (error.message.includes('jwt expired') || 
             error.message.includes('Authentication error'))) {
@@ -292,7 +292,7 @@ export const SocketProvider = ({ children }) => {
       });
 
       adminSock.on('error', async (error) => {
-        console.error('❌ Admin namespace socket error:', error);
+        console.error('Admin namespace socket error:', error);
         
         if (error.message && (error.message.includes('jwt expired') || 
             error.message.includes('Authentication error'))) {

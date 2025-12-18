@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Download } from "lucide-react";
 import { paymentData } from "../data/mockData";
 import PaymentDetailModal from "../modals/PaymentDetailModal";
 import PaymentStats from "../components/Payments/PaymentStats";
 import PaymentFilters from "../components/Payments/PaymentFilters";
 import PaymentTable from "../components/Payments/PaymentTable";
+import { analyticsApi } from "../../../../api/analyticsApi";
 
 const Payments = () => {
   const [payments, setPayments] = useState(paymentData);
@@ -18,12 +19,31 @@ const Payments = () => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
 
-  // Tính toán phí nền tảng tổng
-  const totalPlatformFee = useMemo(() => {
-    return payments
-      .filter((p) => p.status === "success")
-      .reduce((sum, p) => sum + (p.platformFee || 0), 0);
-  }, [payments]);
+  // Phí nền tảng từ API
+  const [totalPlatformFee, setTotalPlatformFee] = useState(0);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [loadingPlatformFee, setLoadingPlatformFee] = useState(true);
+
+  // Fetch phí nền tảng từ API
+  useEffect(() => {
+    const fetchPlatformFee = async () => {
+      try {
+        setLoadingPlatformFee(true);
+        const response = await analyticsApi.getAdminPlatformFee();
+        if (response.success && response.data) {
+          setTotalPlatformFee(response.data.totalPlatformFee || 0);
+          setTotalRevenue(response.data.totalRevenue || 0);
+        }
+      } catch (error) {
+        console.error("Lỗi khi lấy phí nền tảng:", error);
+        // Giữ giá trị mặc định là 0 nếu có lỗi
+      } finally {
+        setLoadingPlatformFee(false);
+      }
+    };
+
+    fetchPlatformFee();
+  }, []);
 
   const totalAmount = useMemo(() => {
     return payments
@@ -92,6 +112,7 @@ const Payments = () => {
     setPage(1);
   };
 
+
   return (
     <div>
       <div
@@ -126,8 +147,9 @@ const Payments = () => {
 
       <PaymentStats
         totalPlatformFee={totalPlatformFee}
-        totalAmount={totalAmount}
+        totalAmount={totalRevenue || totalAmount}
         formatPrice={formatPrice}
+        loading={loadingPlatformFee}
       />
 
       <PaymentFilters

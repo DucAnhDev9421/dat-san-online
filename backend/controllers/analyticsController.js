@@ -4,6 +4,7 @@ import Review from "../models/Review.js";
 import Court from "../models/Court.js";
 import User from "../models/User.js";
 import Facility from "../models/Facility.js";
+import OwnerBalance from "../models/OwnerBalance.js";
 import mongoose from "mongoose";
 
 /**
@@ -738,6 +739,745 @@ export const getOwnerTodaySchedule = asyncHandler(async (req, res) => {
     data: {
       date: today,
       schedule,
+    },
+  });
+});
+
+/**
+ * API: GET /api/analytics/admin/platform-fee
+ * Thống kê tổng phí dịch vụ web đã thu được (Admin only)
+ */
+export const getAdminPlatformFee = asyncHandler(async (req, res) => {
+  // Tính tổng phí dịch vụ từ tất cả owners
+  const platformFeeStats = await OwnerBalance.aggregate([
+    {
+      $group: {
+        _id: null,
+        totalPlatformFee: { $sum: "$totalPlatformFee" },
+        totalRevenue: { $sum: "$totalRevenue" },
+        totalOwners: { $sum: 1 },
+      },
+    },
+  ]);
+
+  // Lấy chi tiết phí dịch vụ theo từng owner
+  const ownerFeeDetails = await OwnerBalance.aggregate([
+    {
+      $match: {
+        totalPlatformFee: { $gt: 0 }, // Chỉ lấy owners có phí dịch vụ
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        as: "ownerInfo",
+      },
+    },
+    {
+      $unwind: {
+        path: "$ownerInfo",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $project: {
+        ownerId: "$owner",
+        ownerName: "$ownerInfo.name",
+        ownerEmail: "$ownerInfo.email",
+        totalRevenue: 1,
+        totalPlatformFee: 1,
+        availableBalance: 1,
+        totalWithdrawn: 1,
+      },
+    },
+    {
+      $sort: { totalPlatformFee: -1 }, // Sắp xếp theo phí dịch vụ giảm dần
+    },
+  ]);
+
+  const stats = platformFeeStats[0] || {
+    totalPlatformFee: 0,
+    totalRevenue: 0,
+    totalOwners: 0,
+  };
+
+  res.json({
+    success: true,
+    data: {
+      totalPlatformFee: stats.totalPlatformFee,
+      totalRevenue: stats.totalRevenue,
+      totalOwners: stats.totalOwners,
+      ownerDetails: ownerFeeDetails,
+    },
+  });
+});
+
+/**
+ * API: GET /api/analytics/admin/dashboard
+ * Thống kê tổng quan cho Admin
+ */
+export const getAdminDashboard = asyncHandler(async (req, res) => {
+  const { period = "month" } = req.query;
+  const { startDate, endDate } = getPeriodDates(period);
+
+  // Lấy ngày cùng kỳ trước để tính tăng trưởng
+  const previousPeriodStart = new Date(startDate);
+  const previousPeriodEnd = new Date(endDate);
+  const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+  
+  if (period === "day") {
+    previousPeriodStart.setDate(previousPeriodStart.getDate() - 1);
+    previousPeriodEnd.setDate(previousPeriodEnd.getDate() - 1);
+  } else if (period === "week") {
+    previousPeriodStart.setDate(previousPeriodStart.getDate() - 7);
+    previousPeriodEnd.setDate(previousPeriodEnd.getDate() - 7);
+  } else {
+    // month
+    previousPeriodStart.setMonth(previousPeriodStart.getMonth() - 1);
+    previousPeriodEnd.setMonth(previousPeriodEnd.getMonth() - 1);
+  }
+
+  // 1. Tổng doanh thu (từ tất cả booking đã thanh toán)
+  const currentRevenue = await Booking.aggregate([
+    {
+      $match: {
+        paymentStatus: "paid",
+        date: { $gte: startDate, $lte: endDate },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalRevenue: { $sum: "$totalAmount" },
+        totalBookings: { $sum: 1 },
+      },
+    },
+  ]);
+
+  // 2. Doanh thu kỳ trước
+  const previousRevenue = await Booking.aggregate([
+    {
+      $match: {
+        paymentStatus: "paid",
+        date: { $gte: previousPeriodStart, $lte: previousPeriodEnd },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalRevenue: { $sum: "$totalAmount" },
+      },
+    },
+  ]);
+
+  const currentRevenueAmount = currentRevenue[0]?.totalRevenue || 0;
+  const previousRevenueAmount = previousRevenue[0]?.totalRevenue || 0;
+  const revenueGrowth = previousRevenueAmount > 0
+    ? ((currentRevenueAmount - previousRevenueAmount) / previousRevenueAmount * 100).toFixed(1)
+    : 0;
+
+  // 3. Thống kê Facilities
+  const facilityStats = await Facility.aggregate([
+    {
+      $group: {
+        _id: "$status",
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const statsMap = facilityStats.reduce((acc, stat) => {
+    acc[stat._id] = stat.count;
+    return acc;
+  }, {});
+
+  const activeFacilities = statsMap.opening || 0;
+  const pausedFacilities = statsMap.closed || 0;
+  const maintenanceFacilities = statsMap.maintenance || 0;
+  const totalFacilities = activeFacilities + pausedFacilities + maintenanceFacilities;
+
+  // 4. Tổng số users
+  const totalUsers = await User.countDocuments({ role: { $ne: "admin" } });
+  const totalOwners = await User.countDocuments({ role: "owner" });
+
+  // 5. Tổng số bookings
+  const totalBookings = currentRevenue[0]?.totalBookings || 0;
+
+  // 6. Tỷ lệ lấp đầy (active facilities / total facilities)
+  const fillRate = totalFacilities > 0
+    ? Math.round((activeFacilities / totalFacilities) * 100)
+    : 0;
+
+  res.json({
+    success: true,
+    data: {
+      period,
+      totalRevenue: currentRevenueAmount,
+      revenueGrowth: parseFloat(revenueGrowth),
+      totalBookings,
+      activeFacilities,
+      pausedFacilities,
+      maintenanceFacilities,
+      totalFacilities,
+      fillRate,
+      totalUsers,
+      totalOwners,
+    },
+  });
+});
+
+/**
+ * API: GET /api/analytics/admin/revenue
+ * Doanh thu theo tháng/quý cho Admin
+ */
+export const getAdminRevenue = asyncHandler(async (req, res) => {
+  const { period = "month", year } = req.query;
+  const selectedYear = year ? parseInt(year) : new Date().getFullYear();
+
+  let data = [];
+
+  if (period === "month") {
+    // Doanh thu theo tháng
+    for (let month = 1; month <= 12; month++) {
+      const monthStart = new Date(selectedYear, month - 1, 1);
+      monthStart.setHours(0, 0, 0, 0);
+      const monthEnd = new Date(selectedYear, month, 0);
+      monthEnd.setHours(23, 59, 59, 999);
+
+      const monthStats = await Booking.aggregate([
+        {
+          $match: {
+            paymentStatus: "paid",
+            date: { $gte: monthStart, $lte: monthEnd },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            revenue: { $sum: "$totalAmount" },
+            bookings: { $sum: 1 },
+          },
+        },
+      ]);
+
+      data.push({
+        period: `Tháng ${month}`,
+        revenue: monthStats[0]?.revenue || 0,
+        bookings: monthStats[0]?.bookings || 0,
+      });
+    }
+  } else {
+    // Doanh thu theo quý
+    for (let quarter = 1; quarter <= 4; quarter++) {
+      const startMonth = (quarter - 1) * 3;
+      const endMonth = quarter * 3 - 1;
+      const quarterStart = new Date(selectedYear, startMonth, 1);
+      quarterStart.setHours(0, 0, 0, 0);
+      const quarterEnd = new Date(selectedYear, endMonth + 1, 0);
+      quarterEnd.setHours(23, 59, 59, 999);
+
+      const quarterStats = await Booking.aggregate([
+        {
+          $match: {
+            paymentStatus: "paid",
+            date: { $gte: quarterStart, $lte: quarterEnd },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            revenue: { $sum: "$totalAmount" },
+            bookings: { $sum: 1 },
+          },
+        },
+      ]);
+
+      data.push({
+        period: `Q${quarter}`,
+        revenue: quarterStats[0]?.revenue || 0,
+        bookings: quarterStats[0]?.bookings || 0,
+      });
+    }
+  }
+
+  res.json({
+    success: true,
+    data: {
+      period,
+      year: selectedYear,
+      revenueData: data,
+    },
+  });
+});
+
+/**
+ * API: GET /api/analytics/admin/facility-stats
+ * Thống kê facilities cho Admin
+ */
+export const getAdminFacilityStats = asyncHandler(async (req, res) => {
+  const facilityStats = await Facility.aggregate([
+    {
+      $group: {
+        _id: "$status",
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const statsMap = facilityStats.reduce((acc, stat) => {
+    acc[stat._id] = stat.count;
+    return acc;
+  }, {});
+
+  res.json({
+    success: true,
+    data: {
+      activeFacilities: statsMap.opening || 0,
+      pausedFacilities: statsMap.closed || 0,
+      maintenanceFacilities: statsMap.maintenance || 0,
+      totalFacilities: Object.values(statsMap).reduce((sum, count) => sum + count, 0),
+    },
+  });
+});
+
+/**
+ * API: GET /api/analytics/admin/peak-hours
+ * Thống kê giờ cao điểm cho Admin
+ */
+export const getAdminPeakHours = asyncHandler(async (req, res) => {
+  const { startDate, endDate } = parseDateRange(
+    req.query.startDate,
+    req.query.endDate
+  );
+
+  // Lấy tất cả bookings đã thanh toán trong khoảng thời gian
+  const bookings = await Booking.find({
+    paymentStatus: "paid",
+    date: { $gte: startDate, $lte: endDate },
+  }).select("timeSlots totalAmount");
+
+  // Phân tích theo giờ
+  const hourStats = {};
+
+  bookings.forEach((booking) => {
+    booking.timeSlots.forEach((slot) => {
+      const [startTime] = slot.split("-");
+      const hourKey = startTime.trim();
+
+      if (!hourStats[hourKey]) {
+        hourStats[hourKey] = {
+          hour: hourKey,
+          slotCount: 0,
+          revenue: 0,
+        };
+      }
+
+      const revenuePerSlot = booking.totalAmount / booking.timeSlots.length;
+      hourStats[hourKey].slotCount += 1;
+      hourStats[hourKey].revenue += revenuePerSlot;
+    });
+  });
+
+  // Tạo array với tất cả giờ từ 6:00 đến 22:00
+  const peakHoursData = [];
+  for (let hour = 6; hour <= 22; hour++) {
+    const hourKey = `${String(hour).padStart(2, "0")}:00`;
+    const nextHour = hour === 22 ? "23:00" : `${String(hour + 1).padStart(2, "0")}:00`;
+    const stat = hourStats[hourKey] || { slotCount: 0, revenue: 0 };
+
+    peakHoursData.push({
+      hour: `${hourKey}-${nextHour}`,
+      bookings: stat.slotCount,
+      revenue: Math.round(stat.revenue),
+      type:
+        stat.slotCount >= 10
+          ? "Cao điểm"
+          : stat.slotCount >= 5
+          ? "Trung bình"
+          : "Thấp điểm",
+    });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      startDate,
+      endDate,
+      peakHours: peakHoursData,
+    },
+  });
+});
+
+/**
+ * API: GET /api/analytics/admin/top-facilities
+ * Top facilities được đặt nhiều nhất cho Admin
+ */
+export const getAdminTopFacilities = asyncHandler(async (req, res) => {
+  const { startDate, endDate } = parseDateRange(
+    req.query.startDate,
+    req.query.endDate
+  );
+  const limit = parseInt(req.query.limit) || 10;
+
+  // Thống kê booking theo facility
+  const facilityStats = await Booking.aggregate([
+    {
+      $match: {
+        paymentStatus: "paid",
+        date: { $gte: startDate, $lte: endDate },
+      },
+    },
+    {
+      $group: {
+        _id: "$facility",
+        totalRevenue: { $sum: "$totalAmount" },
+        totalBookings: { $sum: 1 },
+      },
+    },
+    {
+      $sort: { totalBookings: -1 },
+    },
+    {
+      $limit: limit,
+    },
+  ]);
+
+  // Populate facility info
+  const topFacilities = await Promise.all(
+    facilityStats.map(async (stat) => {
+      const facility = await Facility.findById(stat._id).select("name address status");
+      return {
+        facilityId: stat._id,
+        name: facility?.name || "N/A",
+        address: facility?.address || "",
+        status: facility?.status || "unknown",
+        bookings: stat.totalBookings,
+        revenue: stat.totalRevenue,
+      };
+    })
+  );
+
+  res.json({
+    success: true,
+    data: {
+      startDate,
+      endDate,
+      facilities: topFacilities,
+    },
+  });
+});
+
+/**
+ * API: GET /api/analytics/admin/top-owners
+ * Top owners doanh thu cao nhất cho Admin
+ */
+export const getAdminTopOwners = asyncHandler(async (req, res) => {
+  const { startDate, endDate } = parseDateRange(
+    req.query.startDate,
+    req.query.endDate
+  );
+  const limit = parseInt(req.query.limit) || 10;
+
+  // Lấy thống kê từ OwnerBalance
+  const ownerStats = await OwnerBalance.aggregate([
+    {
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        as: "ownerInfo",
+      },
+    },
+    {
+      $unwind: {
+        path: "$ownerInfo",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: "facilities",
+        localField: "owner",
+        foreignField: "owner",
+        as: "facilities",
+      },
+    },
+    {
+      $project: {
+        ownerId: "$owner",
+        ownerName: "$ownerInfo.name",
+        ownerEmail: "$ownerInfo.email",
+        totalRevenue: 1,
+        totalPlatformFee: 1,
+        facilityCount: { $size: "$facilities" },
+        facilityNames: {
+          $map: {
+            input: "$facilities",
+            as: "facility",
+            in: "$$facility.name",
+          },
+        },
+      },
+    },
+    {
+      $sort: { totalRevenue: -1 },
+    },
+    {
+      $limit: limit,
+    },
+  ]);
+
+  // Tính tổng số booking cho mỗi owner (từ bookings trong khoảng thời gian)
+  const ownerBookings = await Booking.aggregate([
+    {
+      $match: {
+        paymentStatus: "paid",
+        date: { $gte: startDate, $lte: endDate },
+      },
+    },
+    {
+      $lookup: {
+        from: "facilities",
+        localField: "facility",
+        foreignField: "_id",
+        as: "facilityInfo",
+      },
+    },
+    {
+      $unwind: "$facilityInfo",
+    },
+    {
+      $group: {
+        _id: "$facilityInfo.owner",
+        totalBookings: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const bookingsMap = new Map(
+    ownerBookings.map((stat) => [stat._id.toString(), stat.totalBookings])
+  );
+
+  // Kết hợp dữ liệu
+  const topOwners = ownerStats.map((stat) => ({
+    id: stat.ownerId,
+    name: stat.ownerName || "N/A",
+    email: stat.ownerEmail || "",
+    facilities: stat.facilityNames || [],
+    facilityCount: stat.facilityCount || 0,
+    revenue: stat.totalRevenue || 0,
+    bookings: bookingsMap.get(stat.ownerId.toString()) || 0,
+    platformFee: stat.totalPlatformFee || 0,
+  }));
+
+  res.json({
+    success: true,
+    data: {
+      startDate,
+      endDate,
+      owners: topOwners,
+    },
+  });
+});
+
+/**
+ * API: GET /api/analytics/admin/dashboard-overview
+ * Tổng hợp dữ liệu cho Dashboard Admin (KPI, charts, top facilities)
+ */
+export const getAdminDashboardOverview = asyncHandler(async (req, res) => {
+  const { range = "30d" } = req.query; // Today, 7d, 30d
+
+  // Tính toán khoảng thời gian
+  const now = new Date();
+  const endDate = new Date(now);
+  endDate.setHours(23, 59, 59, 999);
+  
+  let startDate = new Date(now);
+  if (range === "Today") {
+    startDate.setHours(0, 0, 0, 0);
+  } else if (range === "7d") {
+    startDate.setDate(now.getDate() - 7);
+    startDate.setHours(0, 0, 0, 0);
+  } else {
+    // 30d
+    startDate.setDate(now.getDate() - 30);
+    startDate.setHours(0, 0, 0, 0);
+  }
+
+  // 1. KPI Cards
+  // Tổng doanh thu (tháng hiện tại)
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  currentMonthStart.setHours(0, 0, 0, 0);
+  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  currentMonthEnd.setHours(23, 59, 59, 999);
+
+  const revenueStats = await Booking.aggregate([
+    {
+      $match: {
+        paymentStatus: "paid",
+        date: { $gte: currentMonthStart, $lte: currentMonthEnd },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalRevenue: { $sum: "$totalAmount" },
+        totalBookings: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const totalRevenue = revenueStats[0]?.totalRevenue || 0;
+  const totalBookings = revenueStats[0]?.totalBookings || 0;
+
+  // Tỷ lệ lấp đầy (active facilities / total facilities)
+  const facilityStats = await Facility.aggregate([
+    {
+      $group: {
+        _id: "$status",
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const statsMap = facilityStats.reduce((acc, stat) => {
+    acc[stat._id] = stat.count;
+    return acc;
+  }, {});
+
+  const activeFacilities = statsMap.opening || 0;
+  const totalFacilities = Object.values(statsMap).reduce((sum, count) => sum + count, 0);
+  const occupancyRate = totalFacilities > 0
+    ? Math.round((activeFacilities / totalFacilities) * 100)
+    : 0;
+
+  // Số người dùng mới (trong 7 ngày qua)
+  const weekAgo = new Date(now);
+  weekAgo.setDate(now.getDate() - 7);
+  weekAgo.setHours(0, 0, 0, 0);
+  const newUsers = await User.countDocuments({
+    role: { $ne: "admin" },
+    createdAt: { $gte: weekAgo },
+  });
+
+  // 2. Trend Data (7 ngày gần nhất)
+  const trendData = [];
+  const dayNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(now.getDate() - i);
+    date.setHours(0, 0, 0, 0);
+    const nextDate = new Date(date);
+    nextDate.setDate(date.getDate() + 1);
+
+    const dayStats = await Booking.aggregate([
+      {
+        $match: {
+          paymentStatus: "paid",
+          date: { $gte: date, $lt: nextDate },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          bookings: { $sum: 1 },
+          revenue: { $sum: "$totalAmount" },
+        },
+      },
+    ]);
+
+    const dayOfWeek = date.getDay();
+    trendData.push({
+      name: dayNames[dayOfWeek],
+      bookings: dayStats[0]?.bookings || 0,
+      revenue: dayStats[0]?.revenue ? parseFloat((dayStats[0].revenue / 1000000).toFixed(1)) : 0, // Convert to millions
+    });
+  }
+
+  // 3. Pie Chart Data (Tình trạng đơn)
+  const bookingStatusStats = await Booking.aggregate([
+    {
+      $match: {
+        createdAt: { $gte: startDate, $lte: endDate },
+      },
+    },
+    {
+      $group: {
+        _id: "$status",
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const statusMap = bookingStatusStats.reduce((acc, stat) => {
+    acc[stat._id] = stat.count;
+    return acc;
+  }, {});
+
+  const pieData = [
+    {
+      name: "Đã xác nhận",
+      value: (statusMap.confirmed || 0) + (statusMap.completed || 0),
+    },
+    {
+      name: "Đã hủy",
+      value: statusMap.cancelled || 0,
+    },
+    {
+      name: "Chờ xử lý",
+      value: (statusMap.pending || 0) + (statusMap.pending_payment || 0) + (statusMap.hold || 0),
+    },
+  ];
+
+  // 4. Top Facilities (Top 5)
+  const topFacilitiesStats = await Booking.aggregate([
+    {
+      $match: {
+        paymentStatus: "paid",
+        date: { $gte: startDate, $lte: endDate },
+      },
+    },
+    {
+      $group: {
+        _id: "$facility",
+        totalRevenue: { $sum: "$totalAmount" },
+        totalBookings: { $sum: 1 },
+      },
+    },
+    {
+      $sort: { totalBookings: -1 },
+    },
+    {
+      $limit: 5,
+    },
+  ]);
+
+  const topFacilities = await Promise.all(
+    topFacilitiesStats.map(async (stat) => {
+      const facility = await Facility.findById(stat._id).select("name");
+      return {
+        name: facility?.name || "N/A",
+        bookings: stat.totalBookings,
+        revenue: stat.totalRevenue,
+      };
+    })
+  );
+
+  res.json({
+    success: true,
+    data: {
+      kpis: {
+        totalRevenue,
+        totalBookings,
+        occupancyRate,
+        newUsers,
+      },
+      trendData,
+      pieData,
+      topFacilities,
     },
   });
 });

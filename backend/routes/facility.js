@@ -364,6 +364,144 @@ router.get("/", async (req, res, next) => {
 });
 
 /**
+ * BE: GET /api/facilities/featured
+ * Lấy danh sách sân thể thao nổi bật (Public)
+ * Sort theo rating, limit 4
+ */
+router.get("/featured", async (req, res, next) => {
+  try {
+    const limit = parseInt(req.query.limit) || 4;
+
+    // Lấy tất cả facilities đang mở
+    const facilities = await Facility.find({ status: "opening" })
+      .populate("owner", "name email avatar")
+      .limit(100); // Lấy nhiều hơn để tính rating, sau đó sort và limit
+
+    // Get facility IDs
+    const facilityIds = facilities.map(f => f._id);
+
+    // Calculate average ratings for all facilities
+    let ratingMap = new Map();
+    if (facilityIds.length > 0) {
+      const ratingResults = await Review.aggregate([
+        {
+          $match: {
+            facility: { $in: facilityIds },
+            isDeleted: false,
+          },
+        },
+        {
+          $group: {
+            _id: "$facility",
+            averageRating: { $avg: "$rating" },
+            totalReviews: { $sum: 1 },
+          },
+        },
+      ]);
+
+      // Create a map of facilityId -> rating stats
+      ratingResults.forEach((result) => {
+        ratingMap.set(result._id.toString(), {
+          averageRating: Math.round(result.averageRating * 10) / 10,
+          totalReviews: result.totalReviews,
+        });
+      });
+    }
+
+    // Add averageRating to each facility and sort by rating
+    const facilitiesWithRatings = facilities
+      .map((facility) => {
+        const ratingData = ratingMap.get(facility._id.toString());
+        return {
+          ...facility.toObject(),
+          averageRating: ratingData?.averageRating || 0,
+          totalReviews: ratingData?.totalReviews || 0,
+        };
+      })
+      .sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0))
+      .slice(0, limit);
+
+    res.json({
+      success: true,
+      data: {
+        facilities: facilitiesWithRatings,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * BE: GET /api/facilities/recent
+ * Lấy danh sách sân thể thao gần đây (Public)
+ * Sort theo createdAt, limit 8
+ */
+router.get("/recent", async (req, res, next) => {
+  try {
+    const limit = parseInt(req.query.limit) || 8;
+    const skip = parseInt(req.query.skip) || 0;
+
+    // Lấy facilities đang mở, sort theo createdAt mới nhất
+    const facilities = await Facility.find({ status: "opening" })
+      .populate("owner", "name email avatar")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Get facility IDs
+    const facilityIds = facilities.map(f => f._id);
+
+    // Calculate average ratings for all facilities
+    let ratingMap = new Map();
+    if (facilityIds.length > 0) {
+      const ratingResults = await Review.aggregate([
+        {
+          $match: {
+            facility: { $in: facilityIds },
+            isDeleted: false,
+          },
+        },
+        {
+          $group: {
+            _id: "$facility",
+            averageRating: { $avg: "$rating" },
+            totalReviews: { $sum: 1 },
+          },
+        },
+      ]);
+
+      // Create a map of facilityId -> rating stats
+      ratingResults.forEach((result) => {
+        ratingMap.set(result._id.toString(), {
+          averageRating: Math.round(result.averageRating * 10) / 10,
+          totalReviews: result.totalReviews,
+        });
+      });
+    }
+
+    // Add averageRating to each facility
+    const facilitiesWithRatings = facilities.map((facility) => {
+      const ratingData = ratingMap.get(facility._id.toString());
+      return {
+        ...facility.toObject(),
+        averageRating: ratingData?.averageRating || 0,
+        totalReviews: ratingData?.totalReviews || 0,
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        facilities: facilitiesWithRatings,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * BE: GET /api/facilities/popular-cities
  * Lấy top 6 thành phố có nhiều cơ sở nhất (Public)
  */

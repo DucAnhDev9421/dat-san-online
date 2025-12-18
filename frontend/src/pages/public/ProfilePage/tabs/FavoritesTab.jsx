@@ -69,7 +69,7 @@ export default function FavoritesTab({ venues, loading, userLocation }) {
               totalReviews={venue.totalReviews || 0}
               open={venue.operatingHours}
               price={venue.price}
-              sport={venue.sport || venue.sportCategory}
+              sports={venue.facilities || (venue.sport || venue.sportCategory ? [venue.sport || venue.sportCategory] : [])}
               status={venue.status}
               services={venue.services || []}
               onBook={() => handleBookVenue(venue.id)}

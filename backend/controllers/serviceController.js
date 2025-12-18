@@ -223,3 +223,45 @@ export const toggleActive = asyncHandler(async (req, res) => {
   });
 });
 
+// Public: Lấy dịch vụ theo facility (qua owner của facility)
+export const getServicesByFacility = asyncHandler(async (req, res) => {
+  const { facilityId } = req.params;
+  const { type, sportCategory } = req.query;
+
+  // Import Facility model
+  const Facility = (await import("../models/Facility.js")).default;
+
+  // Get facility to find owner
+  const facility = await Facility.findById(facilityId);
+  if (!facility) {
+    return res.status(404).json({
+      success: false,
+      message: "Không tìm thấy cơ sở",
+    });
+  }
+
+  // Build query
+  const query = { 
+    owner: facility.owner,
+    isActive: true // Chỉ lấy dịch vụ đang hoạt động
+  };
+
+  if (type) {
+    query.type = type;
+  }
+
+  if (sportCategory) {
+    query.sportCategory = sportCategory;
+  }
+
+  const services = await Service.find(query)
+    .populate("sportCategory", "name")
+    .sort({ type: 1, createdAt: -1 })
+    .lean();
+
+  res.json({
+    success: true,
+    data: services,
+  });
+});
+

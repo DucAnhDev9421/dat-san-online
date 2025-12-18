@@ -77,7 +77,7 @@ function HomePage() {
           minimumFractionDigits: 0,
           maximumFractionDigits: 0
         }).format(priceRange.max);
-        return `${minFormatted} - ${maxFormatted} VND/khung giờ`;
+        return `${minFormatted} - ${maxFormatted} VND`;
       }
       // Fallback về pricePerHour nếu không có priceRange
       if (pricePerHour) {
@@ -85,7 +85,7 @@ function HomePage() {
           minimumFractionDigits: 0,
           maximumFractionDigits: 0
         }).format(pricePerHour);
-        return `${formatted} VND/giờ`;
+        return `${formatted} VND`;
       }
       return null;
     }
@@ -116,26 +116,28 @@ function HomePage() {
       try {
         setFacilitiesLoading(true)
         
-        // Fetch all facilities (recent)
-        const result = await facilityApi.getFacilities({
-          limit: 8,
-          page: 1
-        })
+        // Fetch featured and recent facilities in parallel
+        const [featuredResult, recentResult] = await Promise.all([
+          facilityApi.getFeaturedFacilities({ limit: 4 }),
+          facilityApi.getRecentFacilities({ limit: 8 })
+        ])
         
-        if (result.success && result.data && result.data.facilities) {
-          // Ratings are already included in the response from backend
-          const transformedFacilities = result.data.facilities.map(transformFacilityToVenue)
-          setFacilities(transformedFacilities)
-          
-          // Featured facilities: sort by rating (or use first 4 if no rating)
-          const featured = [...transformedFacilities]
-            .sort((a, b) => (b.rating || 0) - (a.rating || 0))
-            .slice(0, 4)
-          setFeaturedFacilities(featured)
+        // Process featured facilities
+        if (featuredResult.success && featuredResult.data && featuredResult.data.facilities) {
+          const transformedFeatured = featuredResult.data.facilities.map(transformFacilityToVenue)
+          setFeaturedFacilities(transformedFeatured)
         } else {
-          console.warn('No facilities data received')
-          setFacilities([])
+          console.warn('No featured facilities data received')
           setFeaturedFacilities([])
+        }
+        
+        // Process recent facilities
+        if (recentResult.success && recentResult.data && recentResult.data.facilities) {
+          const transformedRecent = recentResult.data.facilities.map(transformFacilityToVenue)
+          setFacilities(transformedRecent)
+        } else {
+          console.warn('No recent facilities data received')
+          setFacilities([])
         }
       } catch (error) {
         console.error('Error fetching facilities:', error)

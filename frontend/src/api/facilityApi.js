@@ -253,6 +253,56 @@ export const facilityApi = {
   },
 
   /**
+   * Get featured facilities (top rated facilities)
+   * GET /api/facilities/featured
+   * @param {Object} params - Query parameters (limit?)
+   * @returns {Promise} Featured facilities list
+   */
+  getFeaturedFacilities: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+      
+      const queryString = queryParams.toString();
+      const url = `/facilities/featured${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await api.get(url);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Get recent facilities (newest facilities)
+   * GET /api/facilities/recent
+   * @param {Object} params - Query parameters (limit?, skip?)
+   * @returns {Promise} Recent facilities list
+   */
+  getRecentFacilities: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+      
+      const queryString = queryParams.toString();
+      const url = `/facilities/recent${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await api.get(url);
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
    * Get popular cities (top 6 cities with most facilities)
    * GET /api/facilities/popular-cities
    * @returns {Promise} Array of cities with count

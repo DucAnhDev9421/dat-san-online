@@ -1,12 +1,15 @@
 // routes/promotion.js
 import express from "express";
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 import Promotion from "../models/Promotion.js";
+import User from "../models/User.js";
 import {
   authenticateToken,
   requireAdmin,
 } from "../middleware/auth.js";
 import { logAudit } from "../utils/auditLogger.js";
+import { config } from "../config/config.js";
 
 const router = express.Router();
 
@@ -16,6 +19,7 @@ const router = express.Router();
  * GET /api/promotions
  * Lấy danh sách khuyến mãi (public, có thể filter)
  * Query params: status, facilityId, code, page, limit
+ * Nếu user là owner, chỉ trả về các khuyến mãi mà owner đó tạo
  */
 router.get("/", async (req, res, next) => {
   try {
@@ -32,6 +36,31 @@ router.get("/", async (req, res, next) => {
 
     // Loại bỏ voucher đổi điểm (chỉ dành cho thành viên)
     query.fromReward = { $ne: true };
+
+    // Nếu user đã đăng nhập và là owner, chỉ lấy các khuyến mãi mà owner đó tạo
+    // Admin vẫn thấy tất cả
+    try {
+      const authHeader = req.headers['authorization'];
+      if (authHeader) {
+        const token = authHeader.split(' ')[1];
+        if (token) {
+          try {
+            const decoded = jwt.verify(token, config.jwt.secret);
+            const user = await User.findById(decoded.userId).select('role').lean();
+            
+            if (user && user.role === 'owner') {
+              // Owner chỉ thấy các khuyến mãi mà họ tạo
+              query.createdBy = new mongoose.Types.ObjectId(decoded.userId);
+            }
+            // Admin và user thường vẫn thấy tất cả (không filter theo createdBy)
+          } catch (tokenError) {
+            // Token không hợp lệ, bỏ qua (xử lý như public request)
+          }
+        }
+      }
+    } catch (authError) {
+      // Lỗi khi xác thực, bỏ qua (xử lý như public request)
+    }
 
     // Filter theo status
     if (status) {

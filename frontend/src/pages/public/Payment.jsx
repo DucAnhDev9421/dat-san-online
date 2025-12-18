@@ -365,7 +365,26 @@ function Payment() {
       
       if (result.success) {
         setIsCancelled(true)
+        
+        // Hiển thị thông tin hoàn tiền nếu có
+        if (result.data?.refundAmount > 0) {
+          const refundAmount = result.data.refundAmount
+          const refundStatus = result.data.refundStatus || "completed"
+          
+          if (refundStatus === "completed") {
+            toast.success(
+              `Đã hủy đặt sân thành công. Đã hoàn tiền ${refundAmount.toLocaleString('vi-VN')} VNĐ vào ví của bạn.`,
+              { autoClose: 5000 }
+            )
+          } else {
+            toast.success(
+              `Đã hủy đặt sân thành công. Sẽ hoàn tiền ${refundAmount.toLocaleString('vi-VN')} VNĐ vào ví của bạn.`,
+              { autoClose: 5000 }
+            )
+          }
+        } else {
         toast.success('Đã hủy đặt sân thành công')
+        }
         
         // Navigate back to booking page of the venue
         const venueId = rawBookingData?.venueId || rawBookingData?.venueData?.id

@@ -7,10 +7,10 @@ const Facilities = lazy(() => import("./pages/Facilities"));
 const Bookings = lazy(() => import("./pages/Bookings"));
 const Users = lazy(() => import("./pages/Users"));
 const Payments = lazy(() => import("./pages/Payments"));
+const Withdrawals = lazy(() => import("./pages/Withdrawals"));
 const Categories = lazy(() => import("./pages/Categories"));
 const Promotions = lazy(() => import("./pages/Promotions"));
 const Feedbacks = lazy(() => import("./pages/Feedbacks"));
-const Notifications = lazy(() => import("./pages/Notifications"));
 const ActivityLog = lazy(() => import("./pages/ActivityLog"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -35,10 +35,10 @@ const AdminRoutes = () => {
         <Route path="bookings" element={<Bookings />} />
         <Route path="users" element={<Users />} />
         <Route path="payments" element={<Payments />} />
+        <Route path="withdrawals" element={<Withdrawals />} />
         <Route path="categories" element={<Categories />} />
         <Route path="promotions" element={<Promotions />} />
         <Route path="feedbacks" element={<Feedbacks />} />
-        <Route path="notifications" element={<Notifications />} />
         <Route path="activity_log" element={<ActivityLog />} />
         <Route path="reports" element={<Reports />} />
         <Route path="settings" element={<Settings />} />

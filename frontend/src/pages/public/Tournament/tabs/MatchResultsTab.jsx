@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Save, X } from 'lucide-react'
+import { Save, X, Trophy, AlertCircle } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { useParams } from 'react-router-dom'
 import { leagueApi } from '../../../../api/leagueApi'
@@ -11,10 +11,8 @@ const MatchResultsTab = ({ tournament }) => {
   const [selectedStage, setSelectedStage] = useState(null)
   const [matches, setMatches] = useState([])
   const [savingResults, setSavingResults] = useState(false)
-  
-  const isRoundRobin = tournament?.format === 'Vòng tròn' || tournament?.format === 'round-robin'
 
-  // Helper: Lấy tên stage để hiển thị
+  // Helper: Get stage title
   const getStageTitle = (stage) => {
     const stageMap = {
       'final': 'Chung Kết',
@@ -23,29 +21,29 @@ const MatchResultsTab = ({ tournament }) => {
       'round4': 'Vòng 4',
       'round2': 'Vòng 2',
       'round1': 'Vòng 1',
-      'round-robin': 'Vòng tròn'
+      'round-robin': 'Vòng bảng'
     }
     return stageMap[stage] || stage
   }
 
-  // Helper: Tìm team từ tournament.teams dựa trên teamId
+  // Helper: Find team
   const findTeamById = (teamId) => {
     if (!teamId || teamId === "BYE") return null
-    return tournament.teams?.find(t => 
-      (t.id === teamId) || 
+    return tournament.teams?.find(t =>
+      (t.id === teamId) ||
       (t._id?.toString() === teamId?.toString())
     ) || null
   }
 
-  // Lấy danh sách các stage có matches từ API
+  // Get available stages
   const availableStages = useMemo(() => {
     if (!tournament?.matches || tournament.matches.length === 0) {
       return []
     }
 
     const stages = [...new Set(tournament.matches.map(m => m.stage).filter(Boolean))]
-    
-    // Sắp xếp theo thứ tự: round1, round2, round3, round4, semi, final, round-robin
+
+    // Sort logic
     const stageOrder = ['round1', 'round2', 'round3', 'round4', 'semi', 'final', 'round-robin']
     return stages.sort((a, b) => {
       const indexA = stageOrder.indexOf(a)
@@ -54,14 +52,14 @@ const MatchResultsTab = ({ tournament }) => {
     })
   }, [tournament?.matches])
 
-  // Tự động chọn stage đầu tiên khi có matches
+  // Auto-select first stage
   useEffect(() => {
     if (availableStages.length > 0 && !selectedStage) {
       setSelectedStage(availableStages[0])
     }
   }, [availableStages, selectedStage])
 
-  // Load matches từ API dựa trên selectedStage
+  // Load matches
   useEffect(() => {
     if (!selectedStage || !tournament?.matches) {
       setMatches([])
@@ -70,7 +68,6 @@ const MatchResultsTab = ({ tournament }) => {
 
     const stageMatches = tournament.matches
       .filter(match => match.stage === selectedStage)
-      // Lọc bỏ các match có BYE (ẩn trận bye)
       .filter(match => {
         const hasBye = match.team1Id === "BYE" || match.team2Id === "BYE"
         return !hasBye
@@ -83,6 +80,8 @@ const MatchResultsTab = ({ tournament }) => {
       team2Id: match.team2Id || null,
       score1: match.score1 ?? null,
       score2: match.score2 ?? null,
+      penaltyScore1: match.penaltyScore1 ?? null,
+      penaltyScore2: match.penaltyScore2 ?? null,
       stage: match.stage,
       date: match.date,
       time: match.time,
@@ -92,34 +91,51 @@ const MatchResultsTab = ({ tournament }) => {
     setMatches(loadedMatches)
   }, [selectedStage, tournament?.matches])
 
-  // Thay đổi điểm số
+  // Score change handler
   const handleScoreChange = (matchId, field, value) => {
     const numValue = value === '' ? null : parseInt(value)
     if (numValue !== null && (isNaN(numValue) || numValue < 0)) {
-      return // Không cho phép giá trị không hợp lệ
+      return
     }
-    
-    setMatches(prev => prev.map(match => 
+
+    setMatches(prev => prev.map(match =>
       match.id === matchId ? { ...match, [field]: numValue } : match
     ))
   }
 
-  // Lưu kết quả một trận đấu
+  // Save result
   const handleSaveMatchResult = async (match) => {
     if (match.score1 === null || match.score2 === null) {
       toast.error('Vui lòng nhập đầy đủ điểm số cho cả hai đội')
       return
     }
 
+    // Kiểm tra nếu hòa và là single-elimination thì yêu cầu nhập đá luân lưu
+    const isRoundRobin = tournament.format === 'Vòng tròn' || tournament.format === 'round-robin'
+    const isDraw = match.score1 === match.score2
+    
+    if (!isRoundRobin && isDraw) {
+      if (match.penaltyScore1 === null || match.penaltyScore2 === null) {
+        toast.error('Trận đấu hòa! Vui lòng nhập kết quả đá luân lưu để xác định đội thắng')
+        return
+      }
+      if (match.penaltyScore1 === match.penaltyScore2) {
+        toast.error('Kết quả đá luân lưu không được hòa. Vui lòng nhập lại')
+        return
+      }
+    }
+
     try {
       setSavingResults(true)
-      
+
       const result = await leagueApi.updateMatchResult(
         id,
         match.stage,
         match.id,
         match.score1,
-        match.score2
+        match.score2,
+        match.penaltyScore1,
+        match.penaltyScore2
       )
 
       if (result.success) {
@@ -134,7 +150,7 @@ const MatchResultsTab = ({ tournament }) => {
     }
   }
 
-  // Hủy kết quả một trận đấu
+  // Clear result
   const handleClearMatchResult = async (match) => {
     if (!window.confirm('Bạn có chắc chắn muốn hủy kết quả trận đấu này? Đội thắng sẽ bị xóa khỏi vòng tiếp theo.')) {
       return
@@ -142,13 +158,13 @@ const MatchResultsTab = ({ tournament }) => {
 
     try {
       setSavingResults(true)
-      
+
       const result = await leagueApi.updateMatchResult(
         id,
         match.stage,
         match.id,
-        null, // score1 = null để hủy
-        null  // score2 = null để hủy
+        null,
+        null
       )
 
       if (result.success) {
@@ -165,15 +181,15 @@ const MatchResultsTab = ({ tournament }) => {
 
   if (!tournament) return null
 
-  // Nếu chưa có matches, hiển thị thông báo
+  // Empty state if no matches
   if (availableStages.length === 0) {
     return (
       <div className="custom-tab-content">
         <h2>Thi đấu</h2>
-        
-        <p className="matches-description">
-          Chưa có lịch đấu. Vui lòng bốc thăm để tạo lịch đấu.
-        </p>
+        <div className="match-results-empty">
+          <Trophy className="empty-icon" />
+          <p>Chưa có lịch đấu. Vui lòng bốc thăm để tạo lịch đấu.</p>
+        </div>
       </div>
     )
   }
@@ -181,255 +197,187 @@ const MatchResultsTab = ({ tournament }) => {
   return (
     <div className="custom-tab-content">
       <h2>Thi đấu</h2>
-      
-      <p className="matches-description">
-        Cập nhật kết quả các trận đấu. Kết quả sẽ tự động cập nhật vào vòng tiếp theo.
-      </p>
 
-      {/* Stage Selector */}
-      {availableStages.length > 1 && (
-        <div className="matches-stage-selector" style={{
-          display: 'flex',
-          gap: '8px',
-          marginBottom: '20px',
-          flexWrap: 'wrap'
-        }}>
-          {availableStages.map(stage => (
-            <button
-              key={stage}
-              onClick={() => setSelectedStage(stage)}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '8px',
-                border: '2px solid',
-                borderColor: selectedStage === stage ? '#10b981' : '#e5e7eb',
-                backgroundColor: selectedStage === stage ? '#10b981' : 'white',
-                color: selectedStage === stage ? 'white' : '#374151',
-                fontWeight: '600',
-                fontSize: '14px',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              {getStageTitle(stage)}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="match-results-container">
+        {/* Stage Selector */}
+        {availableStages.length > 1 && (
+          <div className="stage-selector">
+            {availableStages.map(stage => (
+              <button
+                key={stage}
+                onClick={() => setSelectedStage(stage)}
+                className={`stage-btn ${selectedStage === stage ? 'active' : ''}`}
+              >
+                {getStageTitle(stage)}
+              </button>
+            ))}
+          </div>
+        )}
 
-      <div className="matches-section">
-        <div className="matches-stage-box" style={{
-          backgroundColor: 'white',
-          border: '1px solid #e5e7eb',
-          borderRadius: '12px',
-          padding: '24px',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-        }}>
-          <h3 style={{
-            fontSize: '18px',
-            fontWeight: '600',
-            color: '#1f2937',
-            marginBottom: '20px',
-            paddingBottom: '12px',
-            borderBottom: '2px solid #e5e7eb'
-          }}>
-            {selectedStage ? getStageTitle(selectedStage) : 'Chọn vòng đấu'} ({matches.length} trận)
-          </h3>
-          
+        {/* Results Box */}
+        <div className="match-results-box">
+          <div className="match-results-header">
+            <h3 className="match-results-title">
+              {selectedStage ? getStageTitle(selectedStage) : 'Chọn vòng đấu'}
+              <span style={{ fontWeight: 400, color: '#64748b', fontSize: '14px', marginLeft: '8px' }}>
+                ({matches.length} trận)
+              </span>
+            </h3>
+          </div>
+
           {matches.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
-              Chưa có trận đấu nào cho vòng này.
+            <div className="match-results-empty">
+              <AlertCircle className="empty-icon" />
+              <p>Chưa có trận đấu nào cho vòng này.</p>
             </div>
           ) : (
-            <div className="matches-list">
+            <div className="match-list">
               {matches.map((match) => {
                 const team1 = findTeamById(match.team1Id)
                 const team2 = findTeamById(match.team2Id)
                 const team1Name = team1?.teamNumber || `Đội #${match.team1Id}`
                 const team2Name = team2?.teamNumber || `Đội #${match.team2Id}`
-                
+                const isCompleted = match.score1 !== null && match.score2 !== null
+                const isRoundRobin = tournament.format === 'Vòng tròn' || tournament.format === 'round-robin'
+                const isDraw = match.score1 !== null && match.score2 !== null && match.score1 === match.score2
+                const showPenaltyInputs = !isRoundRobin && isDraw
+
                 return (
-                  <div 
-                    key={match.id} 
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '16px',
-                      padding: '16px',
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      marginBottom: '12px'
-                    }}
-                  >
-                    <span style={{
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: '#374151',
-                      minWidth: '40px'
-                    }}>
-                      #{match.id}
-                    </span>
-                    
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      flex: 1
-                    }}>
-                      {/* Team 1 */}
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        flex: 1
-                      }}>
-                        {team1?.logo && (
-                          <img 
-                            src={team1.logo} 
-                            alt="Team" 
-                            style={{ 
-                              width: '32px', 
-                              height: '32px', 
-                              objectFit: 'cover', 
-                              borderRadius: '4px' 
-                            }}
-                          />
-                        )}
-                        <span style={{
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          color: '#1f2937'
-                        }}>
-                          {team1Name}
+                  <div key={match.id} className={`match-result-card ${isCompleted ? 'completed' : ''}`}>
+                    {/* ID & Info */}
+                    <div className="match-info-col">
+                      <span className="match-number-badge">#{match.id}</span>
+                      {(match.time || match.date) && (
+                        <span className="match-time-badge">
+                          {match.time ? match.time.substring(0, 5) : ''}
                         </span>
+                      )}
+                    </div>
+
+                    {/* Teams & Scores */}
+                    <div className="match-teams-col">
+                      {/* Team 1 */}
+                      <div className="match-team">
+                        <img 
+                          src={team1?.logo || '/team.png'} 
+                          alt={team1Name} 
+                          className="match-team-logo"
+                          onError={(e) => {
+                            // Fallback nếu logo không load được
+                            e.target.src = '/team.png'
+                          }}
+                        />
+                        <span className="match-team-name" title={team1Name}>{team1Name}</span>
                       </div>
-                      
-                      {/* Score Input */}
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                      }}>
+
+                      {/* Inputs */}
+                      <div className="match-score-inputs">
                         <input
                           type="number"
                           min="0"
                           value={match.score1 ?? ''}
                           onChange={(e) => handleScoreChange(match.id, 'score1', e.target.value)}
-                          placeholder="0"
-                          style={{
-                            width: '60px',
-                            padding: '8px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '6px',
-                            fontSize: '16px',
-                            fontWeight: '600',
-                            textAlign: 'center'
-                          }}
+                          placeholder="-"
+                          className="score-input"
                         />
-                        <span style={{
-                          fontSize: '18px',
-                          fontWeight: '600',
-                          color: '#6b7280'
-                        }}>
-                          -
-                        </span>
+                        <span className="score-separator">-</span>
                         <input
                           type="number"
                           min="0"
                           value={match.score2 ?? ''}
                           onChange={(e) => handleScoreChange(match.id, 'score2', e.target.value)}
-                          placeholder="0"
-                          style={{
-                            width: '60px',
-                            padding: '8px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '6px',
-                            fontSize: '16px',
-                            fontWeight: '600',
-                            textAlign: 'center'
-                          }}
+                          placeholder="-"
+                          className="score-input"
                         />
                       </div>
                       
-                      {/* Team 2 */}
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        flex: 1,
-                        justifyContent: 'flex-end'
-                      }}>
-                        <span style={{
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          color: '#1f2937'
+                      {/* Penalty inputs (chỉ hiển thị khi hòa và single-elimination) */}
+                      {showPenaltyInputs && (
+                        <div className="match-penalty-inputs" style={{
+                          marginTop: '8px',
+                          padding: '8px',
+                          backgroundColor: '#fef3c7',
+                          borderRadius: '6px',
+                          border: '1px solid #fbbf24'
                         }}>
-                          {team2Name}
-                        </span>
-                        {team2?.logo && (
-                          <img 
-                            src={team2.logo} 
-                            alt="Team" 
-                            style={{ 
-                              width: '32px', 
-                              height: '32px', 
-                              objectFit: 'cover', 
-                              borderRadius: '4px' 
-                            }}
-                          />
-                        )}
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            color: '#92400e',
+                            marginBottom: '4px',
+                            textAlign: 'center'
+                          }}>
+                            Đá luân lưu (khi hòa)
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px'
+                          }}>
+                            <input
+                              type="number"
+                              min="0"
+                              value={match.penaltyScore1 ?? ''}
+                              onChange={(e) => handleScoreChange(match.id, 'penaltyScore1', e.target.value)}
+                              placeholder="0"
+                              className="score-input"
+                              style={{
+                                width: '50px',
+                                fontSize: '12px',
+                                padding: '4px 8px'
+                              }}
+                            />
+                            <span className="score-separator" style={{ fontSize: '12px' }}>-</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={match.penaltyScore2 ?? ''}
+                              onChange={(e) => handleScoreChange(match.id, 'penaltyScore2', e.target.value)}
+                              placeholder="0"
+                              className="score-input"
+                              style={{
+                                width: '50px',
+                                fontSize: '12px',
+                                padding: '4px 8px'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Team 2 */}
+                      <div className="match-team team-right">
+                        <img 
+                          src={team2?.logo || '/team.png'} 
+                          alt={team2Name} 
+                          className="match-team-logo"
+                          onError={(e) => {
+                            // Fallback nếu logo không load được
+                            e.target.src = '/team.png'
+                          }}
+                        />
+                        <span className="match-team-name" title={team2Name}>{team2Name}</span>
                       </div>
                     </div>
-                    
-                    {/* Action Buttons */}
-                    <div style={{
-                      display: 'flex',
-                      gap: '8px',
-                      alignItems: 'center'
-                    }}>
-                      {/* Save Button */}
+
+                    {/* Actions */}
+                    <div className="match-actions-col">
                       <button
                         onClick={() => handleSaveMatchResult(match)}
-                        disabled={savingResults || match.score1 === null || match.score2 === null}
-                        style={{
-                          padding: '8px 16px',
-                          backgroundColor: (match.score1 !== null && match.score2 !== null) ? '#10b981' : '#d1d5db',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          cursor: (match.score1 !== null && match.score2 !== null) ? 'pointer' : 'not-allowed',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          transition: 'all 0.2s'
-                        }}
+                        disabled={savingResults || match.score1 === null || match.score2 === null || 
+                                 (showPenaltyInputs && (match.penaltyScore1 === null || match.penaltyScore2 === null))}
+                        className="btn-match-action btn-save-result"
                       >
                         <Save size={16} />
                         Lưu
                       </button>
-                      
-                      {/* Clear Button - chỉ hiển thị khi đã có kết quả */}
-                      {match.score1 !== null && match.score2 !== null && (
+
+                      {isCompleted && (
                         <button
                           onClick={() => handleClearMatchResult(match)}
                           disabled={savingResults}
-                          style={{
-                            padding: '8px 16px',
-                            backgroundColor: '#ef4444',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                            cursor: savingResults ? 'not-allowed' : 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            transition: 'all 0.2s'
-                          }}
+                          className="btn-match-action btn-clear-result"
                         >
                           <X size={16} />
                           Hủy
@@ -448,4 +396,3 @@ const MatchResultsTab = ({ tournament }) => {
 }
 
 export default MatchResultsTab
-

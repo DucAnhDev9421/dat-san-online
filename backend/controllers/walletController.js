@@ -83,6 +83,13 @@ export const initTopUp = asyncHandler(async (req, res) => {
   const { amount, method } = req.body;
   const user = req.user;
 
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      message: "Vui lòng đăng nhập để nạp tiền",
+    });
+  }
+
   // === SỬ DỤNG LOGIC TỪ STASH: Ràng buộc số tiền tối thiểu ===
   const MIN_TOPUP_AMOUNT = 10000; // 10.000 VNĐ
   if (!amount || amount < MIN_TOPUP_AMOUNT) {

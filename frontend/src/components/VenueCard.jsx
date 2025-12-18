@@ -16,6 +16,7 @@ export default function VenueCard({
   open,
   price,
   sport,
+  sports, // Array of sports
   status = 'Còn trống',
   services = [],
   onBook,
@@ -277,39 +278,88 @@ export default function VenueCard({
         gap: 8,
         transform: 'translateZ(10px)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {(chip || sport) && (
-            <span style={{
-              fontSize: 12,
-              color: '#16a34a',
-              background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
-              padding: '4px 10px',
-              borderRadius: 999,
-              fontWeight: 600,
-              boxShadow: '0 2px 4px rgba(22, 163, 74, 0.1)'
-            }}>
-              {chip || sport}
-            </span>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', overflow: 'hidden' }}>
+          {/* Display multiple sports badges - optimized for max 2 + overflow */}
+          {(() => {
+            const sportsToDisplay = sports && Array.isArray(sports) && sports.length > 0 
+              ? sports 
+              : (chip || sport) 
+                ? [chip || sport] 
+                : [];
+            
+            const maxDisplay = 2;
+            const visibleSports = sportsToDisplay.slice(0, maxDisplay);
+            const remainingCount = sportsToDisplay.length - maxDisplay;
+            
+            return sportsToDisplay.length > 0 ? (
+              <div style={{ display: 'flex', gap: 6, flex: 1, minWidth: 0, alignItems: 'center' }}>
+                {visibleSports.map((sportItem, index) => (
+                  <span
+                    key={index}
+                    style={{
+                      fontSize: 11,
+                      color: '#16a34a',
+                      background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+                      padding: '3px 8px',
+                      borderRadius: 999,
+                      fontWeight: 600,
+                      boxShadow: '0 2px 4px rgba(22, 163, 74, 0.1)',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0
+                    }}
+                  >
+                    {sportItem}
+                  </span>
+                ))}
+                {remainingCount > 0 && (
+                  <span
+                    title={sportsToDisplay.slice(maxDisplay).join(', ')}
+                    style={{
+                      fontSize: 11,
+                      color: '#16a34a',
+                      background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+                      padding: '3px 8px',
+                      borderRadius: 999,
+                      fontWeight: 600,
+                      boxShadow: '0 2px 4px rgba(22, 163, 74, 0.1)',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      cursor: 'help'
+                    }}
+                  >
+                    +{remainingCount}
+                  </span>
+                )}
+              </div>
+            ) : null;
+          })()}
           <span style={{
-            marginLeft: 'auto',
-            fontSize: 12,
+            fontSize: 11,
             color: '#10b981',
             background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)',
-            padding: '4px 10px',
+            padding: '3px 8px',
             borderRadius: 999,
             fontWeight: 600,
-            boxShadow: '0 2px 4px rgba(16, 185, 129, 0.1)'
+            boxShadow: '0 2px 4px rgba(16, 185, 129, 0.1)',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
           }}>
             {status}
           </span>
         </div>
-        <div style={{
-          fontSize: 16,
-          fontWeight: 800,
-          color: '#0f172a',
-          textShadow: '0 1px 2px rgba(0,0,0,0.05)'
-        }}>
+        <div 
+          title={name}
+          style={{
+            fontSize: 16,
+            fontWeight: 800,
+            color: '#0f172a',
+            textShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            width: '100%'
+          }}
+        >
           {name}
         </div>
         {address && (

@@ -39,7 +39,19 @@ export default function Wallet() {
       }
     } catch (error) {
       console.error('Error initiating top-up:', error)
-      toast.error(error.message || 'Có lỗi xảy ra khi nạp tiền. Vui lòng thử lại.')
+      
+      // Hiển thị thông báo lỗi chi tiết hơn
+      let errorMessage = 'Có lỗi xảy ra khi nạp tiền. Vui lòng thử lại.'
+      
+      if (error.status === 0) {
+        errorMessage = 'Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng hoặc đảm bảo backend đang chạy.'
+      } else if (error.status === 401) {
+        errorMessage = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      toast.error(errorMessage)
     } finally {
       setIsProcessing(false)
     }

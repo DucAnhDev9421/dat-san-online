@@ -15,6 +15,8 @@ import { processBookingRewards } from "../utils/rewardService.js";
 import mongoose from "mongoose";
 import User from "../models/User.js";
 import { sendEmail, sendPaymentReceipt } from "../utils/emailService.js";
+import { creditOwnerBalance } from "../utils/ownerBalanceService.js";
+import Facility from "../models/Facility.js";
 function sortObject(obj) {
   let sorted = {};
   let str = [];
@@ -120,6 +122,43 @@ const processSuccessfulPayment = async (paymentId, transactionId) => {
         }
       } catch (e) {
         console.error("Lỗi cộng điểm thưởng webhook:", e);
+      }
+
+      // C. Cộng tiền cho owner (sau khi thanh toán thành công)
+      try {
+        const bookingWithFacility = await Booking.findById(booking._id)
+          .populate("facility", "owner");
+        
+        if (bookingWithFacility?.facility?.owner) {
+          // Xử lý ownerId (có thể là ObjectId hoặc object đã populate)
+          let ownerId = bookingWithFacility.facility.owner;
+          if (ownerId._id) {
+            ownerId = ownerId._id;
+          } else if (typeof ownerId === 'object' && ownerId.toString) {
+            ownerId = ownerId.toString();
+          }
+          
+          // Lấy platformFee từ SystemConfig (hoặc dùng giá trị mặc định nếu có lỗi)
+          const { getPlatformFee } = await import("../utils/systemConfigService.js");
+          let platformFee = 0.1; // Fallback mặc định
+          try {
+            platformFee = await getPlatformFee();
+          } catch (e) {
+            console.warn("Không thể lấy platformFee từ SystemConfig, dùng giá trị mặc định 10%:", e);
+          }
+          
+          await creditOwnerBalance(
+            ownerId,
+            booking.totalAmount
+            // Không truyền platformFee, sẽ lấy từ SystemConfig trong creditOwnerBalance
+          );
+          
+          console.log(`✅ Đã cộng ${(booking.totalAmount * (1 - platformFee)).toLocaleString("vi-VN")} VNĐ cho owner ${ownerId} (từ booking ${booking.totalAmount.toLocaleString("vi-VN")} VNĐ, phí ${(platformFee * 100).toFixed(0)}%)`);
+        } else {
+          console.warn(`⚠️ Booking ${booking._id} không có facility hoặc owner`);
+        }
+      } catch (e) {
+        console.error("Lỗi cộng tiền cho owner:", e);
       }
 
       return true;
@@ -504,6 +543,40 @@ export const paymentCash = asyncHandler(async (req, res, next) => {
       }
     } catch (e) {
       console.error("Lỗi cộng điểm tiền mặt:", e);
+    }
+
+    // Cộng tiền cho owner (sau khi thanh toán tiền mặt thành công)
+    try {
+      if (updatedBooking?.facility?.owner) {
+        // Xử lý ownerId (có thể là ObjectId hoặc object đã populate)
+        let ownerId = updatedBooking.facility.owner;
+        if (ownerId._id) {
+          ownerId = ownerId._id;
+        } else if (typeof ownerId === 'object' && ownerId.toString) {
+          ownerId = ownerId.toString();
+        }
+        
+        // Lấy platformFee từ SystemConfig (hoặc dùng giá trị mặc định nếu có lỗi)
+        const { getPlatformFee } = await import("../utils/systemConfigService.js");
+        let platformFee = 0.1; // Fallback mặc định
+        try {
+          platformFee = await getPlatformFee();
+        } catch (e) {
+          console.warn("Không thể lấy platformFee từ SystemConfig, dùng giá trị mặc định 10%:", e);
+        }
+        
+        await creditOwnerBalance(
+          ownerId,
+          updatedBooking.totalAmount
+          // Không truyền platformFee, sẽ lấy từ SystemConfig trong creditOwnerBalance
+        );
+        
+        console.log(`✅ [CASH] Đã cộng ${(updatedBooking.totalAmount * (1 - platformFee)).toLocaleString("vi-VN")} VNĐ cho owner ${ownerId} (từ booking ${updatedBooking.totalAmount.toLocaleString("vi-VN")} VNĐ, phí ${(platformFee * 100).toFixed(0)}%)`);
+      } else {
+        console.warn(`⚠️ [CASH] Booking ${updatedBooking._id} không có facility hoặc owner`);
+      }
+    } catch (e) {
+      console.error("Lỗi cộng tiền cho owner (cash):", e);
     }
 
     res.status(201).json({

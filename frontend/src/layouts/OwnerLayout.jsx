@@ -11,8 +11,6 @@ import {
   MessageSquare,
   BarChart3,
   Bell,
-  Users2,
-  History,
   Settings,
   Trophy,
   Gift,
@@ -38,8 +36,6 @@ export default function OwnerLayout({ children }) {
     { id: "reviews", path: "reviews", label: "Đánh giá & Phản hồi", icon: MessageSquare },
     { id: "analytics", path: "analytics", label: "Báo cáo & Thống kê", icon: BarChart3 },
     { id: "notifications", path: "notifications", label: "Quản lý tin nhắn", icon: Bell },
-    { id: "staff", path: "staff", label: "Quản lý nhân sự", icon: Users2 },
-    { id: "activity", path: "activity", label: "Nhật ký hoạt động", icon: History },
     { id: "settings", path: "settings", label: "Cấu hình & Hệ thống", icon: Settings },
   ];
 

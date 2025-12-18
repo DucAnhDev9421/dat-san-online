@@ -7,6 +7,7 @@ import MapDisplay from '../../../components/map/MapDisplay'
 import ReviewsSection from './components/ReviewsSection'
 import CourtAndFieldTypeSelector from './components/CourtAndFieldTypeSelector'
 import TimeSlotSelector from './components/TimeSlotSelector'
+import ServiceSelector from './components/ServiceSelector'
 import BookingSummary from './components/BookingSummary'
 import CalendarModal from './modals/CalendarModal'
 import BookingModal from './modals/BookingModal'
@@ -46,6 +47,7 @@ function Booking() {
   const [reviewsLoading, setReviewsLoading] = useState(false)
   const [reviewsPage, setReviewsPage] = useState(1)
   const [promotionData, setPromotionData] = useState(null) // { code, promotion, discountAmount }
+  const [selectedServices, setSelectedServices] = useState([]) // Array of { serviceId, service, quantity, totalPrice }
 
   // Custom hooks - tất cả logic phức tạp ở đây
   const {
@@ -134,7 +136,8 @@ function Booking() {
     setShowBookingModal,
     slotTimeoutRef,
     isAuthenticated,
-    timeSlotsData
+    timeSlotsData,
+    selectedServices
   )
 
   // Reset field type when sport category changes
@@ -253,6 +256,14 @@ function Booking() {
               bookedSlots={bookedSlots}
               currentUserId={user?._id}
             />
+
+            {/* Service Selector */}
+            <ServiceSelector
+              facilityId={venueId}
+              selectedSportCategory={selectedSportCategory}
+              selectedServices={selectedServices}
+              onServicesChange={setSelectedServices}
+            />
           </div>
 
           {/* Right Column - Booking Summary */}
@@ -268,6 +279,7 @@ function Booking() {
               venueId={venueId}
               timeSlotDuration={timeSlotDuration}
               onPromotionChange={setPromotionData}
+              selectedServices={selectedServices}
             />
           </div>
         </div>

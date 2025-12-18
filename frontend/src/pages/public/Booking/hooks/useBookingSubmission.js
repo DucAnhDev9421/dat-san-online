@@ -23,6 +23,7 @@ import { calculateTotalAmount } from '../utils/priceHelpers';
  * @param {Function} setShowBookingModal - State setter for booking modal
  * @param {Object} slotTimeoutRef - Ref for timeout
  * @param {Array} timeSlotsData - Time slots data
+ * @param {Array} selectedServices - Selected services array
  * @returns {Object} { handleBookingSubmit, isProcessing }
  */
 export const useBookingSubmission = (
@@ -40,7 +41,8 @@ export const useBookingSubmission = (
   setShowBookingModal,
   slotTimeoutRef,
   isAuthenticated,
-  timeSlotsData = []
+  timeSlotsData = [],
+  selectedServices = []
 ) => {
   const navigate = useNavigate();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -94,10 +96,23 @@ export const useBookingSubmission = (
 
       const formattedTimeSlots = formatTimeSlots(selectedSlots, timeSlotDuration);
 
+      // Calculate services total
+      const servicesTotal = selectedServices.reduce((sum, item) => {
+        return sum + (item.totalPrice || 0)
+      }, 0)
+
       // Prepare booking data for API
-      const subtotal = calculateTotalAmount(selectedCourt, selectedSlots, courts, venueData);
+      const courtSubtotal = calculateTotalAmount(selectedCourt, selectedSlots, courts, venueData);
+      const subtotal = courtSubtotal + servicesTotal; // Include services in subtotal
       const discount = promotionData?.discountAmount || 0;
       const finalTotal = Math.max(0, subtotal - discount);
+
+      // Format services for API
+      const services = selectedServices.map(item => ({
+        serviceId: item.serviceId,
+        quantity: item.quantity,
+        price: item.service?.price || 0
+      }))
 
       const bookingPayload = {
         courtId: selectedCourt,
@@ -110,9 +125,10 @@ export const useBookingSubmission = (
           email: user?.email || '',
           notes: ''
         },
-        totalAmount: subtotal, // Subtotal before discount
+        totalAmount: subtotal, // Subtotal before discount (includes services)
         promotionCode: promotionData?.code || null,
-        discountAmount: discount
+        discountAmount: discount,
+        services: services.length > 0 ? services : undefined // Include services if any
       };
 
       // Create booking via API
@@ -145,14 +161,17 @@ export const useBookingSubmission = (
           time: formattedTimeSlots.join(', '),
           duration: selectedSlots.length,
           pricePerHour: selectedCourtData.price || venueData.pricePerHour,
-          subtotal: calculateTotalAmount(selectedCourt, selectedSlots, courts, venueData),
+          courtSubtotal: courtSubtotal,
+          servicesTotal: servicesTotal,
+          subtotal: subtotal,
           serviceFee: 0,
           discount: promotionData?.discountAmount || 0,
           promotionCode: promotionData?.code || null,
           promotion: promotionData?.promotion || null,
-          total: Math.max(0, calculateTotalAmount(selectedCourt, selectedSlots, courts, venueData) - (promotionData?.discountAmount || 0)),
+          total: finalTotal,
           selectedSlots: selectedSlots,
           timeSlotsData: timeSlotsData,
+          selectedServices: selectedServices,
           venueData: venueData,
           booking: booking
         };

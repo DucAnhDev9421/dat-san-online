@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react'
-import { Bracket, Seed, SeedItem, SeedTeam } from 'react-brackets'
+import React, { useMemo, useState, useEffect } from 'react'
+import { Bracket } from 'react-tournament-bracket'
+import { Maximize2, Minimize2 } from 'lucide-react'
 
 const ScheduleTab = ({ tournament }) => {
   if (!tournament) return null
@@ -7,6 +8,26 @@ const ScheduleTab = ({ tournament }) => {
   // Kiểm tra format giải đấu
   const isRoundRobin = tournament.format === 'Vòng tròn' || tournament.format === 'round-robin'
   const [selectedRoundIndex, setSelectedRoundIndex] = useState(null) // null = hiển thị tất cả
+  const [hoveredTeamId, setHoveredTeamId] = useState(null) // Track team đang được hover
+  const [isFullscreen, setIsFullscreen] = useState(false) // Track fullscreen mode
+
+  // Xử lý phím ESC để đóng fullscreen
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false)
+      }
+    }
+    if (isFullscreen) {
+      document.addEventListener('keydown', handleEsc)
+      // Ngăn scroll body khi fullscreen
+      document.body.style.overflow = 'hidden'
+    }
+    return () => {
+      document.removeEventListener('keydown', handleEsc)
+      document.body.style.overflow = 'unset'
+    }
+  }, [isFullscreen])
 
   // Helper: Lấy tên stage để hiển thị
   const getStageTitle = (stage) => {
@@ -49,63 +70,6 @@ const ScheduleTab = ({ tournament }) => {
     ) || null
   }
 
-  // Helper: Lấy stage trước đó dựa trên matches thực tế
-  const getPreviousStage = (currentStage) => {
-    if (!tournament?.matches) return null
-
-    // Lấy tất cả các stage có matches (single-elimination)
-    const allStages = [...new Set(
-      tournament.matches
-        .filter(m => m.stage && !m.stage.startsWith('round-robin'))
-        .map(m => m.stage)
-    )]
-
-    if (allStages.length === 0) return null
-
-    // Sắp xếp các stage theo thứ tự
-    const stageOrder = ['round1', 'round2', 'round3', 'round4', 'semi', 'final']
-    const sortedStages = allStages.sort((a, b) => {
-      const indexA = stageOrder.indexOf(a)
-      const indexB = stageOrder.indexOf(b)
-      return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB)
-    })
-
-    // Tìm index của currentStage trong sortedStages
-    const currentIndex = sortedStages.indexOf(currentStage)
-    if (currentIndex > 0) {
-      return sortedStages[currentIndex - 1]
-    }
-
-    return null
-  }
-
-  // Helper: Tính toán matchNumber và stage của match trước đó
-  const getPreviousMatchInfo = (currentMatch, isTeam1) => {
-    if (!currentMatch) return null
-
-    const currentStage = currentMatch.stage
-    const currentMatchNumber = currentMatch.matchNumber || 1
-    const previousStage = getPreviousStage(currentStage)
-
-    if (!previousStage) return null
-
-    // Tính matchNumber ở vòng trước:
-    // Match 1, 2 ở vòng trước -> Match 1 ở vòng hiện tại (team1 từ match 1, team2 từ match 2)
-    // Match 3, 4 ở vòng trước -> Match 2 ở vòng hiện tại (team1 từ match 3, team2 từ match 4)
-    // Công thức: 
-    // - team1: matchNumber = (currentMatchNumber - 1) * 2 + 1
-    // - team2: matchNumber = (currentMatchNumber - 1) * 2 + 2
-    const previousMatchNumber = isTeam1
-      ? (currentMatchNumber - 1) * 2 + 1
-      : (currentMatchNumber - 1) * 2 + 2
-
-    return {
-      stage: previousStage,
-      matchNumber: previousMatchNumber,
-      stageTitle: getStageTitle(previousStage)
-    }
-  }
-
   // Helper: Lấy tên team để hiển thị
   const getTeamDisplayName = (teamId, match, isTeam1 = true) => {
     // Xử lý BYE
@@ -115,10 +79,8 @@ const ScheduleTab = ({ tournament }) => {
 
     // Nếu teamId là null/undefined, hiển thị W#matchNumber tên_vòng
     if (!teamId && match) {
-      const prevMatchInfo = getPreviousMatchInfo(match, isTeam1)
-      if (prevMatchInfo) {
-        return `W#${prevMatchInfo.matchNumber} ${prevMatchInfo.stageTitle}`
-      }
+      // Logic tìm prev match ở đây khá phức tạp nếu không có context, 
+      // nhưng với Bracket mới, ta build tree nên có thể không cần hiển thị text TBD chi tiết nếu cây nối đúng
       return "TBD"
     }
 
@@ -132,6 +94,13 @@ const ScheduleTab = ({ tournament }) => {
     return `Đội #${teamId}`
   }
 
+  // Helper: Lấy logo team
+  const getTeamLogo = (teamId) => {
+    if (teamId === 'BYE') return null;
+    const team = findTeamById(teamId);
+    return team?.logo || '/team.png';
+  }
+
   // Helper: Lấy tên sân từ match
   const getCourtName = (match) => {
     if (!match?.courtId) return null
@@ -142,98 +111,269 @@ const ScheduleTab = ({ tournament }) => {
     return null
   }
 
-  // Tính toán rounds cho Single-Elimination: CHỈ nhóm matches từ API, KHÔNG tính toán
-  const rounds = useMemo(() => {
-    // Nếu là round-robin, không hiển thị bracket
-    if (isRoundRobin) {
-      return []
+  // --- LOGIC XÂY DỰNG CÂY TRẬN ĐẤU CHO REACT-TOURNAMENT-BRACKET ---
+  const bracketGame = useMemo(() => {
+    if (isRoundRobin || !tournament?.matches || tournament.matches.length === 0) {
+      return null
     }
 
-    // Nếu không có matches, trả về mảng rỗng
-    if (!tournament?.matches || tournament.matches.length === 0) {
-      return []
-    }
-
-    // Lọc chỉ matches single-elimination (không phải round-robin)
-    const singleEliminationMatches = tournament.matches.filter(
+    // Lọc matches single-elimination
+    const matches = tournament.matches.filter(
       m => m.stage && !m.stage.startsWith('round-robin')
     )
 
-    if (singleEliminationMatches.length === 0) {
-      return []
+    if (matches.length === 0) {
+      return null
     }
 
-    // Nhóm matches theo stage
-    const matchesByStage = {}
-    singleEliminationMatches.forEach(match => {
-      if (!matchesByStage[match.stage]) {
-        matchesByStage[match.stage] = []
-      }
-      matchesByStage[match.stage].push(match)
-    })
-
-    // Sắp xếp các stage theo thứ tự: round1, round2, round3, round4, semi, final
+    // Tìm trận chung kết (trận cuối cùng)
+    // Sắp xếp các stage theo thứ tự: round1 -> final
     const stageOrder = ['round1', 'round2', 'round3', 'round4', 'semi', 'final']
-    const sortedStages = Object.keys(matchesByStage).sort((a, b) => {
-      const indexA = stageOrder.indexOf(a)
-      const indexB = stageOrder.indexOf(b)
-      if (indexA === -1 && indexB === -1) return 0
-      if (indexA === -1) return 1
-      if (indexB === -1) return -1
-      return indexA - indexB
-    })
 
-    // Tạo rounds từ matches đã nhóm
-    const calculatedRounds = sortedStages.map(stage => {
-      const stageMatches = matchesByStage[stage]
-        .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
-
-      const seeds = stageMatches
-        // --- QUAN TRỌNG: ĐÃ XÓA ĐOẠN .filter() TẠI ĐÂY ---
-        // Chúng ta phải giữ lại match BYE để renderSeedComponent có cái mà render (dù là ẩn)
-        // thì dây nối mới có chỗ để bám vào.
-        .map(match => {
-          const team1Name = getTeamDisplayName(match.team1Id, match, true)
-          const team2Name = getTeamDisplayName(match.team2Id, match, false)
-
-          return {
-            id: match.matchNumber || match.id || `${stage}_${match.matchNumber}`,
-            date: match.date
-              ? new Date(match.date).toLocaleDateString('vi-VN', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-              })
-              : new Date().toLocaleDateString('vi-VN', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-              }),
-            courtName: getCourtName(match),
-            teams: [
-              {
-                name: team1Name,
-                score: match.score1 ?? null,
-                teamId: match.team1Id
-              },
-              {
-                name: team2Name,
-                score: match.score2 ?? null,
-                teamId: match.team2Id
-              }
-            ],
-            _match: match
-          }
-        })
-
-      return {
-        title: getStageTitle(stage),
-        seeds: seeds
+    // Tìm match thuộc stage cao nhất có trong danh sách
+    let finalMatch = null;
+    for (let i = stageOrder.length - 1; i >= 0; i--) {
+      const stage = stageOrder[i];
+      const matchesInStage = matches.filter(m => m.stage === stage);
+      if (matchesInStage.length > 0) {
+        // Lấy match đầu tiên của stage cao nhất (thường final chỉ có 1)
+        finalMatch = matchesInStage[0];
+        break;
       }
-    })
+    }
 
-    return calculatedRounds
-  }, [tournament, isRoundRobin])
+    if (!finalMatch) {
+      return null;
+    }
+
+    // Tạo map để tìm matches theo nextMatchId và theo stage_matchNumber
+    const matchMap = new Map();
+    matches.forEach(m => {
+      const matchKey = m.id || `${m.stage}_${m.matchNumber}`;
+      const stageMatchKey = `${m.stage}_${m.matchNumber}`;
+      matchMap.set(matchKey, m);
+      matchMap.set(stageMatchKey, m);
+      if (m.id) {
+        matchMap.set(m.id.toString(), m);
+      }
+      // Thêm key với format "stage_matchNumber" để dễ tìm
+      matchMap.set(`${m.stage}_${m.matchNumber}`, m);
+    });
+
+    // Hàm đệ quy xây dựng node theo format của react-tournament-bracket
+    const buildGame = (match) => {
+      if (!match) return null;
+
+      const team1 = findTeamById(match.team1Id);
+      const team2 = findTeamById(match.team2Id);
+      const team1Name = getTeamDisplayName(match.team1Id, match, true);
+      const team2Name = getTeamDisplayName(match.team2Id, match, false);
+
+      // Xác định trạng thái match
+      const hasScore = match.score1 !== undefined && match.score2 !== undefined && 
+                       match.score1 !== null && match.score2 !== null;
+      const state = hasScore ? 'DONE' : 'NO_SHOW';
+      
+      // Xác định winner (bao gồm cả penalty nếu hòa)
+      let winner1 = false;
+      let winner2 = false;
+      if (hasScore) {
+        if (match.score1 > match.score2) {
+          winner1 = true;
+        } else if (match.score2 > match.score1) {
+          winner2 = true;
+        } else if (match.score1 === match.score2) {
+          // Hòa, xét đá luân lưu
+          if (match.penaltyScore1 !== null && match.penaltyScore2 !== null) {
+            if (match.penaltyScore1 > match.penaltyScore2) {
+              winner1 = true;
+            } else if (match.penaltyScore2 > match.penaltyScore1) {
+              winner2 = true;
+            }
+          }
+        }
+      }
+
+      // Tìm previous matches (children) - tìm matches có nextMatchId trỏ tới match này
+      const currentMatchKey = match.id || `${match.stage}_${match.matchNumber}`;
+      const currentMatchKeyAlt = `${match.stage}_${match.matchNumber}`;
+      
+      // Tìm matches có nextMatchId trỏ tới match hiện tại
+      let childMatches = matches.filter(m => {
+        if (!m.nextMatchId) return false;
+        // nextMatchId có thể là string format "stage_matchNumber" hoặc ID
+        const nextMatchIdStr = m.nextMatchId.toString();
+        // So sánh với nhiều format có thể
+        return nextMatchIdStr === currentMatchKey || 
+               nextMatchIdStr === currentMatchKeyAlt ||
+               nextMatchIdStr === match.id?.toString() ||
+               nextMatchIdStr === `${match.stage}_${match.matchNumber}`;
+      });
+
+      // Nếu không tìm thấy đủ 2 child matches qua nextMatchId, dùng logic matchNumber (fallback)
+      // Mỗi match ở vòng sau cần 2 matches từ vòng trước
+      if (childMatches.length < 2) {
+        const currentStage = match.stage;
+        const currentMatchNumber = match.matchNumber || 1;
+
+        const getPreviousStage = (curr) => {
+          const idx = stageOrder.indexOf(curr);
+          if (idx > 0) return stageOrder[idx - 1];
+          return null;
+        };
+        const prevStage = getPreviousStage(currentStage);
+
+        if (prevStage) {
+          // Logic: Match 1 ở vòng sau nhận winner từ Match 1 và Match 2 ở vòng trước
+          // Match 2 ở vòng sau nhận winner từ Match 3 và Match 4 ở vòng trước
+          const prevMatchNum1 = (currentMatchNumber - 1) * 2 + 1;
+          const prevMatchNum2 = (currentMatchNumber - 1) * 2 + 2;
+
+          // Tìm các matches từ vòng trước mà chưa có trong childMatches
+          const childMatch1 = matches.find(m => 
+            m.stage === prevStage && 
+            m.matchNumber === prevMatchNum1 &&
+            !childMatches.some(cm => cm.stage === m.stage && cm.matchNumber === m.matchNumber)
+          );
+          const childMatch2 = matches.find(m => 
+            m.stage === prevStage && 
+            m.matchNumber === prevMatchNum2 &&
+            !childMatches.some(cm => cm.stage === m.stage && cm.matchNumber === m.matchNumber)
+          );
+
+          if (childMatch1) {
+            childMatches.push(childMatch1);
+          }
+          if (childMatch2) {
+            childMatches.push(childMatch2);
+          }
+        }
+      }
+
+      // Xây dựng children nodes trước (cần để tạo seed.sourceGame)
+      const children = childMatches
+        .map(childMatch => buildGame(childMatch))
+        .filter(Boolean);
+
+      // Format theo react-tournament-bracket - sử dụng sides.home và sides.visitor với seed.sourceGame
+      const matchId = match.id || `${match.stage}_${match.matchNumber}`;
+      const nextMatchId = match.nextMatchId ? 
+        (matchMap.has(match.nextMatchId.toString()) ? match.nextMatchId : null) : null;
+
+      // Format date để hiển thị ở vị trí "Invalid Date" - cần là Date object với cả time nếu có
+      let scheduledDate = null;
+      if (match.date) {
+        try {
+          const date = new Date(match.date);
+          if (!isNaN(date.getTime())) {
+            // Nếu có time, thêm vào date
+            if (match.time) {
+              const [hours, minutes] = match.time.split(':').map(Number);
+              if (!isNaN(hours) && !isNaN(minutes)) {
+                date.setHours(hours, minutes, 0, 0);
+              }
+            }
+            scheduledDate = date; // Giữ nguyên Date object để Bracket component hiển thị
+          }
+        } catch (e) {
+          // Ignore date parsing errors
+        }
+      }
+
+      // Xác định sourceGame cho mỗi side (team1 từ childMatch đầu tiên, team2 từ childMatch thứ hai)
+      const homeSourceGame = children.length > 0 ? children[0] : null;
+      const visitorSourceGame = children.length > 1 ? children[1] : null;
+
+      // Tìm child match tương ứng để lấy matchNumber cho hiển thị W#matchNumber
+      const homeChildMatch = childMatches.length > 0 ? childMatches[0] : null;
+      const visitorChildMatch = childMatches.length > 1 ? childMatches[1] : null;
+
+      // Xác định tên hiển thị cho team1 (nếu chưa có team thì hiển thị W#matchNumber (vòng đấu trước))
+      let homeTeamName = team1Name;
+      if (!match.team1Id && homeChildMatch) {
+        const prevStageTitle = getStageTitle(homeChildMatch.stage);
+        homeTeamName = `W#${homeChildMatch.matchNumber} (${prevStageTitle})`;
+      } else if (!match.team1Id && !homeChildMatch) {
+        homeTeamName = 'TBD';
+      }
+
+      // Xác định tên hiển thị cho team2 (nếu chưa có team thì hiển thị W#matchNumber (vòng đấu trước))
+      let visitorTeamName = team2Name;
+      if (!match.team2Id && visitorChildMatch) {
+        const prevStageTitle = getStageTitle(visitorChildMatch.stage);
+        visitorTeamName = `W#${visitorChildMatch.matchNumber} (${prevStageTitle})`;
+      } else if (!match.team2Id && !visitorChildMatch) {
+        visitorTeamName = 'TBD';
+      }
+
+      // Lấy tên sân đấu
+      const courtName = getCourtName(match);
+
+      // Xây dựng sides object với home và visitor, thêm seed.sourceGame nếu có
+      const gameNode = {
+        id: matchId,
+        name: getStageTitle(match.stage),
+        scheduled: scheduledDate,
+        courtName: courtName, // Thêm tên sân vào gameNode
+        sides: {
+          home: {
+            team: {
+              id: match.team1Id && match.team1Id !== 'BYE' ? match.team1Id.toString() : (match.team1Id === 'BYE' ? 'BYE_1' : 'TBD_1'),
+              name: match.team1Id === 'BYE' ? 'BYE' : homeTeamName,
+              logo: getTeamLogo(match.team1Id)
+            },
+            score: {
+              score: match.score1 !== undefined && match.score1 !== null ? match.score1 : null,
+              // Hiển thị penalty score nếu có và hòa
+              ...(match.score1 !== null && match.score2 !== null && 
+                  match.score1 === match.score2 && 
+                  match.penaltyScore1 !== null && match.penaltyScore2 !== null ? {
+                penaltyScore: match.penaltyScore1
+              } : {})
+            },
+            // Thêm seed với sourceGame nếu có child match
+            ...(homeSourceGame ? {
+              seed: {
+                sourceGame: homeSourceGame,
+                rank: 1, // Winner
+                displayName: homeTeamName
+              }
+            } : {})
+          },
+          visitor: {
+            team: {
+              id: match.team2Id && match.team2Id !== 'BYE' ? match.team2Id.toString() : (match.team2Id === 'BYE' ? 'BYE_2' : 'TBD_2'),
+              name: match.team2Id === 'BYE' ? 'BYE' : visitorTeamName,
+              logo: getTeamLogo(match.team2Id)
+            },
+            score: {
+              score: match.score2 !== undefined && match.score2 !== null ? match.score2 : null,
+              // Hiển thị penalty score nếu có và hòa
+              ...(match.score1 !== null && match.score2 !== null && 
+                  match.score1 === match.score2 && 
+                  match.penaltyScore1 !== null && match.penaltyScore2 !== null ? {
+                penaltyScore: match.penaltyScore2
+              } : {})
+            },
+            // Thêm seed với sourceGame nếu có child match
+            ...(visitorSourceGame ? {
+              seed: {
+                sourceGame: visitorSourceGame,
+                rank: 1, // Winner
+                displayName: visitorTeamName
+              }
+            } : {})
+          }
+        }
+      };
+
+      return gameNode;
+    };
+
+    return buildGame(finalMatch);
+
+  }, [tournament, isRoundRobin]);
+
 
   // Tính toán rounds cho Round-Robin: CHỈ nhóm matches từ API
   const roundRobinRounds = useMemo(() => {
@@ -334,27 +474,6 @@ const ScheduleTab = ({ tournament }) => {
     return rounds
   }, [tournament, isRoundRobin])
 
-  // Helper: Lấy team data để hiển thị logo (dùng trực tiếp teamId từ match)
-  const getTeamDataFromId = (teamId) => {
-    if (!teamId || teamId === "BYE") return null
-    return findTeamById(teamId)
-  }
-
-  // Helper: Kiểm tra trạng thái match (BYE, EMPTY, hoặc NORMAL)
-  const checkMatchStatus = (seed) => {
-    // Lưu ý: seed.teams có thể chưa có nếu data không chuẩn, cần optional chaining
-    const team1Name = seed.teams?.[0]?.name;
-    const team2Name = seed.teams?.[1]?.name;
-
-    // Kiểm tra xem có phải là trận đấu thủ tục (Bye) hay không
-    // Logic: Nếu tên đội là "BYE" hoặc teamId là "BYE"
-    const isTeam1Bye = team1Name === 'BYE' || seed.teams?.[0]?.teamId === 'BYE';
-    const isTeam2Bye = team2Name === 'BYE' || seed.teams?.[1]?.teamId === 'BYE';
-
-    if (isTeam1Bye && isTeam2Bye) return 'EMPTY'; // Cả 2 là BYE (Nhánh chết)
-    if (isTeam1Bye || isTeam2Bye) return 'BYE';   // 1 trong 2 là BYE
-    return 'NORMAL';
-  }
 
   // Hiển thị round-robin: Theo từng vòng với selector
   if (isRoundRobin) {
@@ -451,7 +570,12 @@ const ScheduleTab = ({ tournament }) => {
                     const team1 = match.team1
                     const team2 = match.team2
                     const hasScore = match.score1 !== undefined && match.score2 !== undefined
-                    const scoreText = hasScore ? `${match.score1 || 0}-${match.score2 || 0}` : 'Chưa có lịch thi đấu'
+                    let scoreText = hasScore ? `${match.score1 || 0}-${match.score2 || 0}` : 'Chưa có lịch thi đấu'
+                    // Thêm penalty score nếu có và hòa (chỉ cho single-elimination, round-robin không cần)
+                    if (!isRoundRobin && hasScore && match.score1 === match.score2 && 
+                        match.penaltyScore1 !== null && match.penaltyScore2 !== null) {
+                      scoreText += ` (${match.penaltyScore1 || 0}-${match.penaltyScore2 || 0} P)`
+                    }
 
                     return (
                       <div
@@ -584,201 +708,184 @@ const ScheduleTab = ({ tournament }) => {
 
   // Hiển thị single-elimination: Bracket tree
   return (
-    <div className="schedule-section">
-      <div className="section-card">
-        <h2>Lịch thi đấu</h2>
-        {rounds.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
-            Chưa có lịch đấu. Vui lòng bốc thăm để tạo lịch đấu.
+    <>
+      <div className="schedule-section">
+        <div className="section-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ margin: 0 }}>Lịch thi đấu</h2>
+            {bracketGame && (
+              <button
+                onClick={() => setIsFullscreen(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  backgroundColor: '#3b82f6',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#2563eb'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#3b82f6'}
+              >
+                <Maximize2 size={16} />
+                Mở rộng
+              </button>
+            )}
           </div>
-        ) : (
-          <div className="bracket-container">
-            <Bracket
-              rounds={rounds}
-              renderSeedComponent={(props) => {
-                const status = checkMatchStatus(props.seed);
-
-                // Kiểm tra xem có cần ẩn không (Double Bye hoặc Single Bye)
-                // Nếu là EMPTY (Cả 2 là Bye) -> Có thể return null nếu muốn xóa hẳn nhánh
-                // Nhưng nếu là BYE (1 đội đấu với Bye) -> BẮT BUỘC PHẢI GIỮ KHUNG (dùng visibility hidden)
-                const isHidden = status === 'EMPTY' || status === 'BYE';
-
-                // --- LOGIC QUAN TRỌNG: CHUẨN BỊ NỘI DUNG ---
-                // Chúng ta tính toán nội dung y như trận đấu thật để lấy chiều cao chính xác
-                const match = props.seed._match
-                const team1Id = match?.team1Id || props.seed.teams[0]?.teamId
-                const team2Id = match?.team2Id || props.seed.teams[1]?.teamId
-                const team1Data = getTeamDataFromId(team1Id)
-                const team2Data = getTeamDataFromId(team2Id)
-                const team1Name = props.seed.teams[0]?.name || 'TBD'
-                const team2Name = props.seed.teams[1]?.name || 'TBD'
-
-                // Logic hiển thị màu sắc (copy từ code cũ)
-                const isTeam1Bye = team1Id === "BYE"
-                const isTeam2Bye = team2Id === "BYE"
-                const hasBye = isTeam1Bye || isTeam2Bye
-
-                return (
-                  <Seed
-                    {...props}
-                    style={{
-                      // QUAN TRỌNG: KHÔNG ĐƯỢC ẨN SEED, NẾU KHÔNG SẼ MẤT DÂY
-                      fontSize: '12px',
-                      opacity: 1
-                    }}
-                  >
-                    <SeedItem
-                      style={{
-                        // CHỈ ẨN NỘI DUNG BÊN TRONG
-                        // Dùng opacity: 0 để nó vẫn chiếm diện tích (giữ dây thẳng hàng) nhưng không nhìn thấy
-                        opacity: isHidden ? 0 : 1,
-                        pointerEvents: isHidden ? 'none' : 'auto', // Không cho click vào vùng ẩn
-                        backgroundColor: isHidden ? 'transparent' : undefined, // Đảm bảo nền trong suốt
-                        boxShadow: isHidden ? 'none' : undefined, // Xóa bóng đổ nếu có
-                        border: isHidden ? 'none' : undefined // Xóa viền nếu có
-                      }}
-                    >
-                      {/* Render nội dung ĐẦY ĐỦ y hệt trận thật để chiếm đúng chiều cao */}
-                      <div className="seed-header" style={{
-                        backgroundColor: hasBye ? '#f59e0b' : '#10b981',
-                        padding: '4px 8px' // Đảm bảo padding giống thật
-                      }}>
-                        <div className="seed-title" style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '2px',
-                          fontSize: '11px'
-                        }}>
-                          <div>{props.seed.date}</div>
-                          {props.seed.courtName && (
-                            <div style={{
-                              fontSize: '10px',
-                              opacity: 0.9,
-                              fontWeight: '500'
-                            }}>
-                              {props.seed.courtName}
-                            </div>
-                          )}
-                          {hasBye && !props.seed.courtName && (
-                            <span style={{
-                              fontSize: '10px',
-                              opacity: 0.9
-                            }}>
-                              (BYE)
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
-                        {/* Team 1 - Render đầy đủ */}
-                        <SeedTeam className="seed-team" style={{
-                          padding: '8px',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          height: '40px',
-                          alignItems: 'center',
-                          backgroundColor: isTeam1Bye ? '#fef3c7' : 'white'
-                        }}>
-                          <div className="team-info-bracket" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            {/* Giữ nguyên cấu trúc ảnh/text để chiều cao không đổi */}
-                            {isTeam1Bye ? (
-                              <div style={{
-                                width: '24px',
-                                height: '24px',
-                                borderRadius: '4px',
-                                backgroundColor: '#f59e0b',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: 'white',
-                                fontWeight: '700',
-                                fontSize: '10px'
-                              }}>
-                                BYE
-                              </div>
-                            ) : (
-                              <img
-                                src={team1Data?.logo || '/team.png'}
-                                alt="Team"
-                                className="team-logo-bracket"
-                                style={{ width: '24px', height: '24px', objectFit: 'cover', borderRadius: '4px' }}
-                              />
-                            )}
-                            <div className="team-name-bracket" style={{
-                              color: isTeam1Bye ? '#92400e' : '#1f2937',
-                              fontWeight: isTeam1Bye ? '600' : '500'
-                            }}>
-                              {team1Name}
-                            </div>
-                          </div>
-                          <div className="team-score" style={{
-                            color: isTeam1Bye ? '#f59e0b' : '#10b981'
-                          }}>
-                            {props.seed.teams[0]?.score !== null && props.seed.teams[0]?.score !== undefined
-                              ? props.seed.teams[0].score
-                              : '-'}
-                          </div>
-                        </SeedTeam>
-
-                        {/* Team 2 - Render đầy đủ */}
-                        <SeedTeam className="seed-team" style={{
-                          padding: '8px',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          height: '40px',
-                          alignItems: 'center',
-                          backgroundColor: isTeam2Bye ? '#fef3c7' : 'white'
-                        }}>
-                          <div className="team-info-bracket" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            {isTeam2Bye ? (
-                              <div style={{
-                                width: '24px',
-                                height: '24px',
-                                borderRadius: '4px',
-                                backgroundColor: '#f59e0b',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: 'white',
-                                fontWeight: '700',
-                                fontSize: '10px'
-                              }}>
-                                BYE
-                              </div>
-                            ) : (
-                              <img
-                                src={team2Data?.logo || '/team.png'}
-                                alt="Team"
-                                className="team-logo-bracket"
-                                style={{ width: '24px', height: '24px', objectFit: 'cover', borderRadius: '4px' }}
-                              />
-                            )}
-                            <div className="team-name-bracket" style={{
-                              color: isTeam2Bye ? '#92400e' : '#1f2937',
-                              fontWeight: isTeam2Bye ? '600' : '500'
-                            }}>
-                              {team2Name}
-                            </div>
-                          </div>
-                          <div className="team-score" style={{
-                            color: isTeam2Bye ? '#f59e0b' : '#10b981'
-                          }}>
-                            {props.seed.teams[1]?.score !== null && props.seed.teams[1]?.score !== undefined
-                              ? props.seed.teams[1].score
-                              : '-'}
-                          </div>
-                        </SeedTeam>
-                      </div>
-                    </SeedItem>
-                  </Seed>
-                )
-              }}
-            />
-          </div>
-        )}
+          {!bracketGame ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+              Chưa có lịch đấu. Vui lòng bốc thăm để tạo lịch đấu.
+            </div>
+          ) : (
+            <div className="bracket-container" style={{ overflowX: 'auto', padding: '20px' }}>
+              {/* Component Bracket của react-tournament-bracket */}
+              <Bracket 
+                game={bracketGame}
+                hoveredTeamId={hoveredTeamId}
+                onHoveredTeamIdChange={setHoveredTeamId}
+                bottomText={(game) => {
+                  // Hiển thị tên vòng và tên sân (ngày đã hiển thị ở vị trí scheduled)
+                  const parts = [game.name];
+                  if (game.courtName) {
+                    parts.push(`Sân: ${game.courtName}`);
+                  }
+                  return parts.join(' - ');
+                }}
+                styles={{
+                  backgroundColor: '#58595e',
+                  hoverBackgroundColor: '#3b82f6', // Màu xanh khi hover
+                  scoreBackground: '#787a80',
+                  winningScoreBackground: '#10b981',
+                  teamNameStyle: { 
+                    fill: '#fff', 
+                    fontSize: 12, 
+                    textShadow: '1px 1px 1px #222',
+                    transition: 'all 0.2s ease'
+                  },
+                  teamScoreStyle: { fill: '#23252d', fontSize: 12 },
+                  gameNameStyle: { fill: '#999', fontSize: 10 },
+                  gameTimeStyle: { fill: '#999', fontSize: 10 },
+                  teamSeparatorStyle: { stroke: '#444549', strokeWidth: 1 }
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Fullscreen Modal */}
+      {isFullscreen && bracketGame && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            overflow: 'auto'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsFullscreen(false)
+            }
+          }}
+        >
+          <div style={{
+            position: 'relative',
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <button
+              onClick={() => setIsFullscreen(false)}
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 20px',
+                backgroundColor: '#ef4444',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600',
+                zIndex: 10000,
+                transition: 'all 0.2s ease',
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
+              }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#dc2626'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = '#ef4444'}
+            >
+              <Minimize2 size={18} />
+              Thu gọn
+            </button>
+            <div style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'auto',
+              padding: '40px'
+            }}>
+              <Bracket 
+                game={bracketGame}
+                hoveredTeamId={hoveredTeamId}
+                onHoveredTeamIdChange={setHoveredTeamId}
+                bottomText={(game) => {
+                  // Hiển thị tên vòng và tên sân (ngày đã hiển thị ở vị trí scheduled)
+                  const parts = [game.name];
+                  if (game.courtName) {
+                    parts.push(`Sân: ${game.courtName}`);
+                  }
+                  return parts.join(' - ');
+                }}
+                styles={{
+                  backgroundColor: '#58595e',
+                  hoverBackgroundColor: '#3b82f6',
+                  scoreBackground: '#787a80',
+                  winningScoreBackground: '#10b981',
+                  teamNameStyle: { 
+                    fill: '#fff', 
+                    fontSize: 14, 
+                    textShadow: '1px 1px 1px #222',
+                    transition: 'all 0.2s ease'
+                  },
+                  teamScoreStyle: { fill: '#23252d', fontSize: 14 },
+                  gameNameStyle: { fill: '#999', fontSize: 12 },
+                  gameTimeStyle: { fill: '#999', fontSize: 12 },
+                  teamSeparatorStyle: { stroke: '#444549', strokeWidth: 1 }
+                }}
+                gameDimensions={{
+                  width: 250,
+                  height: 100
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

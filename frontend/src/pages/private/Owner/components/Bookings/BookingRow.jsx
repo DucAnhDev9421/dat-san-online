@@ -24,7 +24,69 @@ const BookingRow = ({ booking, handlers }) => {
         </div>
       </td>
       <td style={{ padding: 12, fontWeight: 600 }}>{booking.date}</td>
-      <td style={{ padding: 12, color: "#059669", fontWeight: 600 }}>{booking.time}</td>
+      <td style={{ padding: 12, maxWidth: "200px", width: "200px" }}>
+        {(() => {
+          const timeSlots = booking._original?.timeSlots || 
+            (typeof booking.time === 'string' && booking.time !== 'N/A' 
+              ? booking.time.split(', ').filter(Boolean) 
+              : []);
+          
+          if (Array.isArray(timeSlots) && timeSlots.length > 0) {
+            return (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "4px",
+                  maxHeight: "60px",
+                  overflow: "hidden",
+                }}
+                title={timeSlots.join(", ")}
+              >
+                {timeSlots.slice(0, 3).map((slot, idx) => (
+                  <span
+                    key={idx}
+                    style={{
+                      background: "#e6f9f0",
+                      color: "#059669",
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                      display: "inline-block",
+                    }}
+                  >
+                    {slot.trim()}
+                  </span>
+                ))}
+                {timeSlots.length > 3 && (
+                  <span
+                    style={{
+                      background: "#f3f4f6",
+                      color: "#6b7280",
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      display: "inline-block",
+                    }}
+                    title={`+${timeSlots.length - 3} khung giờ khác: ${timeSlots.slice(3).join(", ")}`}
+                  >
+                    +{timeSlots.length - 3}
+                  </span>
+                )}
+              </div>
+            );
+          }
+          
+          return (
+            <span style={{ color: "#059669", fontWeight: 600, fontSize: 12 }}>
+              {booking.time || "N/A"}
+            </span>
+          );
+        })()}
+      </td>
       <td style={{ padding: 12, fontWeight: 600, color: "#059669" }}>
         {booking.price.toLocaleString()}
       </td>

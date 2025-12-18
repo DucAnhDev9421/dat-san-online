@@ -7,7 +7,91 @@ import CreateReviewModal from '../modals/CreateReviewModal'
 import ReportBookingModal from '../modals/ReportBookingModal'
 import { QRCodeSVG } from 'qrcode.react'
 import html2canvas from 'html2canvas'
-import { Download, Star, Loader, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Download, Star, Loader, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react'
+
+// Component hiển thị khung giờ compact
+const TimeSlotsDisplay = ({ timeSlots }) => {
+  const [showAll, setShowAll] = useState(false)
+  const MAX_VISIBLE = 6 // Số khung giờ hiển thị ban đầu
+
+  if (!timeSlots || timeSlots.length === 0) {
+    return <span style={{ color: '#6b7280', fontSize: '14px' }}>N/A</span>
+  }
+
+  const visibleSlots = showAll ? timeSlots : timeSlots.slice(0, MAX_VISIBLE)
+  const hasMore = timeSlots.length > MAX_VISIBLE
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div style={{ 
+        display: 'flex', 
+        flexWrap: 'wrap', 
+        gap: '4px',
+        maxWidth: '100%',
+        lineHeight: '1.4'
+      }}>
+        {visibleSlots.map((slot, index) => (
+          <span
+            key={index}
+            style={{
+              display: 'inline-block',
+              padding: '2px 8px',
+              background: '#e6f9f0',
+              color: '#059669',
+              borderRadius: '4px',
+              fontSize: '12px',
+              fontWeight: '500',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+          >
+            {slot.trim()}
+          </span>
+        ))}
+        {hasMore && !showAll && (
+          <span style={{ 
+            fontSize: '12px', 
+            color: '#6b7280', 
+            alignSelf: 'center',
+            padding: '2px 4px'
+          }}>
+            +{timeSlots.length - MAX_VISIBLE} khung giờ
+          </span>
+        )}
+      </div>
+      {hasMore && (
+        <button
+          onClick={() => setShowAll(!showAll)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: 'none',
+            border: 'none',
+            color: '#3b82f6',
+            fontSize: '12px',
+            cursor: 'pointer',
+            padding: '2px 0',
+            width: 'fit-content',
+            fontWeight: '500'
+          }}
+        >
+          {showAll ? (
+            <>
+              <ChevronUp size={14} />
+              Thu gọn
+            </>
+          ) : (
+            <>
+              <ChevronDown size={14} />
+              Xem tất cả ({timeSlots.length} khung giờ)
+            </>
+          )}
+        </button>
+      )}
+    </div>
+  )
+}
 
 export default function BookingsTab() {
   const [bookings, setBookings] = useState([])
@@ -23,6 +107,8 @@ export default function BookingsTab() {
   const [bookingReviews, setBookingReviews] = useState({}) // Map bookingId -> review
   const [refreshKey, setRefreshKey] = useState(0)
   const ticketRef = useRef(null)
+  const [refundInfo, setRefundInfo] = useState(null) // Thông tin hoàn tiền
+  const [showConfirmCancel, setShowConfirmCancel] = useState(false) // Xác nhận lại khi hủy 12-24h hoặc <12h
 
   // Pagination state
   const [page, setPage] = useState(1)
@@ -49,6 +135,84 @@ export default function BookingsTab() {
     setShowCancelModal(true)
     setCancelReason('')
     setOtherReason('')
+    setShowConfirmCancel(false)
+    
+    // Tính toán thông tin hoàn tiền
+    if (booking && booking.paymentStatus === 'paid' && booking._original) {
+      try {
+        const bookingData = booking._original
+        // Lấy totalAmount từ _original hoặc parse từ price string
+        let totalAmount = bookingData.totalAmount
+        if (!totalAmount && booking.price) {
+          // Parse từ string "1.000.000 VNĐ" hoặc "1,000,000 VNĐ"
+          const priceStr = booking.price.toString().replace(/[^\d]/g, '')
+          totalAmount = parseInt(priceStr) || 0
+        }
+        if (!totalAmount) totalAmount = 0
+        
+        const date = bookingData.date || booking.date
+        const timeSlots = bookingData.timeSlots || (booking.time ? booking.time.split(', ') : [])
+        
+        if (date && timeSlots && timeSlots.length > 0 && totalAmount > 0) {
+          // Tính thời gian vào sân
+          const bookingDate = new Date(date)
+          const firstTimeSlot = timeSlots[0]
+          const [startTime] = firstTimeSlot.split("-")
+          const [hours, minutes] = startTime.split(":").map(Number)
+          bookingDate.setHours(hours, minutes, 0, 0)
+          
+          const now = new Date()
+          const hoursUntilBooking = (bookingDate - now) / (1000 * 60 * 60)
+          
+          let refundAmount = 0
+          let refundPercentage = 0
+          let refundMessage = ""
+          let warningLevel = "none" // "none", "partial", "no_refund"
+          
+          if (hoursUntilBooking >= 24) {
+            // Hủy 24+ giờ trước: hoàn 100%
+            refundAmount = totalAmount
+            refundPercentage = 100
+            refundMessage = "Hủy trước 24 giờ: Hoàn 100%"
+            warningLevel = "none"
+          } else if (hoursUntilBooking >= 12) {
+            // Hủy 12-24 giờ trước: hoàn 50%
+            refundAmount = totalAmount * 0.5
+            refundPercentage = 50
+            refundMessage = "Hủy trước 12-24 giờ: Chỉ hoàn 50%"
+            warningLevel = "partial"
+          } else if (hoursUntilBooking >= 0) {
+            // Hủy dưới 12 giờ: không hoàn tiền
+            refundAmount = 0
+            refundPercentage = 0
+            refundMessage = "Hủy dưới 12 giờ: Không hoàn tiền"
+            warningLevel = "no_refund"
+          } else {
+            // Đã qua giờ vào sân
+            refundAmount = 0
+            refundPercentage = 0
+            refundMessage = "Đã qua giờ vào sân: Không hoàn tiền"
+            warningLevel = "no_refund"
+          }
+          
+          setRefundInfo({
+            refundAmount,
+            refundPercentage,
+            refundMessage,
+            warningLevel,
+            hoursUntilBooking: Math.max(0, hoursUntilBooking),
+            totalAmount: totalAmount
+          })
+        } else {
+          setRefundInfo(null)
+        }
+      } catch (error) {
+        console.error("Error calculating refund:", error)
+        setRefundInfo(null)
+      }
+    } else {
+      setRefundInfo(null)
+    }
   }
 
   const openDetailModal = (booking) => {
@@ -80,6 +244,14 @@ export default function BookingsTab() {
   const handleConfirmCancel = async () => {
     if (!cancelReason || !selectedBooking) return
 
+    // Nếu hủy từ 12-24 giờ hoặc dưới 12 giờ, cần xác nhận lại
+    if (refundInfo && (refundInfo.warningLevel === 'partial' || refundInfo.warningLevel === 'no_refund')) {
+      if (!showConfirmCancel) {
+        setShowConfirmCancel(true)
+        return
+      }
+    }
+
     // Lấy label của lý do hủy (hoặc otherReason nếu là 'other')
     let finalReason = ''
     if (cancelReason === 'other') {
@@ -97,13 +269,35 @@ export default function BookingsTab() {
     try {
       const bookingId = selectedBooking._original?._id || selectedBooking._original?.id || selectedBooking.id
       // Truyền lý do hủy (label) vào API
-      await bookingApi.cancelBooking(bookingId, finalReason)
-      toast.success('Hủy đặt sân thành công')
+      const result = await bookingApi.cancelBooking(bookingId, finalReason)
+      
+      // Hiển thị thông tin hoàn tiền nếu có
+      if (result.success && result.data?.refundAmount > 0) {
+        const refundAmount = result.data.refundAmount
+        const refundStatus = result.data.refundStatus || "completed"
+        
+        if (refundStatus === "completed") {
+          toast.success(
+            `Hủy đặt sân thành công. Đã hoàn tiền ${refundAmount.toLocaleString('vi-VN')} VNĐ vào ví của bạn.`,
+            { autoClose: 5000 }
+          )
+        } else {
+          toast.success(
+            `Hủy đặt sân thành công. Sẽ hoàn tiền ${refundAmount.toLocaleString('vi-VN')} VNĐ vào ví của bạn.`,
+            { autoClose: 5000 }
+          )
+        }
+      } else {
+        toast.success('Hủy đặt sân thành công')
+      }
+      
       setRefreshKey(prev => prev + 1) // Refresh bookings
       setShowCancelModal(false)
       setSelectedBooking(null)
       setCancelReason('')
       setOtherReason('')
+      setRefundInfo(null)
+      setShowConfirmCancel(false)
     } catch (error) {
       console.error('Error cancelling booking:', error)
       toast.error(error.message || 'Không thể hủy đặt sân')
@@ -250,7 +444,8 @@ export default function BookingsTab() {
               price: price,
               paymentMethod: paymentMethod,
               paymentStatus: paymentStatus, // Lưu paymentStatus để dùng cho validation
-              status: status,
+              status: status, // Status đã được map (upcoming/completed/cancelled)
+              originalStatus: booking.status, // Lưu status gốc từ API để dùng cho điều kiện hiển thị nút
               imageUrl: imageUrl,
               isPastDate: hasBookingEnded, // Store flag to check if booking has ended
               bookingDate: bookingDate, // Store booking date for comparison
@@ -387,9 +582,12 @@ export default function BookingsTab() {
                 <div className="booking-info">
                   <h4>{booking.venue}</h4>
                   <p className="booking-sport">{booking.sport}</p>
-                  <p className="booking-datetime">
-                    {new Date(booking.date).toLocaleDateString('vi-VN')} - {booking.time}
-                  </p>
+                  <div style={{ marginBottom: '8px' }}>
+                    <p style={{ margin: '0 0 6px 0', fontSize: '14px', color: '#374151' }}>
+                      {new Date(booking.date).toLocaleDateString('vi-VN')}
+                    </p>
+                    <TimeSlotsDisplay timeSlots={booking._original?.timeSlots || (booking.time ? booking.time.split(', ') : [])} />
+                  </div>
                   {booking.location && (
                     <p className="booking-location" style={{ color: '#6b7280' }}>{booking.location}</p>
                   )}
@@ -434,7 +632,29 @@ export default function BookingsTab() {
                       </button>
                     )}
                     {/* Only show cancel button if booking is upcoming/pending/pending_payment/hold/confirmed AND date hasn't passed */}
-                    {(booking.status === 'upcoming' || booking.status === 'pending' || booking.status === 'pending_payment' || booking.status === 'hold' || booking.status === 'confirmed') && !booking.isPastDate && (
+                    {(() => {
+                      // Lấy status gốc từ booking
+                      const originalStatus = booking.originalStatus || booking._original?.status || booking.status
+                      const displayStatus = booking.status
+                      
+                      // Có thể hủy nếu:
+                      // 1. Status hiển thị là upcoming (đã được map từ pending/confirmed)
+                      // 2. Hoặc status gốc là pending, pending_payment, hold, confirmed
+                      // 3. VÀ chưa qua ngày đặt sân
+                      // 4. VÀ không phải cancelled hoặc expired
+                      const canCancel = (
+                        displayStatus === 'upcoming' ||
+                        originalStatus === 'pending' ||
+                        originalStatus === 'pending_payment' ||
+                        originalStatus === 'hold' ||
+                        originalStatus === 'confirmed'
+                      ) && 
+                      originalStatus !== 'cancelled' &&
+                      originalStatus !== 'expired' &&
+                      !booking.isPastDate
+                      
+                      return canCancel
+                    })() && (
                       <button
                         className="btn btn-outline small"
                         onClick={() => openCancelModal(booking)}
@@ -620,12 +840,113 @@ export default function BookingsTab() {
       {/* Cancel Booking Modal */}
       <Dialog
         open={showCancelModal}
-        onClose={() => setShowCancelModal(false)}
+        onClose={() => {
+          setShowCancelModal(false)
+          setShowConfirmCancel(false)
+          setRefundInfo(null)
+        }}
         title="Hủy đặt sân"
         description={selectedBooking ? `${selectedBooking.venue} - ${new Date(selectedBooking.date).toLocaleDateString('vi-VN')} ${selectedBooking.time}` : ''}
         maxWidth="520px"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Cảnh báo về chính sách hoàn tiền */}
+          {refundInfo && selectedBooking?.paymentStatus === 'paid' && (
+            <div style={{
+              padding: '16px',
+              borderRadius: '8px',
+              border: refundInfo.warningLevel === 'no_refund' 
+                ? '2px solid #ef4444' 
+                : refundInfo.warningLevel === 'partial'
+                ? '2px solid #f59e0b'
+                : '2px solid #10b981',
+              background: refundInfo.warningLevel === 'no_refund'
+                ? '#fef2f2'
+                : refundInfo.warningLevel === 'partial'
+                ? '#fffbeb'
+                : '#ecfdf5'
+            }}>
+              <div style={{
+                fontWeight: 600,
+                fontSize: '15px',
+                marginBottom: '8px',
+                color: refundInfo.warningLevel === 'no_refund'
+                  ? '#dc2626'
+                  : refundInfo.warningLevel === 'partial'
+                  ? '#d97706'
+                  : '#059669'
+              }}>
+                {refundInfo.warningLevel === 'no_refund' && '⚠️ Cảnh báo: Không hoàn tiền'}
+                {refundInfo.warningLevel === 'partial' && '⚠️ Cảnh báo: Chỉ hoàn 50%'}
+                {refundInfo.warningLevel === 'none' && '✓ Thông tin hoàn tiền'}
+              </div>
+              <div style={{ fontSize: '14px', color: '#374151', lineHeight: '1.6' }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>Thời gian còn lại:</strong> {Math.floor(refundInfo.hoursUntilBooking)} giờ {Math.floor((refundInfo.hoursUntilBooking % 1) * 60)} phút
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>Chính sách:</strong> {refundInfo.refundMessage}
+                </div>
+                {refundInfo.refundAmount > 0 ? (
+                  <div style={{
+                    padding: '12px',
+                    background: '#fff',
+                    borderRadius: '6px',
+                    marginTop: '8px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#059669', marginBottom: '4px' }}>
+                      Số tiền hoàn: {refundInfo.refundAmount.toLocaleString('vi-VN')} VNĐ ({refundInfo.refundPercentage}%)
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                      Tổng tiền: {refundInfo.totalAmount.toLocaleString('vi-VN')} VNĐ
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    padding: '12px',
+                    background: '#fff',
+                    borderRadius: '6px',
+                    marginTop: '8px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#dc2626' }}>
+                      Không được hoàn tiền
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Tổng tiền: {refundInfo.totalAmount.toLocaleString('vi-VN')} VNĐ
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Xác nhận lại khi hủy 12-24h hoặc <12h */}
+          {showConfirmCancel && refundInfo && (refundInfo.warningLevel === 'partial' || refundInfo.warningLevel === 'no_refund') && (
+            <div style={{
+              padding: '16px',
+              borderRadius: '8px',
+              background: '#fef2f2',
+              border: '2px solid #ef4444'
+            }}>
+              <div style={{ fontWeight: 700, fontSize: '16px', color: '#dc2626', marginBottom: '8px' }}>
+                Xác nhận lại
+              </div>
+              <div style={{ fontSize: '14px', color: '#374151', lineHeight: '1.6' }}>
+                {refundInfo.warningLevel === 'no_refund' ? (
+                  <p style={{ margin: 0 }}>
+                    Bạn có chắc chắn muốn hủy đặt sân? <strong style={{ color: '#dc2626' }}>Bạn sẽ không được hoàn tiền</strong> vì hủy dưới 12 giờ trước giờ vào sân.
+                  </p>
+                ) : (
+                  <p style={{ margin: 0 }}>
+                    Bạn có chắc chắn muốn hủy đặt sân? <strong style={{ color: '#d97706' }}>Bạn chỉ được hoàn {refundInfo.refundPercentage}% số tiền</strong> ({refundInfo.refundAmount.toLocaleString('vi-VN')} VNĐ) vì hủy từ 12-24 giờ trước giờ vào sân.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <div>
             <div style={{ fontWeight: 600, marginBottom: '8px' }}>Chọn lý do hủy</div>
             <div style={{ display: 'grid', gap: '8px' }}>
@@ -659,16 +980,28 @@ export default function BookingsTab() {
 
           <p style={{ margin: 0, color: '#6b7280' }}>Hành động này không thể hoàn tác.</p>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <button className="btn btn-outline" onClick={() => setShowCancelModal(false)}>Đóng</button>
+            <button 
+              className="btn btn-outline" 
+              onClick={() => {
+                setShowCancelModal(false)
+                setShowConfirmCancel(false)
+                setRefundInfo(null)
+              }}
+            >
+              Đóng
+            </button>
             <button
               className="btn"
               onClick={handleConfirmCancel}
               disabled={
                 !cancelReason || (cancelReason === 'other' && !otherReason.trim())
               }
-              style={{ opacity: !cancelReason || (cancelReason === 'other' && !otherReason.trim()) ? 0.6 : 1 }}
+              style={{ 
+                opacity: !cancelReason || (cancelReason === 'other' && !otherReason.trim()) ? 0.6 : 1,
+                background: refundInfo?.warningLevel === 'no_refund' ? '#dc2626' : refundInfo?.warningLevel === 'partial' ? '#f59e0b' : undefined
+              }}
             >
-              Xác nhận hủy
+              {showConfirmCancel ? 'Xác nhận hủy' : 'Tiếp tục'}
             </button>
           </div>
         </div>

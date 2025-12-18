@@ -7,13 +7,13 @@ import {
   Calendar,
   UserCheck,
   CreditCard,
-  Bell,
   Activity,
   BarChart3,
   Settings,
   FolderTree,
   Ticket,
   MessageSquare,
+  ArrowDownCircle,
 } from "lucide-react";
 
 export default function AdminLayout({ 
@@ -28,11 +28,11 @@ export default function AdminLayout({
     { id: "facilities", path: "facilities", label: "Quản lý cơ sở", icon: Building2 },
     { id: "bookings", path: "bookings", label: "Quản lý lịch đặt sân", icon: Calendar },
     { id: "users", path: "users", label: "Quản lý người dùng", icon: UserCheck },
-    { id: "payments", path: "payments", label: "Quản lý giao dịch", icon: CreditCard },
+    { id: "payments", path: "payments", label: "Quản lý thanh toán", icon: CreditCard },
+    { id: "withdrawals", path: "withdrawals", label: "Quản lý rút tiền", icon: ArrowDownCircle },
     { id: "categories", path: "categories", label: "Quản lý danh mục", icon: FolderTree },
     { id: "promotions", path: "promotions", label: "Quản lý khuyến mãi", icon: Ticket },
     { id: "feedbacks", path: "feedbacks", label: "Quản lý phản hồi", icon: MessageSquare },
-    { id: "notifications", path: "notifications", label: "Quản lý thông báo", icon: Bell },
     { id: "activity_log", path: "activity_log", label: "Nhật ký hoạt động", icon: Activity },
     { id: "reports", path: "reports", label: "Báo cáo & thống kê", icon: BarChart3 },
     { id: "settings", path: "settings", label: "Cấu hình hệ thống", icon: Settings },

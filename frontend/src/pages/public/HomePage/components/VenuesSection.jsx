@@ -41,8 +41,6 @@ export default function VenuesSection({
     })
   }, [venues, selectedSport])
 
-  const cardStyle = { flex: '0 0 300px', width: '300px' }
-
   return (
     <section id={id} className="venues-section">
       <div className="container">
@@ -90,17 +88,17 @@ export default function VenuesSection({
           </div>
         </div>
         {loading ? (
-          <Slider itemWidth={300} gap={16}>
+          <Slider itemWidth={300} gap={16} loop={true}>
             {[...Array(id === 'featured' ? 4 : 8)].map((_, i) => (
-              <div key={i} style={cardStyle}>
+              <div key={i}>
                 <SkeletonVenueCard />
               </div>
             ))}
           </Slider>
         ) : filteredVenues.length > 0 ? (
-          <Slider itemWidth={300} gap={16}>
+          <Slider itemWidth={300} gap={16} loop={true}>
             {filteredVenues.map((venue) => (
-              <div key={venue.id} style={cardStyle}>
+              <div key={venue.id}>
                 <VenueCard
                   venueId={venue.id}
                   image={venue.image || venue.images?.[0] || venue.imageUrl}
@@ -110,7 +108,7 @@ export default function VenuesSection({
                   totalReviews={venue.totalReviews || 0}
                   open={venue.operatingHours || venue.hours}
                   price={venue.price || venue.pricePerHour}
-                  chip={venue.facilities?.[0] || venue.sportCategory}
+                  sports={venue.facilities || (venue.sportCategory ? [venue.sportCategory] : [])}
                   services={venue.services || []}
                   onBook={() => onBookVenue(venue.id)}
                   userLocation={userLocation}

@@ -28,7 +28,7 @@ const TopOwnersTable = ({ owners, formatPrice }) => {
         <tbody>
           {owners.map((owner, index) => (
             <tr
-              key={owner.id}
+              key={owner.id || owner.ownerId}
               style={{
                 borderBottom: "1px solid #f3f4f6",
               }}
@@ -58,16 +58,16 @@ const TopOwnersTable = ({ owners, formatPrice }) => {
                   {index + 1}
                 </span>
               </td>
-              <td style={{ padding: 12, fontWeight: 600 }}>{owner.name}</td>
-              <td style={{ padding: 12, color: "#6b7280" }}>{owner.email}</td>
+              <td style={{ padding: 12, fontWeight: 600 }}>{owner.name || "N/A"}</td>
+              <td style={{ padding: 12, color: "#6b7280" }}>{owner.email || "-"}</td>
               <td style={{ padding: 12, color: "#6b7280" }}>
-                {owner.facilities.length} cơ sở
+                {owner.facilityCount || (owner.facilities?.length || 0)} cơ sở
               </td>
               <td style={{ padding: 12, fontWeight: 600, color: "#10b981" }}>
-                {formatPrice(owner.revenue)} VNĐ
+                {formatPrice(owner.revenue || 0)} VNĐ
               </td>
               <td style={{ padding: 12, color: "#6b7280" }}>
-                {owner.bookings} lượt
+                {owner.bookings || 0} lượt
               </td>
             </tr>
           ))}

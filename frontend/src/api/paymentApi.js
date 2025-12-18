@@ -79,6 +79,25 @@ export const paymentApi = {
     } catch (error) {
       throw handleApiError(error);
     }
+  },
+
+  /**
+   * Hoàn tiền cho payment (Admin/Owner)
+   * @param {string} paymentId - ID của payment
+   * @param {number} [amount] - Số tiền hoàn (optional, mặc định là toàn bộ)
+   * @param {string} [reason] - Lý do hoàn tiền
+   * @returns {Promise<{success: boolean, data: Object}>}
+   */
+  refundPayment: async (paymentId, amount, reason) => {
+    try {
+      const response = await api.post(`/payments/${paymentId}/refund`, {
+        amount,
+        reason
+      });
+      return handleApiSuccess(response);
+    } catch (error) {
+      throw handleApiError(error);
+    }
   }
 };
 

@@ -12,12 +12,16 @@ import mongoose from 'mongoose';
  * @param {string} params.userQuery - User's query
  * @param {Object} params.userLocation - User location {lat, lng}
  * @param {string} params.userId - User ID (optional)
+ * @param {string} params.sportCategoryId - Sport category ID (optional)
+ * @param {number} params.radius - Search radius in meters (optional)
  * @returns {Promise<Object>} Context object
  */
-export const buildContext = async ({ userQuery, userLocation, userId }) => {
+export const buildContext = async ({ userQuery, userLocation, userId, sportCategoryId, radius }) => {
   const context = {
     timestamp: new Date().toISOString(),
     userLocation: userLocation || null,
+    sportCategoryId: sportCategoryId || null,
+    radius: radius || null,
     facilities: [],
     courts: [],
     userBookings: [],
@@ -27,8 +31,130 @@ export const buildContext = async ({ userQuery, userLocation, userId }) => {
     // Extract intent from query (simple keyword matching, can be improved)
     const queryLower = userQuery.toLowerCase();
     
-    // Find nearest facilities if user has location
-    if (userLocation && (queryLower.includes('gần') || queryLower.includes('gần nhất') || queryLower.includes('gần đây'))) {
+    // Find nearest facilities by sport category if user has location and sportCategoryId
+    // Also trigger if we have all required info (sportCategoryId, location, radius) even without keywords
+    const hasNearbyKeywords = queryLower.includes('gần') || queryLower.includes('gần nhất') || queryLower.includes('gần đây') || queryLower.includes('tìm cơ sở');
+    const hasRequiredInfo = !!(userLocation && sportCategoryId && radius);
+    
+    // Debug: Nearby search check logging removed to reduce console noise
+    
+    if (userLocation && sportCategoryId && (hasNearbyKeywords || hasRequiredInfo)) {
+      // Get sport category info
+      const sportCategory = await SportCategory.findById(sportCategoryId).lean();
+      
+      if (sportCategory) {
+        // Get court types for this sport category
+        const courtTypes = await CourtType.find({
+          sportCategory: sportCategoryId,
+          status: 'active'
+        }).select('name _id').lean();
+        
+        if (courtTypes.length > 0) {
+          const courtTypeNames = courtTypes.map(ct => ct.name);
+          const courtTypeIds = courtTypes.map(ct => ct._id);
+          
+          // Find facilities that have courts for this sport category
+          // First, get all courts for this sport
+          const courts = await Court.find({
+            status: 'active',
+            $or: [
+              { type: { $in: courtTypeNames } },
+              { courtType: { $in: courtTypeIds } },
+              { sportCategory: new mongoose.Types.ObjectId(sportCategoryId) }
+            ]
+          })
+          .populate({
+            path: 'facility',
+            match: { status: 'opening' },
+            select: 'name address location types pricePerHour phoneNumber images'
+          })
+          .lean();
+          
+          // Get unique facilities from courts
+          const facilityIds = new Set();
+          const facilitiesWithDistance = [];
+          
+          // Default radius is 10km (10000 meters) if not specified
+          // Convert radius to number if it's a string
+          let maxDistance = 10000; // Default 10km
+          if (radius) {
+            maxDistance = typeof radius === 'number' ? radius : Number(radius);
+            if (isNaN(maxDistance)) {
+              console.warn('[BuildContext] Invalid radius value:', radius, 'using default 10km');
+              maxDistance = 10000;
+            }
+          }
+          
+          // verbose logs about maxDistance and court count removed
+          
+          let facilitiesWithinRadius = 0;
+          let facilitiesOutsideRadius = 0;
+          const outsideRadiusFacilities = [];
+          
+          for (const court of courts) {
+            if (court.facility && court.facility.location?.coordinates) {
+              const facilityId = court.facility._id.toString();
+              
+              // Calculate distance (returns distance in km)
+              const distanceInKm = calculateDistance(
+                userLocation.lat,
+                userLocation.lng,
+                court.facility.location.coordinates[1],
+                court.facility.location.coordinates[0]
+              );
+              
+              // Convert distance to meters for comparison
+              const distanceInMeters = distanceInKm * 1000;
+              
+              // Only process unique facilities
+              if (!facilityIds.has(facilityId)) {
+                facilityIds.add(facilityId);
+                
+                // Only include facilities within the specified radius (maxDistance is in meters)
+                if (distanceInMeters <= maxDistance) {
+                  facilitiesWithinRadius++;
+                  facilitiesWithDistance.push({
+                    id: facilityId,
+                    name: court.facility.name,
+                    address: court.facility.address,
+                    types: court.facility.types,
+                    pricePerHour: court.facility.pricePerHour,
+                    phoneNumber: court.facility.phoneNumber,
+                    location: {
+                      lat: court.facility.location.coordinates[1],
+                      lng: court.facility.location.coordinates[0]
+                    },
+                    images: court.facility.images?.slice(0, 1) || [],
+                    distance: distanceInMeters // Store distance in meters
+                  });
+                } else {
+                  facilitiesOutsideRadius++;
+                  outsideRadiusFacilities.push({
+                    name: court.facility.name,
+                    distance: (distanceInMeters / 1000).toFixed(2) + 'km',
+                    distanceMeters: Math.round(distanceInMeters)
+                  });
+                }
+              }
+            }
+          }
+          
+          // verbose facilities stats logging removed
+          
+          // Sort by distance
+          facilitiesWithDistance.sort((a, b) => a.distance - b.distance);
+          
+          // detailed found facilities logging removed
+          
+          // Return all facilities within radius (not limited to 10)
+          // Frontend can limit display if needed
+          context.facilities = facilitiesWithDistance;
+        }
+      }
+    }
+    
+    // Find nearest facilities if user has location (old logic for backward compatibility)
+    if (userLocation && !sportCategoryId && (queryLower.includes('gần') || queryLower.includes('gần nhất') || queryLower.includes('gần đây'))) {
       const facilities = await Facility.find({
         status: 'opening',
         location: {
