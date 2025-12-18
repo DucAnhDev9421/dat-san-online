@@ -41,7 +41,6 @@
     "lucide-react": "^0.545.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.1.1",
-    "react-brackets": "^0.4.7",
     "react-datepicker": "^8.7.0",
     "react-dom": "^19.1.1",
     "react-easy-crop": "^5.5.5",
