@@ -36,17 +36,7 @@ export const buildContext = async ({ userQuery, userLocation, userId, sportCateg
     const hasNearbyKeywords = queryLower.includes('gần') || queryLower.includes('gần nhất') || queryLower.includes('gần đây') || queryLower.includes('tìm cơ sở');
     const hasRequiredInfo = !!(userLocation && sportCategoryId && radius);
     
-    // Debug: Log context building
-    console.log('[BuildContext] Nearby search check:', {
-      hasUserLocation: !!userLocation,
-      hasSportCategoryId: !!sportCategoryId,
-      hasRadius: !!radius,
-      radiusValue: radius,
-      radiusType: typeof radius,
-      hasNearbyKeywords,
-      hasRequiredInfo,
-      willTriggerSearch: !!(userLocation && sportCategoryId && (hasNearbyKeywords || hasRequiredInfo))
-    });
+    // Debug: Nearby search check logging removed to reduce console noise
     
     if (userLocation && sportCategoryId && (hasNearbyKeywords || hasRequiredInfo)) {
       // Get sport category info
@@ -95,8 +85,7 @@ export const buildContext = async ({ userQuery, userLocation, userId, sportCateg
             }
           }
           
-          console.log('[BuildContext] Using maxDistance:', maxDistance, 'meters');
-          console.log('[BuildContext] Total courts found:', courts.length);
+          // verbose logs about maxDistance and court count removed
           
           let facilitiesWithinRadius = 0;
           let facilitiesOutsideRadius = 0;
@@ -150,26 +139,12 @@ export const buildContext = async ({ userQuery, userLocation, userId, sportCateg
             }
           }
           
-          console.log('[BuildContext] Facilities stats:', {
-            withinRadius: facilitiesWithinRadius,
-            outsideRadius: facilitiesOutsideRadius,
-            totalUnique: facilityIds.size,
-            outsideRadiusDetails: outsideRadiusFacilities
-          });
+          // verbose facilities stats logging removed
           
           // Sort by distance
           facilitiesWithDistance.sort((a, b) => a.distance - b.distance);
           
-          // Log results for debugging
-          console.log('[BuildContext] Found facilities:', {
-            total: facilitiesWithDistance.length,
-            maxDistance: maxDistance,
-            radius: radius,
-            sampleDistances: facilitiesWithDistance.slice(0, 5).map(f => ({
-              name: f.name.substring(0, 20),
-              distance: (f.distance / 1000).toFixed(2) + 'km'
-            }))
-          });
+          // detailed found facilities logging removed
           
           // Return all facilities within radius (not limited to 10)
           // Frontend can limit display if needed

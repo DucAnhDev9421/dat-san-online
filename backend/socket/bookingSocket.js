@@ -3,15 +3,11 @@ import Booking from '../models/Booking.js';
 import Court from '../models/Court.js';
 import Facility from '../models/Facility.js';
 
-// Store locked slots in memory (consider using Redis for production)
 const lockedSlots = new Map(); // key: "courtId_date_timeSlot", value: { userId, lockedAt, expiresAt }
 
 // Lock expiration time (5 minutes)
-const LOCK_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-/**
- * Cleanup expired locks periodically
- */
+const LOCK_DURATION = 5 * 60 * 1000;
+// Periodic cleanup of expired locks
 setInterval(() => {
   const now = Date.now();
   for (const [key, lock] of lockedSlots.entries()) {
@@ -21,10 +17,6 @@ setInterval(() => {
   }
 }, 60000); // Cleanup every minute
 
-/**
- * Generate lock key
- * date can be Date object or string in YYYY-MM-DD format
- */
 const getLockKey = (courtId, date, timeSlot) => {
   let dateStr;
   // If date is already a string in YYYY-MM-DD format, use it directly

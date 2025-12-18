@@ -20,7 +20,6 @@ async function syncOwnerBalance() {
   try {
     console.log("🔌 Đang kết nối MongoDB...");
     await mongoose.connect(MONGODB_URI);
-    console.log("✅ Đã kết nối MongoDB");
 
     // 1. Lấy tất cả các Payment đã thành công
     const successfulPayments = await Payment.find({
@@ -34,14 +33,11 @@ async function syncOwnerBalance() {
       },
     });
 
-    console.log(`📊 Tìm thấy ${successfulPayments.length} payment đã thành công`);
-
     // 2. Lấy tất cả các booking đã thanh toán (để đảm bảo không bỏ sót)
     const paidBookings = await Booking.find({
       paymentStatus: "paid",
     }).populate("facility", "owner");
 
-    console.log(`📊 Tìm thấy ${paidBookings.length} booking đã thanh toán`);
 
     // 3. Tạo map để tránh cộng trùng
     const processedBookings = new Set();
@@ -107,7 +103,6 @@ async function syncOwnerBalance() {
       processedBookings.add(bookingId);
     }
 
-    console.log(`\n📈 Tổng hợp cho ${Object.keys(ownerStats).length} owner:`);
 
     // 4. Cộng tiền cho từng owner
     let totalProcessed = 0;
@@ -135,22 +130,12 @@ async function syncOwnerBalance() {
 
         totalProcessed += stats.bookingCount;
         totalAmount += stats.totalAmount;
-
-        console.log(
-          `✅ Owner ${ownerId}: Cộng ${stats.totalAmount.toLocaleString("vi-VN")} VNĐ từ ${stats.bookingCount} booking(s)`
-        );
       } catch (error) {
         console.error(`❌ Lỗi khi cộng tiền cho owner ${ownerId}:`, error.message);
       }
     }
 
-    console.log(`\n🎉 Hoàn thành!`);
-    console.log(`   - Đã xử lý: ${totalProcessed} booking(s)`);
-    console.log(`   - Tổng số tiền: ${totalAmount.toLocaleString("vi-VN")} VNĐ`);
-    console.log(`   - Số dư khả dụng (sau phí 10%): ${(totalAmount * 0.9).toLocaleString("vi-VN")} VNĐ`);
-
     await mongoose.disconnect();
-    console.log("🔌 Đã ngắt kết nối MongoDB");
     process.exit(0);
   } catch (error) {
     console.error("❌ Lỗi:", error);

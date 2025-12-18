@@ -27,7 +27,7 @@ export default function userSocket(namespace) {
     socket.on('leave_facility', (facilityId) => {
       if (!facilityId) return;
       socket.leave(`facility_${facilityId}`);
-      console.log(`👋 User ${socket.userId} left facility room: ${facilityId}`);
+      console.log(`User ${socket.userId} left facility room: ${facilityId}`);
       socket.emit('left_facility', { facilityId });
     });
 
@@ -39,13 +39,13 @@ export default function userSocket(namespace) {
         return;
       }
       socket.join(`court_${courtId}`);
-      console.log(`📌 User ${socket.userId} joined court room: ${courtId}`);
+      console.log(`User ${socket.userId} joined court room: ${courtId}`);
       
       // Send all currently locked slots for this court to the user
       const lockedSlots = getLockedSlotsForCourt(courtId, date);
       if (lockedSlots.length > 0) {
         socket.emit('booking:locked:slots', { courtId, date, lockedSlots });
-        console.log(`📋 Sent ${lockedSlots.length} locked slots to user ${socket.userId} for court ${courtId}`);
+        console.log(`Sent ${lockedSlots.length} locked slots to user ${socket.userId} for court ${courtId}`);
       }
       
       socket.emit('joined_court', { courtId, facilityId });
@@ -55,7 +55,7 @@ export default function userSocket(namespace) {
     socket.on('leave_court', (courtId) => {
       if (!courtId) return;
       socket.leave(`court_${courtId}`);
-      console.log(`👋 User ${socket.userId} left court room: ${courtId}`);
+      console.log(`User ${socket.userId} left court room: ${courtId}`);
       socket.emit('left_court', { courtId });
     });
 
@@ -66,16 +66,16 @@ export default function userSocket(namespace) {
 
     // Handle disconnect
     socket.on('disconnect', (reason) => {
-      console.log(`❌ User disconnected [/user]: ${socket.userId} - Reason: ${reason}`);
+      console.log(`User disconnected [/user]: ${socket.userId} - Reason: ${reason}`);
       
       // Online status is handled in default namespace
     });
 
     // Handle errors
     socket.on('error', (error) => {
-      console.error(`❌ User socket error [/user]: ${socket.userId}`, error);
+      console.error(`User socket error [/user]: ${socket.userId}`, error);
     });
   });
 
-  console.log('✅ User namespace initialized');
+  console.log('User namespace initialized');
 }

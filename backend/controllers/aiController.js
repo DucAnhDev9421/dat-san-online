@@ -27,14 +27,7 @@ export const chat = async (req, res, next) => {
     const { message, conversationHistory = [], userLocation, sportCategoryId, radius } = req.body;
     const userId = req.user?._id?.toString() || null;
     
-    // Debug: Log radius value
-    console.log('[AI Chat] Received params:', {
-      message: message?.substring(0, 50),
-      hasUserLocation: !!userLocation,
-      sportCategoryId: sportCategoryId,
-      radius: radius,
-      radiusType: typeof radius
-    });
+    // Removed verbose debug log for received AI chat params to reduce console noise
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({
